@@ -1,0 +1,26 @@
+# Project Design Report
+
+## Project: {{ project_name | default('Unnamed Project') }}
+
+**Generated:** {{ timestamp | default('N/A') }}
+
+## Overview
+{{ overview | default('Project overview not provided.') }}
+
+## Architecture
+{{ architecture | default('Architecture details not provided.') }}
+
+## Components
+{% if components %}
+{% for component in components %}
+- {{ component }}
+{% endfor %}
+{% else %}
+No components defined.
+{% endif %}
+
+## Implementation Plan
+{{ implementation_plan | default('Implementation plan not provided.') }}
+
+---
+*Generated with Devussy Documentation System*

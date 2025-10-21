@@ -1,0 +1,16 @@
+{
+  "id": "max_quality",
+  "name": "Maximum Quality (GPT-4 Turbo)",
+  "description": "Use the latest GPT-4 Turbo for all stages to maximize output quality. Best for complex or critical projects where quality is more important than cost.",
+  "default_model_config": {
+    "provider_credential_id": "default_openai",
+    "model_name": "gpt-4-turbo-preview",
+    "temperature": 0.7,
+    "max_tokens": 4096,
+    "top_p": 1.0,
+    "frequency_penalty": 0.0,
+    "presence_penalty": 0.0
+  },
+  "stage_overrides": {},
+  "estimated_cost_per_project": "$1.00-1.50"
+}

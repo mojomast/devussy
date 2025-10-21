@@ -1,0 +1,16 @@
+{
+  "id": "anthropic_claude",
+  "name": "Anthropic Claude 3 Opus",
+  "description": "Use Claude 3 Opus for all stages. Excellent for creative and nuanced development plans with strong reasoning capabilities.",
+  "default_model_config": {
+    "provider_credential_id": "default_anthropic",
+    "model_name": "claude-3-opus-20240229",
+    "temperature": 0.7,
+    "max_tokens": 4096,
+    "top_p": 1.0,
+    "frequency_penalty": null,
+    "presence_penalty": null
+  },
+  "stage_overrides": {},
+  "estimated_cost_per_project": "$0.80-1.20"
+}

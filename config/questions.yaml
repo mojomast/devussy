@@ -1,0 +1,173 @@
+# Interactive questionnaire configuration for DevPlan Builder
+# This file defines the questions asked during interactive design creation
+
+questions:
+  - id: project_name
+    text: "What is your project name?"
+    type: text
+    help_text: "Choose a short, descriptive name for your project"
+    examples:
+      - "my-awesome-app"
+      - "ecommerce-api"
+      - "data-pipeline"
+    required: true
+    
+  - id: project_type
+    text: "What type of project are you building?"
+    type: choice
+    options:
+      - "Web Application"
+      - "REST API"
+      - "CLI Tool"
+      - "Data Pipeline"
+      - "Library/Package"
+      - "Mobile App"
+      - "Desktop App"
+      - "Other"
+    help_text: "This helps us ask the right follow-up questions"
+    required: true
+    
+  - id: primary_language
+    text: "What is your primary programming language?"
+    type: choice
+    options:
+      - "Python"
+      - "JavaScript"
+      - "TypeScript"
+      - "Go"
+      - "Rust"
+      - "Java"
+      - "C#"
+      - "Ruby"
+      - "PHP"
+      - "Other"
+    required: true
+    
+  - id: additional_languages
+    text: "Any additional languages? (comma-separated, or press Enter to skip)"
+    type: text
+    required: false
+    help_text: "For example: JavaScript,HTML,CSS"
+    
+  - id: requirements
+    text: "Describe what you want to build in 1-2 sentences"
+    type: text
+    help_text: "Be specific about key features and goals"
+    examples:
+      - "Build a REST API for managing user accounts with JWT authentication"
+      - "Create a CLI tool for processing CSV files and generating reports"
+      - "Develop a web application for team collaboration with real-time updates"
+    required: true
+    
+  - id: frontend_framework
+    text: "Which frontend framework?"
+    type: choice
+    options:
+      - "React"
+      - "Vue"
+      - "Svelte"
+      - "Angular"
+      - "Vanilla JS"
+      - "None (backend only)"
+    depends_on:
+      project_type: "Web Application"
+    help_text: "Choose the framework you're most comfortable with"
+    
+  - id: backend_framework
+    text: "Which backend framework?"
+    type: choice
+    options:
+      - "FastAPI"
+      - "Django"
+      - "Flask"
+      - "Express.js"
+      - "NestJS"
+      - "Spring Boot"
+      - "Rails"
+      - "ASP.NET Core"
+      - "Other"
+    depends_on:
+      project_type: ["Web Application", "REST API"]
+    help_text: "Select the framework that best fits your needs"
+    
+  - id: database
+    text: "What database will you use?"
+    type: choice
+    options:
+      - "PostgreSQL"
+      - "MySQL"
+      - "MongoDB"
+      - "Redis"
+      - "SQLite"
+      - "Firestore"
+      - "DynamoDB"
+      - "None"
+    depends_on:
+      project_type: ["Web Application", "REST API", "Data Pipeline"]
+    help_text: "Choose based on your data structure needs"
+    
+  - id: authentication
+    text: "Do you need user authentication?"
+    type: yesno
+    default: true
+    depends_on:
+      project_type: ["Web Application", "REST API"]
+    help_text: "Required for user accounts, login, and protected routes"
+    
+  - id: external_apis
+    text: "Any external APIs to integrate? (comma-separated, or press Enter to skip)"
+    type: text
+    help_text: "e.g., Stripe, SendGrid, Twilio, OpenAI, AWS S3"
+    required: false
+    examples:
+      - "Stripe,SendGrid"
+      - "OpenAI,Pinecone"
+      - "AWS S3,CloudFront"
+    
+  - id: deployment_platform
+    text: "Where will you deploy?"
+    type: choice
+    options:
+      - "AWS"
+      - "Google Cloud"
+      - "Azure"
+      - "Heroku"
+      - "Vercel"
+      - "Netlify"
+      - "Railway"
+      - "DigitalOcean"
+      - "Render"
+      - "Self-hosted"
+      - "Not sure yet"
+    required: false
+    help_text: "Your deployment target (can be changed later)"
+    default: "Not sure yet"
+    
+  - id: testing_requirements
+    text: "What level of testing do you need?"
+    type: choice
+    options:
+      - "Comprehensive (unit + integration + e2e)"
+      - "Standard (unit + integration)"
+      - "Basic (unit tests only)"
+      - "Minimal"
+    default: "Standard (unit + integration)"
+    help_text: "More testing means higher quality but more development time"
+    
+  - id: ci_cd
+    text: "Do you want CI/CD pipeline setup?"
+    type: yesno
+    default: true
+    help_text: "Automated testing and deployment on every commit"
+    
+  - id: documentation_level
+    text: "How much documentation do you need?"
+    type: choice
+    options:
+      - "Comprehensive (API docs + guides + examples)"
+      - "Standard (API docs + README)"
+      - "Basic (README only)"
+      - "Minimal"
+    default: "Standard (API docs + README)"
+    required: false
+    help_text: "Good documentation helps team collaboration"

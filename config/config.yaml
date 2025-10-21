@@ -1,0 +1,73 @@
+# DevPlan Orchestrator Configuration
+
+# Global LLM Provider Configuration (fallback for all stages)
+llm_provider: openai  # Options: openai, generic, requesty
+model: gpt-4  # Model identifier (e.g., gpt-4, gpt-3.5-turbo, claude-3-opus)
+temperature: 0.7
+max_tokens: 4096
+
+# Per-Stage LLM Configuration (optional overrides)
+# Uncomment and configure to use different models/providers for each stage
+# 
+# design_llm_provider: openai
+# design_model: gpt-4
+# design_temperature: 0.7
+# design_max_tokens: 4096
+#
+# devplan_llm_provider: openai
+# devplan_model: gpt-3.5-turbo  # Use a cheaper model for devplan
+# devplan_temperature: 0.5
+# devplan_max_tokens: 8192
+#
+# handoff_llm_provider: openai
+# handoff_model: gpt-4
+# handoff_temperature: 0.8
+# handoff_max_tokens: 4096
+#
+# You can also set per-stage API keys via environment variables:
+# DESIGN_API_KEY=sk-...
+# DEVPLAN_API_KEY=sk-...
+# HANDOFF_API_KEY=sk-...
+
+# API Configuration
+api_timeout: 60  # Request timeout in seconds
+max_concurrent_requests: 5  # Maximum number of concurrent API calls
+
+# Retry Configuration
+retry:
+  max_attempts: 3  # Maximum number of retry attempts
+  initial_delay: 1  # Initial delay in seconds
+  max_delay: 60  # Maximum delay in seconds
+  exponential_base: 2  # Exponential backoff base
+
+# Streaming Configuration
+streaming_enabled: false  # Enable/disable token streaming
+streaming_callback: null  # Custom streaming callback function
+
+# Output Configuration
+output_dir: ./docs  # Directory for generated documentation
+state_dir: ./.devussy_state  # Directory for state persistence
+
+# Logging Configuration
+log_level: INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_file: logs/devussy.log  # Log file path
+log_format: "[%(asctime)s] %(levelname)s - %(name)s - %(message)s"
+
+# Git Configuration
+git_enabled: true  # Enable/disable automatic git commits
+git_commit_after_design: true
+git_commit_after_devplan: true
+git_commit_after_handoff: true
+
+# Documentation Configuration
+documentation:
+  auto_generate: true  # Automatically generate documentation
+  include_citations: true  # Include citations in documentation
+  timestamp_updates: true  # Add timestamps to documentation updates
+  generate_index: true  # Generate documentation index
+
+# Pipeline Configuration
+pipeline:
+  save_intermediate_results: true  # Save intermediate pipeline results
+  validate_output: true  # Validate pipeline output
+  enable_checkpoints: true  # Enable progress checkpoints for resumable workflows

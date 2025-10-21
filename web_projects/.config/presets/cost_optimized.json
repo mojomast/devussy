@@ -1,0 +1,47 @@
+{
+  "id": "cost_optimized",
+  "name": "Cost-Optimized (GPT-4 + GPT-3.5)",
+  "description": "Use GPT-4 for design stage (complex reasoning), GPT-3.5 Turbo for devplan/handoff (structured output) to minimize costs while maintaining quality",
+  "default_model_config": {
+    "provider_credential_id": "default_openai",
+    "model_name": "gpt-4",
+    "temperature": 0.7,
+    "max_tokens": 4096,
+    "top_p": 1.0,
+    "frequency_penalty": 0.0,
+    "presence_penalty": 0.0
+  },
+  "stage_overrides": {
+    "devplan": {
+      "stage": "devplan",
+      "model_config": {
+        "provider_credential_id": "default_openai",
+        "model_name": "gpt-3.5-turbo",
+        "temperature": 0.5,
+        "max_tokens": 2048,
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+      },
+      "enabled": true,
+      "timeout": 60,
+      "max_retries": 3
+    },
+    "handoff": {
+      "stage": "handoff",
+      "model_config": {
+        "provider_credential_id": "default_openai",
+        "model_name": "gpt-3.5-turbo",
+        "temperature": 0.5,
+        "max_tokens": 2048,
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+      },
+      "enabled": true,
+      "timeout": 60,
+      "max_retries": 3
+    }
+  },
+  "estimated_cost_per_project": "$0.40-0.60"
+}
