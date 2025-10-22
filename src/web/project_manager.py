@@ -280,9 +280,8 @@ class ProjectManager:
             # Create pipeline orchestrator
             from src.clients.factory import create_llm_client
             from src.concurrency import ConcurrencyManager
-            from src.config import load_config
             
-            app_config = load_config()
+            app_config = config  # Use the config we already loaded
             llm_client = create_llm_client(app_config)
             concurrency_manager = ConcurrencyManager(app_config.concurrency.max_concurrent)
             
@@ -302,10 +301,12 @@ class ProjectManager:
             await self._send_update(project_id, "stage", {"stage": "design", "progress": 0})
             
             # Generate design
+            # Use description or requirements
+            requirements_text = project.request.description or project.request.requirements or ""
             design = await orchestrator.project_design_gen.generate(
                 project_name=project.request.name,
                 languages=project.request.languages,
-                requirements=project.request.requirements.split('\n'),
+                requirements=requirements_text.split('\n') if requirements_text else [],
                 frameworks=project.request.frameworks,
                 apis=project.request.apis,
             )

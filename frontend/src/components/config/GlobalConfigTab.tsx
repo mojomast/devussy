@@ -251,6 +251,109 @@ const GlobalConfigTab: React.FC = () => {
         </div>
       </div>
 
+      {/* Stage-Specific Model Configuration */}
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">
+          Pipeline Stage Configuration
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Assign different models to different stages (Design → DevPlan → Handoff).
+          Leave empty to use the default model for all stages.
+        </p>
+        
+        <div className="space-y-6">
+          {/* Design Stage */}
+          <div className="border-l-4 border-blue-500 pl-4">
+            <h4 className="font-medium text-gray-900 mb-3">🎨 Design Stage</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Model (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Use default model"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Temperature
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  placeholder="0.7"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* DevPlan Stage */}
+          <div className="border-l-4 border-green-500 pl-4">
+            <h4 className="font-medium text-gray-900 mb-3">📋 DevPlan Stage</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Model (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Use default model"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Temperature
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  placeholder="0.7"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Handoff Stage */}
+          <div className="border-l-4 border-purple-500 pl-4">
+            <h4 className="font-medium text-gray-900 mb-3">🚀 Handoff Stage</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Model (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Use default model"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Temperature
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  placeholder="0.7"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* System Settings */}
       <div className="bg-white border border-gray-200 rounded-lg p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">System Settings</h3>

@@ -31,6 +31,12 @@ export interface ProjectCreateRequest {
     enable_streaming?: boolean;
     output_dir?: string;
   };
+  // Per-stage model configuration
+  provider?: string;
+  model?: string;
+  design_model?: string;
+  devplan_model?: string;
+  handoff_model?: string;
 }
 
 export interface ProjectResponse {

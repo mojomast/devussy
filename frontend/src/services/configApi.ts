@@ -221,12 +221,19 @@ export const configApi = {
   // ============ Model Discovery ============
 
   /**
-   * List available models for a provider
+   * List available models for a credential
    */
-  async listModels(provider: ProviderType): Promise<string[]> {
-    const response = await axios.get(`${API_BASE}/models/${provider}`);
-    return response.data;
+  async listAvailableModels(credentialId: string): Promise<AvailableModel[]> {
+    const response = await axios.get(`${API_BASE}/credentials/${credentialId}/models`);
+    return response.data.models || [];
   }
 };
+
+export interface AvailableModel {
+  id: string;
+  name: string;
+  description: string;
+  context_window: number;
+}
 
 export default configApi;

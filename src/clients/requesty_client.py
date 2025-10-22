@@ -1,21 +1,10 @@
 """Requesty client implementation.
 
-This is a placeholder implementation for a provider referred to as
-"Requesty". It assumes a simple JSON API with an endpoint like:
+Requesty is an OpenAI-compatible API gateway that routes requests to 300+ models.
+It uses the standard OpenAI chat completions API format.
 
-POST <base_url>/v1/generate
-{
-  "prompt": "...",
-  "model": "model-id",
-  "temperature": 0.7,
-  "max_tokens": 1024,
-  "top_p": 1.0
-}
-
-Response:
-{
-  "text": "generated content..."
-}
+Endpoint: https://router.requesty.ai/v1/chat/completions
+Models: Use format "provider/model" (e.g., "openai/gpt-4o", "anthropic/claude-3-opus")
 """
 
 from __future__ import annotations
@@ -30,14 +19,14 @@ from ..llm_client import LLMClient
 
 
 class RequestyClient(LLMClient):
-    """Client for the Requesty API (hypothetical)."""
+    """Client for Requesty AI - OpenAI-compatible API gateway."""
 
     def __init__(self, config: Any) -> None:
         super().__init__(config)
         llm = getattr(config, "llm", None)
         self._api_key = getattr(llm, "api_key", None)
-        self._base_url = getattr(llm, "base_url", None) or ""
-        self._model = getattr(llm, "model", "default")
+        self._base_url = getattr(llm, "base_url", None) or "https://router.requesty.ai/v1"
+        self._model = getattr(llm, "model", "openai/gpt-4o-mini")
         self._temperature = getattr(llm, "temperature", 0.7)
         self._max_tokens = getattr(llm, "max_tokens", 1024)
 
@@ -49,10 +38,12 @@ class RequestyClient(LLMClient):
 
     @property
     def _endpoint(self) -> str:
+        """Return the OpenAI-compatible chat completions endpoint."""
         base = self._base_url.rstrip("/")
-        return f"{base}/v1/generate"
+        return f"{base}/chat/completions"
 
-    async def _post_generate(self, prompt: str, **kwargs: Any) -> str:
+    async def _post_chat(self, prompt: str, **kwargs: Any) -> str:
+        """Post to OpenAI-compatible chat completions endpoint."""
         model = kwargs.get("model", self._model)
         temperature = kwargs.get("temperature", self._temperature)
         max_tokens = kwargs.get("max_tokens", self._max_tokens)
@@ -62,9 +53,11 @@ class RequestyClient(LLMClient):
             "Authorization": f"Bearer {self._api_key}" if self._api_key else "",
             "Content-Type": "application/json",
         }
+        
+        # Use OpenAI chat format
         payload: dict[str, Any] = {
-            "prompt": prompt,
             "model": model,
+            "messages": [{"role": "user", "content": prompt}],
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
@@ -80,13 +73,12 @@ class RequestyClient(LLMClient):
             ) as resp:
                 resp.raise_for_status()
                 data = await resp.json()
-                # Prefer `text`, fallback to OpenAI-like shape if present
-                text = data.get("text")
-                if isinstance(text, str):
-                    return text
+                # OpenAI format: choices[0].message.content
                 return (
-                    data.get("choices", [{}])[0].get("message", {}).get("content")
-                ) or ""
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
 
     async def generate_completion(self, prompt: str, **kwargs: Any) -> str:
         async for attempt in AsyncRetrying(
@@ -99,7 +91,7 @@ class RequestyClient(LLMClient):
             ),
         ):
             with attempt:
-                return await self._post_generate(prompt, **kwargs)
+                return await self._post_chat(prompt, **kwargs)
 
     async def generate_multiple(self, prompts: Iterable[str]) -> List[str]:
         concurrency = getattr(self._config, "max_concurrent_requests", 5) or 5

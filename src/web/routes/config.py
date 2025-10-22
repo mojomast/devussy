@@ -205,24 +205,48 @@ async def test_credential(credential_id: str):
         
         # Import here to avoid circular dependency
         from ...clients.factory import create_llm_client
-        from ...config import LLMConfig
+        from ...config import LLMConfig, RetryConfig
+        from types import SimpleNamespace
         
-        # Create a test LLM config
-        test_config = LLMConfig(
+        # Create a test LLM config that matches what the clients expect
+        # The clients expect config.llm.api_key, config.llm.model, etc.
+        # Requesty uses OpenAI-compatible format with models like "openai/gpt-4o"
+        if credential.provider == "openai":
+            test_model = "gpt-3.5-turbo"
+        elif credential.provider == "requesty":
+            test_model = "openai/gpt-4o-mini"  # Use a cheap model for testing
+        else:
+            test_model = "test-model"
+        
+        llm_config = LLMConfig(
             provider=credential.provider,
             api_key=api_key,
-            api_base=credential.api_base,
-            organization_id=credential.organization_id,
-            model="gpt-3.5-turbo" if credential.provider == "openai" else "test-model",
+            base_url=credential.api_base,
+            org_id=credential.organization_id,
+            model=test_model,
             temperature=0.7,
             max_tokens=10  # Just a tiny test
+        )
+        
+        retry_config = RetryConfig(
+            max_attempts=2,
+            initial_delay=1.0,
+            max_delay=5.0,
+            exponential_base=2.0
+        )
+        
+        # Wrap in a namespace that matches the expected structure
+        test_config = SimpleNamespace(
+            llm=llm_config,
+            retry=retry_config,
+            max_concurrent_requests=1
         )
         
         # Create client and test
         client = create_llm_client(test_config)
         
         # Try a simple test request
-        result = await client.generate_completion("Test", "Say 'OK'")
+        result = await client.generate_completion("Say 'OK' if you can read this.")
         
         # Update credential status
         credential.is_valid = True
@@ -251,6 +275,80 @@ async def test_credential(credential_id: str):
             message=f"API key test failed: {str(e)}",
             tested_at=credential.last_tested,
             details={"error": str(e)}
+        )
+
+
+@router.get("/credentials/{credential_id}/models")
+async def list_available_models(credential_id: str):
+    """
+    List available models for a credential.
+    
+    Makes an API call to the provider to fetch available models.
+    Currently supports Requesty provider.
+    """
+    credential = storage.load_credential(credential_id)
+    
+    if credential is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Credential not found: {credential_id}"
+        )
+    
+    try:
+        # Decrypt the API key
+        api_key = security.decrypt(credential.api_key_encrypted)
+        
+        # Handle different providers
+        if credential.provider == "requesty":
+            # Requesty models endpoint (OpenAI-compatible)
+            import aiohttp
+            
+            base_url = credential.api_base or "https://router.requesty.ai/v1"
+            models_endpoint = f"{base_url.rstrip('/')}/models"
+            
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(models_endpoint, headers=headers) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                    
+                    # Extract model list from response
+                    # Requesty returns OpenAI format: {"data": [{"id": "provider/model", ...}]}
+                    # or custom format: {"models": [...]}
+                    models_list = data.get("data", data.get("models", []))
+                    
+                    return {
+                        "success": True,
+                        "provider": credential.provider,
+                        "models": [
+                            {
+                                "id": m.get("id", m.get("name", "unknown")),
+                                "name": m.get("name", m.get("id", "Unknown Model")),
+                                "description": m.get("description", ""),
+                                "context_window": m.get("context_window", m.get("max_tokens", 0))
+                            }
+                            for m in models_list
+                        ]
+                    }
+        else:
+            # For other providers, return a placeholder or error
+            return {
+                "success": False,
+                "provider": credential.provider,
+                "message": f"Model listing not yet implemented for {credential.provider}",
+                "models": []
+            }
+    
+    except Exception as e:
+        logger.error(f"Failed to list models: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list models: {str(e)}"
         )
 
 
@@ -482,7 +580,7 @@ async def estimate_cost(request: CostEstimateRequest):
 # Model Discovery Endpoint
 
 @router.get("/models/{provider}")
-async def list_available_models(provider: ProviderType):
+async def list_models_by_provider(provider: ProviderType):
     """
     List available models for a provider.
     

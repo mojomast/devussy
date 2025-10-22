@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { projectsApi, ProjectCreateRequest } from '../services/projectsApi';
-import { configApi, GlobalConfig } from '../services/configApi';
+import { configApi, GlobalConfig, ProviderCredentials, AvailableModel } from '../services/configApi';
 
 const CreateProjectPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,17 +17,46 @@ const CreateProjectPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
+  const [credentials, setCredentials] = useState<ProviderCredentials[]>([]);
+  const [availableModels, setAvailableModels] = useState<Record<string, AvailableModel[]>>({});
+  const [loadingModels, setLoadingModels] = useState<boolean>(false);
+  const [selectedCredential, setSelectedCredential] = useState<string>('');
 
   useEffect(() => {
-    loadGlobalConfig();
+    loadConfigAndCredentials();
   }, []);
 
-  const loadGlobalConfig = async () => {
+  const loadConfigAndCredentials = async () => {
     try {
-      const config = await configApi.getGlobalConfig();
+      const [config, creds] = await Promise.all([
+        configApi.getGlobalConfig().catch(() => null),
+        configApi.listCredentials().catch(() => [])
+      ]);
       setGlobalConfig(config);
+      setCredentials(creds);
+      
+      // Auto-select first valid credential
+      const validCred = creds.find(c => c.is_valid);
+      if (validCred) {
+        setSelectedCredential(validCred.id);
+        loadModelsForCredential(validCred.id);
+      }
     } catch (err) {
-      console.error('Failed to load global config:', err);
+      console.error('Failed to load configuration:', err);
+    }
+  };
+
+  const loadModelsForCredential = async (credentialId: string) => {
+    if (availableModels[credentialId]) return; // Already loaded
+    
+    try {
+      setLoadingModels(true);
+      const models = await configApi.listAvailableModels(credentialId);
+      setAvailableModels(prev => ({ ...prev, [credentialId]: models }));
+    } catch (err) {
+      console.error('Failed to load models:', err);
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -92,20 +121,20 @@ const CreateProjectPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Create New Project</h1>
-        <p className="text-gray-600 mt-2">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Project</h1>
+        <p className="text-lg text-gray-600 dark:text-gray-300 mt-2">
           Generate comprehensive documentation for your development project
         </p>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-800">{error}</p>
+          <p className="text-base text-red-800 font-medium">{error}</p>
         </div>
       )}
 
       {/* Configuration Status */}
-      {globalConfig && (
+      {(globalConfig || credentials.length > 0) && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
             <svg
@@ -120,20 +149,16 @@ const CreateProjectPage: React.FC = () => {
               />
             </svg>
             <div>
-              <h3 className="font-medium text-blue-900">Configuration Active</h3>
-              <p className="text-sm text-blue-700 mt-1">
-                Using global configuration with default model. You can change this in{' '}
-                <a href="/settings" className="underline">
-                  Settings
-                </a>
-                .
+              <h3 className="font-semibold text-blue-900 text-base">✅ Configuration Active</h3>
+              <p className="text-base text-blue-800 mt-1 leading-relaxed">
+                {credentials.length} credential(s) available. You can configure different models for each phase below.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {!globalConfig && (
+      {!globalConfig && credentials.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
             <svg
@@ -148,10 +173,10 @@ const CreateProjectPage: React.FC = () => {
               />
             </svg>
             <div>
-              <h3 className="font-medium text-yellow-900">No Configuration Found</h3>
-              <p className="text-sm text-yellow-700 mt-1">
+              <h3 className="font-semibold text-yellow-900 text-base">⚠️ No Credentials Found</h3>
+              <p className="text-base text-yellow-800 mt-1 leading-relaxed">
                 Please set up your API credentials in{' '}
-                <a href="/settings" className="underline">
+                <a href="/settings" className="underline font-bold hover:text-yellow-900">
                   Settings
                 </a>{' '}
                 before creating a project.
@@ -164,7 +189,7 @@ const CreateProjectPage: React.FC = () => {
       <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-6">
         {/* Project Name */}
         <div className="mb-6">
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="name" className="block text-base font-semibold text-gray-900 dark:text-white mb-2">
             Project Name *
           </label>
           <input
@@ -174,10 +199,10 @@ const CreateProjectPage: React.FC = () => {
             value={formData.name}
             onChange={handleInputChange}
             placeholder="My Awesome Project"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-3 text-base text-gray-900 dark:text-white placeholder-gray-400 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
             A clear, descriptive name for your project
           </p>
         </div>
@@ -186,7 +211,7 @@ const CreateProjectPage: React.FC = () => {
         <div className="mb-6">
           <label
             htmlFor="description"
-            className="block text-sm font-medium text-gray-700 mb-2"
+            className="block text-base font-semibold text-gray-900 dark:text-white mb-2"
           >
             Project Description *
           </label>
@@ -197,10 +222,10 @@ const CreateProjectPage: React.FC = () => {
             onChange={handleInputChange}
             placeholder="A web application that helps users manage their tasks with AI-powered suggestions..."
             rows={6}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-3 text-base text-gray-900 dark:text-white placeholder-gray-400 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 leading-relaxed"
             required
           />
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
             Describe your project's purpose, features, and technical requirements. The more detail
             you provide, the better the generated documentation.
           </p>
@@ -208,35 +233,35 @@ const CreateProjectPage: React.FC = () => {
 
         {/* Options */}
         <div className="mb-6">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Options</h3>
-          <div className="space-y-3">
-            <label className="flex items-center gap-3">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Options</h3>
+          <div className="space-y-4">
+            <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 name="enable_git"
                 checked={formData.options?.enable_git || false}
                 onChange={handleCheckboxChange}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-5 h-5 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <div>
-                <span className="text-sm font-medium text-gray-900">Enable Git Integration</span>
-                <p className="text-xs text-gray-500">
+                <span className="text-base font-medium text-gray-900 dark:text-white">Enable Git Integration</span>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Automatically initialize a Git repository and commit generated files
                 </p>
               </div>
             </label>
 
-            <label className="flex items-center gap-3">
+            <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 name="enable_streaming"
                 checked={formData.options?.enable_streaming !== false}
                 onChange={handleCheckboxChange}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className="w-5 h-5 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <div>
-                <span className="text-sm font-medium text-gray-900">Enable Streaming</span>
-                <p className="text-xs text-gray-500">
+                <span className="text-base font-medium text-gray-900 dark:text-white">Enable Streaming</span>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   Show real-time progress updates during generation
                 </p>
               </div>
@@ -244,17 +269,115 @@ const CreateProjectPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Per-Stage Model Selection */}
+        {credentials.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">🎯 Model Configuration Per Phase</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+              Optionally select different models for each phase of your project generation. Leave blank to use defaults.
+            </p>
+            
+            {/* Credential Selector */}
+            <div className="mb-4">
+              <label className="block text-base font-medium text-gray-900 dark:text-white mb-2">
+                API Credential
+              </label>
+              <select
+                value={selectedCredential}
+                onChange={(e) => {
+                  setSelectedCredential(e.target.value);
+                  loadModelsForCredential(e.target.value);
+                }}
+                className="w-full px-4 py-3 text-base text-gray-900 dark:text-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Use Global Default --</option>
+                {credentials.map(cred => (
+                  <option key={cred.id} value={cred.id}>
+                    {cred.name} ({cred.provider}) {cred.is_valid ? '✓' : '⚠️ Not Tested'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Model Selection Grid */}
+            {selectedCredential && availableModels[selectedCredential] && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Design Phase */}
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900 mb-3 text-base">🎨 Design Phase</h4>
+                  <select
+                    value={formData.design_model || ''}
+                    onChange={(e) => setFormData({ ...formData, design_model: e.target.value })}
+                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-white border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- Default Model --</option>
+                    {availableModels[selectedCredential].map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-blue-700 mt-3 leading-relaxed">Creates initial project architecture</p>
+                </div>
+
+                {/* DevPlan Phase */}
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-900 mb-3 text-base">📋 DevPlan Phase</h4>
+                  <select
+                    value={formData.devplan_model || ''}
+                    onChange={(e) => setFormData({ ...formData, devplan_model: e.target.value })}
+                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-white border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">-- Default Model --</option>
+                    {availableModels[selectedCredential].map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-green-700 mt-3 leading-relaxed">Generates detailed development plan</p>
+                </div>
+
+                {/* Handoff Phase */}
+                <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-purple-900 mb-3 text-base">🚀 Handoff Phase</h4>
+                  <select
+                    value={formData.handoff_model || ''}
+                    onChange={(e) => setFormData({ ...formData, handoff_model: e.target.value })}
+                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-white border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="">-- Default Model --</option>
+                    {availableModels[selectedCredential].map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-purple-700 mt-3 leading-relaxed">Creates handoff documentation</p>
+                </div>
+              </div>
+            )}
+
+            {loadingModels && selectedCredential && (
+              <div className="text-center py-4">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="text-base text-gray-600 dark:text-gray-400 mt-3 font-medium">Loading available models...</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Submit Button */}
         <div className="flex gap-4">
           <button
             type="submit"
-            disabled={loading || !globalConfig}
-            className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+            disabled={loading || (credentials.length === 0 && !globalConfig)}
+            className="flex-1 px-6 py-4 text-lg bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold shadow-md hover:shadow-lg"
           >
             {loading ? (
-              <span className="flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-3">
                 <svg
-                  className="animate-spin h-5 w-5"
+                  className="animate-spin h-6 w-6"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
@@ -282,7 +405,7 @@ const CreateProjectPage: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/projects')}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            className="px-6 py-4 text-lg bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
           >
             Cancel
           </button>

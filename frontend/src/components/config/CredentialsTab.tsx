@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { configApi, ProviderCredentials, ProviderType, CreateCredentialRequest } from '../../services/configApi';
+import { configApi, ProviderCredentials, ProviderType, CreateCredentialRequest, AvailableModel } from '../../services/configApi';
 
 const CredentialsTab: React.FC = () => {
   const [credentials, setCredentials] = useState<ProviderCredentials[]>([]);
@@ -8,6 +8,8 @@ const CredentialsTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [loadingModelsId, setLoadingModelsId] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<Record<string, AvailableModel[]>>({});
   
   // Form state
   const [formData, setFormData] = useState<CreateCredentialRequest>({
@@ -94,13 +96,31 @@ const CredentialsTab: React.FC = () => {
     });
     
     try {
-      await testPromise;
+      const result = await testPromise;
       // Reload to get updated is_valid status
       await loadCredentials();
+      
+      // If test was successful, automatically fetch available models
+      if (result.success) {
+        await handleLoadModels(id);
+      }
     } catch (err: any) {
       // Error already handled by toast.promise
     } finally {
       setTestingId(null);
+    }
+  };
+
+  const handleLoadModels = async (id: string) => {
+    setLoadingModelsId(id);
+    try {
+      const models = await configApi.listAvailableModels(id);
+      setAvailableModels(prev => ({ ...prev, [id]: models }));
+      toast.success(`✅ Loaded ${models.length} available models`);
+    } catch (err: any) {
+      toast.error(`Failed to load models: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setLoadingModelsId(null);
     }
   };
 
@@ -326,6 +346,15 @@ const CredentialsTab: React.FC = () => {
                   >
                     {testingId === cred.id ? '⏳ Testing...' : '🔍 Test'}
                   </button>
+                  {cred.is_valid && (
+                    <button
+                      onClick={() => handleLoadModels(cred.id)}
+                      disabled={loadingModelsId === cred.id}
+                      className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingModelsId === cred.id ? '⏳ Loading...' : '📋 List Models'}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(cred.id)}
                     className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
@@ -334,6 +363,29 @@ const CredentialsTab: React.FC = () => {
                   </button>
                 </div>
               </div>
+              
+              {/* Available Models Section */}
+              {availableModels[cred.id] && availableModels[cred.id].length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Available Models ({availableModels[cred.id].length})</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {availableModels[cred.id].map((model) => (
+                      <div
+                        key={model.id}
+                        className="p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="font-mono text-xs text-blue-600">{model.id}</div>
+                        <div className="text-xs text-gray-600 mt-1">{model.name}</div>
+                        {model.context_window > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Context: {model.context_window.toLocaleString()} tokens
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

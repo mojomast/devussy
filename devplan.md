@@ -4,7 +4,7 @@
 
 DevUssY (DevPlan Orchestrator) is an AI-powered development planning tool that generates comprehensive project documentation. This development plan tracks the completion of the core CLI tool and web interface.
 
-**Current Status:** Phase 11 - Web Interface Configuration System (COMPLETED ✅)
+**Current Status:** Phase 17 - Requesty Provider Integration & Model Management (COMPLETED ✅)
 
 ---
 
@@ -435,17 +435,106 @@ Enhance template system and improve project list management with better UX featu
 
 ---
 
-## Remaining Tasks (Optional Enhancements)
-- [ ] Search & Filtering
-  - Search projects by name/description
-  - Advanced filters (date range, status)
-  - Sort options (date, name, status)
-  
-- [ ] Project Templates
-  - Save project configs as templates
-  - Quick start from templates
-  - Template library
+## Phase 17: Requesty Provider Integration & Model Management ✅
 
+**Status:** COMPLETED  
+**Completed:** October 22, 2025  
+**Duration:** 1 session
+
+### Objectives
+Fix API credential testing and add model management features specifically for Requesty provider.
+
+### Completed Tasks
+
+#### 1. Fixed API Credential Testing ✅
+- **Root Issue:** "api_key client option must be set" error when testing credentials
+- **Root Cause:** LLMConfig wasn't wrapped in structure clients expect (config.llm.api_key)
+- **Solution Implemented:**
+  - Updated `/api/config/credentials/{id}/test` endpoint in `src/web/routes/config.py`
+  - Created proper config wrapper using SimpleNamespace
+  - Wrapped LLMConfig in structure: `config.llm`, `config.retry`, `config.max_concurrent_requests`
+  - Clients now receive config in expected format
+  - Test endpoint works with Requesty provider
+
+#### 2. Model Listing from Requesty API ✅
+- **Backend Implementation:**
+  - Added endpoint: `GET /api/config/credentials/{credential_id}/models`
+  - Fetches available models from Requesty API's `/v1/models` endpoint
+  - Returns structured model data: id, name, description, context_window
+  - Error handling for unsupported providers
+  
+- **Frontend Implementation:**
+  - Updated `configApi.ts` with `listAvailableModels()` method
+  - Added `AvailableModel` TypeScript interface
+  - Enhanced `CredentialsTab.tsx` with:
+    - "List Models" button (appears when credential is valid)
+    - Automatic model loading after successful test
+    - Grid display of available models
+    - Model details: ID, name, context window
+  - Toast notifications for loading success/failure
+
+#### 3. Per-Stage Model Configuration UI ✅
+- **Global Config Tab Enhancement:**
+  - Added "Pipeline Stage Configuration" section
+  - Three stage cards: Design (blue), DevPlan (green), Handoff (purple)
+  - Each stage allows:
+    - Optional model override (defaults to global model)
+    - Temperature configuration
+  - Color-coded visual organization
+  - Clear explanation text
+
+#### 4. Verified CLI Integration ✅
+- **Confirmed Web UI Uses CLI Structure:**
+  - `src/web/project_manager.py` analysis:
+    - Uses `load_config()` from `src/config.py`
+    - Uses `create_llm_client()` from `src/clients/factory.py`
+    - Uses `PipelineOrchestrator` from `src/pipeline/compose.py`
+    - Same config structure between CLI and web
+  - Requesty client works in both CLI and web contexts
+  - Shared infrastructure confirmed
+
+### Files Modified/Created
+
+**Backend:**
+- Modified: `src/web/routes/config.py`
+  - Fixed test_credential() function with proper config wrapper
+  - Added list_available_models() endpoint for Requesty
+- Modified: `src/web/config_models.py`
+  - Added AvailableModel Pydantic model
+
+**Frontend:**
+- Modified: `frontend/src/services/configApi.ts`
+  - Added listAvailableModels() method
+  - Added AvailableModel TypeScript interface
+- Modified: `frontend/src/components/config/CredentialsTab.tsx`
+  - Added handleLoadModels() function
+  - Added state for available models
+  - Added "List Models" button UI
+  - Added models grid display
+- Modified: `frontend/src/components/config/GlobalConfigTab.tsx`
+  - Added stage-specific model configuration section
+  - Color-coded stage cards
+  - Model and temperature inputs per stage
+
+### Testing Status
+- API credential testing working for Requesty
+- Model listing endpoint functional
+- Frontend UI displaying models correctly
+- No TypeScript compilation errors
+- Integration with existing UI flows verified
+
+### Benefits
+- **Fixed Critical Bug:** API credential testing now works
+- **Better UX:** Users see available models after testing credentials
+- **Flexibility:** Per-stage model assignment for optimized workflows
+- **Transparency:** Clear display of model capabilities and limits
+- **Verified Architecture:** Confirmed shared CLI/web infrastructure
+
+---
+
+## Remaining Tasks (Optional Enhancements)
+- [ ] Full stage override backend logic integration
+- [ ] Model cost estimation per stage
 - [ ] E2E Tests (Optional)
   - Playwright or Cypress tests
   - Full workflow testing

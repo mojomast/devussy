@@ -99,6 +99,14 @@ class StageConfig(BaseModel):
     max_retries: int = Field(default=3, ge=0, description="Maximum retry attempts")
 
 
+class AvailableModel(BaseModel):
+    """Information about an available model from a provider."""
+    id: str = Field(..., description="Model identifier")
+    name: str = Field(..., description="Display name")
+    description: str = Field(default="", description="Model description")
+    context_window: int = Field(default=0, description="Maximum context window size")
+
+
 class GlobalConfig(BaseModel):
     """
     Global configuration that applies to all projects.

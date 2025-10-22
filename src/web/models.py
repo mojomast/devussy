@@ -39,11 +39,14 @@ class ProjectCreateRequest(BaseModel):
     
     # Required fields
     name: str = Field(..., min_length=1, max_length=200, description="Project name")
-    project_type: ProjectType = Field(..., description="Type of project")
-    languages: List[str] = Field(..., min_items=1, description="Programming languages")
-    requirements: str = Field(..., min_length=10, description="Project requirements")
     
-    # Optional fields
+    # Description/Requirements (either field works)
+    description: Optional[str] = Field(None, min_length=10, description="Project description")
+    requirements: Optional[str] = Field(None, min_length=10, description="Project requirements")
+    
+    # Optional fields with defaults
+    project_type: ProjectType = Field(ProjectType.WEB_APP, description="Type of project")
+    languages: List[str] = Field(default_factory=lambda: ["Python"], description="Programming languages")
     frameworks: List[str] = Field(default_factory=list, description="Frameworks to use")
     apis: List[str] = Field(default_factory=list, description="External APIs to integrate")
     database: Optional[str] = Field(None, description="Database system")
@@ -52,12 +55,30 @@ class ProjectCreateRequest(BaseModel):
     testing_framework: Optional[str] = Field(None, description="Testing framework")
     ci_cd: Optional[bool] = Field(False, description="Include CI/CD")
     
+    # Options (for backward compatibility with frontend)
+    options: Optional[dict] = Field(None, description="Additional options")
+    
     # LLM configuration overrides
     provider: Optional[str] = Field(None, description="LLM provider (openai, generic, requesty)")
     model: Optional[str] = Field(None, description="Model name")
     design_model: Optional[str] = Field(None, description="Model for design stage")
     devplan_model: Optional[str] = Field(None, description="Model for devplan stage")
     handoff_model: Optional[str] = Field(None, description="Model for handoff stage")
+    
+    @validator("description", "requirements", pre=True, always=True)
+    def validate_description_or_requirements(cls, v, values):
+        """Ensure either description or requirements is provided."""
+        # If this field is empty, check the other one
+        if not v:
+            desc = values.get('description')
+            req = values.get('requirements')
+            if not desc and not req:
+                # Neither is set, this will fail
+                if 'name' in values:  # Only raise if name is already set (meaning we're past initial field)
+                    return None
+            # Copy from the other field if one is set
+            return req if 'requirements' in values else desc
+        return v
     
     @validator("name")
     def validate_name(cls, v):
