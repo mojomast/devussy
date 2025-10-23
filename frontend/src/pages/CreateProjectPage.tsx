@@ -305,6 +305,28 @@ const CreateProjectPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+              
+              {/* Requesty Model Format Help */}
+              {selectedCredential && credentials.find(c => c.id === selectedCredential)?.provider.toLowerCase() === 'requesty' && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                  <p className="text-sm text-blue-800 dark:text-blue-300">
+                    <strong>💡 Requesty Model Format:</strong> Model names must use{' '}
+                    <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded text-xs font-mono">
+                      provider/model
+                    </code>{' '}
+                    format (e.g., <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded text-xs font-mono">openai/gpt-4o</code>
+                    , <code className="bg-blue-100 dark:bg-blue-800 px-1 py-0.5 rounded text-xs font-mono">anthropic/claude-3-5-sonnet</code>).{' '}
+                    <a 
+                      href="https://docs.requesty.ai/models" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="underline hover:text-blue-600 dark:hover:text-blue-200"
+                    >
+                      View available models →
+                    </a>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Model Selection Grid */}
