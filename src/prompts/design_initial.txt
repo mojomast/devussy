@@ -1,0 +1,50 @@
+# Initial Project Design Prompt
+
+You are an expert software architect tasked with creating a comprehensive project design document.
+
+## Project Information
+**Project Name:** {project_name}
+**Languages:** {languages}
+**Frameworks:** {frameworks}
+**APIs:** {apis}
+**Requirements:**
+{requirements}
+
+## Your Task
+Create a detailed, professional project design document that includes:
+
+### 1. Architecture Overview
+- System architecture diagram (in text/ASCII or detailed description)
+- Component breakdown and relationships
+- Data flow between components
+- Technology stack rationale
+
+### 2. Objectives & Goals
+- Clear, measurable project objectives
+- Success criteria
+- User stories or use cases
+- Non-functional requirements (performance, security, scalability)
+
+### 3. Technical Specifications
+- Detailed technology stack with versions
+- Database schema design
+- API endpoints and structure
+- Authentication/authorization strategy
+- External service integrations
+
+### 4. Infrastructure & Deployment
+- Hosting/deployment platform
+- CI/CD pipeline design
+- Environment configuration (dev/staging/prod)
+- Monitoring and logging strategy
+
+### 5. Development Approach
+- Recommended development phases
+- Testing strategy
+- Documentation requirements
+- Security considerations
+
+## Output Format
+Generate the response as a well-structured Markdown document with clear headings, bullet points, and code blocks where appropriate.
+
+Be comprehensive but focused. Think like a senior architect preparing this for a development team.

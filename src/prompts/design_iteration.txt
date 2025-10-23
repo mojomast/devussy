@@ -1,0 +1,34 @@
+# Design Iteration Prompt
+
+You are refining a project design based on user feedback.
+
+## Original Design
+{original_design}
+
+## User Feedback (Iteration {iteration_number})
+{user_feedback}
+
+## Your Task
+Update the project design to incorporate the user's feedback while maintaining:
+- Consistency with the original vision
+- Technical best practices
+- Completeness and clarity
+
+### Guidelines
+1. **Preserve good elements:** Keep aspects the user approved or didn't question
+2. **Address feedback directly:** Make specific changes requested by the user
+3. **Maintain coherence:** Ensure all sections still align with each other
+4. **Add details:** If the user asks for more information, provide comprehensive details
+5. **Suggest improvements:** If the feedback opens up better approaches, suggest them
+
+### What to Update
+- Expand sections where user requested more detail
+- Add new components/features requested
+- Revise architecture if fundamental changes were requested
+- Update technology choices if alternatives were suggested
+- Clarify confusing or ambiguous sections
+
+## Output Format
+Generate a COMPLETE updated design document (not just the changes). This should be a polished, production-ready design that reflects all feedback.
+
+Use the same Markdown structure as the original, ensuring all sections are comprehensive and clear.

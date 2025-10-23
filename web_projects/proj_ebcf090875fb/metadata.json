@@ -1,0 +1,22 @@
+{
+  "id": "proj_ebcf090875fb",
+  "name": "test hell yeah its the test",
+  "status": "failed",
+  "current_stage": null,
+  "progress": 0,
+  "created_at": "2025-10-22T06:15:43.461120",
+  "updated_at": "2025-10-22T06:15:43.472566",
+  "completed_at": null,
+  "request": {
+    "name": "test hell yeah its the test",
+    "project_type": "web_app",
+    "languages": [
+      "Python"
+    ],
+    "frameworks": [],
+    "apis": [],
+    "requirements": "test for a devplan for testing devussy"
+  },
+  "files": {},
+  "error": "\"LLMConfig\" object has no field \"design_model\""
+}

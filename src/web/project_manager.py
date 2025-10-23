@@ -49,14 +49,26 @@ class Project:
     # Output directory
     output_dir: str
     
-    # Generated files
-    files: List[str]
+    # Generated files (dict mapping type to filepath)
+    files: Dict[str, Optional[str]]
     
     # Error information
     error: Optional[str] = None
     
     # Task handle for cancellation
     _task: Optional[asyncio.Task] = None
+    
+    # NEW: Iteration support
+    current_iteration: int = 0
+    awaiting_user_input: bool = False
+    iteration_prompt: Optional[str] = None
+    current_stage_output: Optional[str] = None
+    iteration_history: List[dict] = None  # Will be initialized in __post_init__
+    
+    def __post_init__(self):
+        """Initialize mutable defaults."""
+        if self.iteration_history is None:
+            self.iteration_history = []
     
     def to_response(self) -> ProjectResponse:
         """Convert to API response model."""
@@ -74,6 +86,10 @@ class Project:
             frameworks=self.request.frameworks,
             files=self.files,
             error=self.error,
+            current_iteration=self.current_iteration,
+            awaiting_user_input=self.awaiting_user_input,
+            iteration_prompt=self.iteration_prompt,
+            current_stage_output=self.current_stage_output,
         )
 
 
@@ -119,7 +135,7 @@ class ProjectManager:
             completed_at=None,
             request=request,
             output_dir=str(output_dir),
-            files=[],
+            files={},  # Changed from [] to {}
             error=None,
         )
         
@@ -328,7 +344,21 @@ class ProjectManager:
             # Save design file
             design_file = Path(project.output_dir) / "project_design.md"
             design_file.write_text(design_output, encoding='utf-8')
-            project.files.append("project_design.md")
+            project.files["design"] = str(design_file)
+            
+            # NEW: PAUSE FOR USER REVIEW
+            project.status = ProjectStatus.AWAITING_USER_INPUT
+            project.awaiting_user_input = True
+            project.current_stage_output = design_output
+            project.iteration_prompt = "Please review the project design. Approve to continue to Basic DevPlan, or provide feedback to iterate."
+            project.updated_at = datetime.utcnow()
+            await self._save_metadata(project)
+            await self._send_update(project_id, "awaiting_input", {
+                "stage": "design",
+                "prompt": project.iteration_prompt
+            })
+            # RETURN HERE - will continue when user approves
+            return
             
             # Stage 2: DevPlan (50% progress)
             project.current_stage = PipelineStage.BASIC_DEVPLAN
@@ -347,7 +377,7 @@ class ProjectManager:
             # Save devplan file
             devplan_file = Path(project.output_dir) / "devplan.md"
             devplan_file.write_text(devplan_output, encoding='utf-8')
-            project.files.append("devplan.md")
+            project.files["devplan"] = str(devplan_file)
             
             # Stage 3: Handoff (100% progress)
             project.current_stage = PipelineStage.HANDOFF
@@ -363,7 +393,7 @@ class ProjectManager:
             # Save handoff file
             handoff_file = Path(project.output_dir) / "handoff_prompt.md"
             handoff_file.write_text(handoff_output, encoding='utf-8')
-            project.files.append("handoff_prompt.md")
+            project.files["handoff"] = str(handoff_file)
             
             # Mark complete
             project.status = ProjectStatus.COMPLETED
@@ -507,3 +537,217 @@ class ProjectManager:
         
         file_path = Path(project.output_dir) / filename
         return str(file_path) if file_path.exists() else None
+    
+    # ========================================================================
+    # NEW: Iteration Support Methods
+    # ========================================================================
+    
+    async def iterate_stage(
+        self,
+        project_id: str,
+        feedback: str,
+        regenerate: bool = True
+    ) -> ProjectResponse:
+        """Handle iteration request on current stage.
+        
+        Args:
+            project_id: Project ID
+            feedback: User feedback
+            regenerate: Whether to regenerate content
+            
+        Returns:
+            ProjectResponse: Updated project
+        """
+        project = _projects.get(project_id)
+        
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+        
+        # Record iteration
+        project.current_iteration += 1
+        
+        # Store feedback in history
+        history_entry = {
+            "stage": project.current_stage.value if project.current_stage else None,
+            "iteration": project.current_iteration,
+            "timestamp": datetime.utcnow().isoformat(),
+            "feedback": feedback,
+            "output": project.current_stage_output or ""
+        }
+        project.iteration_history.append(history_entry)
+        
+        if not regenerate:
+            # Just store feedback, don't regenerate
+            project.awaiting_user_input = True
+            project.iteration_prompt = f"Iteration {project.current_iteration}: Review your feedback and approve or regenerate."
+        else:
+            # Will regenerate in background
+            project.status = ProjectStatus.RUNNING
+            project.awaiting_user_input = False
+        
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        
+        return project.to_response()
+    
+    async def approve_stage(
+        self,
+        project_id: str,
+        notes: Optional[str] = None
+    ) -> ProjectResponse:
+        """Approve current stage and prepare to move to next.
+        
+        Args:
+            project_id: Project ID
+            notes: Optional approval notes
+            
+        Returns:
+            ProjectResponse: Updated project
+        """
+        project = _projects.get(project_id)
+        
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+        
+        # Reset iteration counter for next stage
+        project.current_iteration = 0
+        project.awaiting_user_input = False
+        project.iteration_prompt = None
+        project.status = ProjectStatus.RUNNING
+        
+        # Store approval in history if notes provided
+        if notes:
+            history_entry = {
+                "stage": project.current_stage.value if project.current_stage else None,
+                "iteration": "APPROVED",
+                "timestamp": datetime.utcnow().isoformat(),
+                "feedback": notes,
+                "output": project.current_stage_output or ""
+            }
+            project.iteration_history.append(history_entry)
+        
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        
+        return project.to_response()
+    
+    async def regenerate_current_stage(
+        self,
+        project_id: str,
+        feedback: str
+    ):
+        """Regenerate current stage with user feedback.
+        
+        Args:
+            project_id: Project ID
+            feedback: User feedback to incorporate
+        """
+        project = _projects.get(project_id)
+        
+        if not project:
+            return
+        
+        try:
+            # Load configuration
+            config = load_config()
+            
+            # Create clients
+            from src.clients.factory import create_llm_client
+            from src.concurrency import ConcurrencyManager
+            
+            llm_client = create_llm_client(config)
+            concurrency_manager = ConcurrencyManager(config.concurrency.max_concurrent)
+            
+            orchestrator = PipelineOrchestrator(
+                llm_client=llm_client,
+                concurrency_manager=concurrency_manager,
+                file_manager=None,
+                git_config=None,
+                repo_path=None,
+                config=config,
+                state_manager=None
+            )
+            
+            # Regenerate based on current stage
+            if project.current_stage == PipelineStage.DESIGN:
+                # Regenerate design with feedback
+                requirements_text = project.request.description or project.request.requirements or ""
+                requirements_list = requirements_text.split('\n') if requirements_text else []
+                requirements_list.append(f"\nUSER FEEDBACK (Iteration {project.current_iteration}): {feedback}")
+                
+                design = await orchestrator.project_design_gen.generate(
+                    project_name=project.request.name,
+                    languages=project.request.languages,
+                    requirements=requirements_list,
+                    frameworks=project.request.frameworks,
+                    apis=project.request.apis,
+                )
+                
+                # Convert to markdown
+                design_output = f"# Project Design: {project.request.name}\n\n"
+                design_output += f"## Architecture Overview\n\n{design.architecture_overview}\n\n"
+                if design.objectives:
+                    design_output += "## Objectives\n\n"
+                    for obj in design.objectives:
+                        design_output += f"- {obj}\n"
+                    design_output += "\n"
+                if design.tech_stack:
+                    design_output += f"## Tech Stack\n\n{', '.join(design.tech_stack)}\n\n"
+                
+                # Save and update
+                design_file = Path(project.output_dir) / "project_design.md"
+                design_file.write_text(design_output, encoding='utf-8')
+                project.current_stage_output = design_output
+            
+            # After regeneration, pause for user review
+            project.status = ProjectStatus.AWAITING_USER_INPUT
+            project.awaiting_user_input = True
+            project.iteration_prompt = f"Please review the updated {project.current_stage.value}. Approve to continue or provide more feedback."
+            
+            project.updated_at = datetime.utcnow()
+            await self._save_metadata(project)
+            await self._send_update(project_id, "regenerated", {
+                "stage": project.current_stage.value,
+                "iteration": project.current_iteration
+            })
+            
+        except Exception as e:
+            project.status = ProjectStatus.FAILED
+            project.error = str(e)
+            project.updated_at = datetime.utcnow()
+            await self._save_metadata(project)
+            await self._send_update(project_id, "error", {"error": str(e)})
+    
+    async def continue_pipeline(self, project_id: str):
+        """Continue pipeline to next stage after approval.
+        
+        Args:
+            project_id: Project ID
+        """
+        project = _projects.get(project_id)
+        
+        if not project:
+            return
+        
+        # Determine next stage based on current
+        if project.current_stage == PipelineStage.DESIGN:
+            project.current_stage = PipelineStage.BASIC_DEVPLAN
+        elif project.current_stage == PipelineStage.BASIC_DEVPLAN:
+            project.current_stage = PipelineStage.DETAILED_DEVPLAN
+        elif project.current_stage == PipelineStage.DETAILED_DEVPLAN:
+            project.current_stage = PipelineStage.REFINED_DEVPLAN
+        elif project.current_stage == PipelineStage.REFINED_DEVPLAN:
+            project.current_stage = PipelineStage.HANDOFF
+        else:
+            # Already at handoff, complete
+            project.status = ProjectStatus.COMPLETED
+            project.completed_at = datetime.utcnow()
+            project.updated_at = datetime.utcnow()
+            await self._save_metadata(project)
+            return
+        
+        # Continue with next stage
+        # For now, just run the full pipeline
+        # TODO: Make pipeline truly iterative
+        await self.run_pipeline(project_id)
+

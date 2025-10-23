@@ -21,6 +21,7 @@ class ProjectStatus(str, Enum):
     """Current status of a project generation."""
     PENDING = "pending"
     RUNNING = "running"
+    AWAITING_USER_INPUT = "awaiting_user_input"  # NEW: Waiting for user iteration
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -31,6 +32,7 @@ class PipelineStage(str, Enum):
     DESIGN = "design"
     BASIC_DEVPLAN = "basic_devplan"
     DETAILED_DEVPLAN = "detailed_devplan"
+    REFINED_DEVPLAN = "refined_devplan"  # NEW: Handoff-ready devplan
     HANDOFF = "handoff"
 
 
@@ -100,7 +102,7 @@ class ProjectCreateRequest(BaseModel):
     
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "E-commerce Platform",
                 "project_type": "web_app",
@@ -134,15 +136,21 @@ class ProjectResponse(BaseModel):
     languages: List[str]
     frameworks: List[str]
     
-    # Generated files
-    files: List[str] = Field(default_factory=list, description="Generated file names")
+    # Generated files (dict mapping type to filepath)
+    files: Dict[str, Optional[str]] = Field(default_factory=dict, description="Generated files by type")
     
     # Error information (if failed)
     error: Optional[str] = Field(None, description="Error message if failed")
     
+    # Iteration support (NEW)
+    current_iteration: int = Field(0, description="Current iteration count for this stage")
+    awaiting_user_input: bool = Field(False, description="Whether project is waiting for user feedback")
+    iteration_prompt: Optional[str] = Field(None, description="Prompt/question for user feedback")
+    current_stage_output: Optional[str] = Field(None, description="Current output for user to review")
+    
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "proj_abc123",
                 "name": "E-commerce Platform",
@@ -169,7 +177,7 @@ class ProjectListResponse(BaseModel):
     
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "projects": [
                     {
@@ -202,7 +210,7 @@ class StreamMessage(BaseModel):
     
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "type": "token",
                 "data": {"token": "# Project", "stage": "design"},
@@ -222,7 +230,7 @@ class FileInfo(BaseModel):
     
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "project_design.md",
                 "path": "web_projects/proj_abc123/project_design.md",
@@ -242,10 +250,69 @@ class ErrorResponse(BaseModel):
     
     class Config:
         """Pydantic config."""
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "error": "Project not found",
                 "detail": "Project with ID 'proj_abc123' does not exist",
                 "code": "PROJECT_NOT_FOUND"
             }
         }
+
+
+# ============================================================================
+# NEW: Iteration Support Models
+# ============================================================================
+
+class IterationRequest(BaseModel):
+    """Request to iterate on current stage with user feedback."""
+    
+    feedback: str = Field(..., min_length=1, description="User feedback for iteration")
+    regenerate: bool = Field(True, description="Whether to regenerate with feedback")
+    
+    class Config:
+        """Pydantic config."""
+        json_schema_extra = {
+            "example": {
+                "feedback": "Please add more details about the database schema and add Redis for caching",
+                "regenerate": True
+            }
+        }
+
+
+class StageApproval(BaseModel):
+    """Approval to move to next pipeline stage."""
+    
+    approved: bool = Field(True, description="Whether the stage is approved")
+    notes: Optional[str] = Field(None, description="Optional notes about approval")
+    
+    class Config:
+        """Pydantic config."""
+        json_schema_extra = {
+            "example": {
+                "approved": True,
+                "notes": "Design looks great, ready to proceed to basic devplan"
+            }
+        }
+
+
+class IterationHistory(BaseModel):
+    """Track iteration history for a stage."""
+    
+    stage: PipelineStage = Field(..., description="Pipeline stage")
+    iteration: int = Field(..., description="Iteration number")
+    timestamp: datetime = Field(..., description="When this iteration occurred")
+    feedback: str = Field(..., description="User feedback provided")
+    output: str = Field(..., description="Generated output for this iteration")
+    
+    class Config:
+        """Pydantic config."""
+        json_schema_extra = {
+            "example": {
+                "stage": "design",
+                "iteration": 2,
+                "timestamp": "2025-10-22T10:15:00Z",
+                "feedback": "Add more details about authentication flow",
+                "output": "# Updated Project Design\n\n..."
+            }
+        }
+

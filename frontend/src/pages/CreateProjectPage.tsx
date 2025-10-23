@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { projectsApi, ProjectCreateRequest } from '../services/projectsApi';
 import { configApi, GlobalConfig, ProviderCredentials, AvailableModel } from '../services/configApi';
+import { extractErrorMessage } from '../utils/errorHandler';
 
 const CreateProjectPage: React.FC = () => {
   const navigate = useNavigate();
@@ -60,6 +61,33 @@ const CreateProjectPage: React.FC = () => {
     }
   };
 
+  // Helper function to extract error message from various error formats
+  const extractErrorMessage = (err: any): string => {
+    const detail = err.response?.data?.detail;
+    
+    // If detail is a string, return it
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    
+    // If detail is an array (Pydantic validation errors)
+    if (Array.isArray(detail)) {
+      return detail.map((e: any) => {
+        const field = e.loc?.join('.') || 'field';
+        const message = e.msg || 'validation error';
+        return `${field}: ${message}`;
+      }).join('; ');
+    }
+    
+    // If detail is an object with msg property
+    if (detail && typeof detail === 'object' && detail.msg) {
+      return detail.msg;
+    }
+    
+    // Fallback to generic error message
+    return err.message || 'Failed to create project';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -86,13 +114,14 @@ const CreateProjectPage: React.FC = () => {
       toast.promise(createPromise, {
         loading: 'Creating project...',
         success: 'Project created successfully! Redirecting...',
-        error: (err: any) => err.response?.data?.detail || 'Failed to create project',
+        error: (err: any) => extractErrorMessage(err),
       });
       
       const project = await createPromise;
       setTimeout(() => navigate(`/projects/${project.id}`), 500);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create project');
+      const errorMessage = extractErrorMessage(err);
+      setError(errorMessage);
       setLoading(false);
     }
   };
@@ -199,7 +228,7 @@ const CreateProjectPage: React.FC = () => {
             value={formData.name}
             onChange={handleInputChange}
             placeholder="My Awesome Project"
-            className="w-full px-4 py-3 text-base text-gray-900 dark:text-white placeholder-gray-400 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-3 text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -222,7 +251,7 @@ const CreateProjectPage: React.FC = () => {
             onChange={handleInputChange}
             placeholder="A web application that helps users manage their tasks with AI-powered suggestions..."
             rows={6}
-            className="w-full px-4 py-3 text-base text-gray-900 dark:text-white placeholder-gray-400 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 leading-relaxed"
+            className="w-full px-4 py-3 text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 leading-relaxed"
             required
           />
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 leading-relaxed">
@@ -288,7 +317,7 @@ const CreateProjectPage: React.FC = () => {
                   setSelectedCredential(e.target.value);
                   loadModelsForCredential(e.target.value);
                 }}
-                className="w-full px-4 py-3 text-base text-gray-900 dark:text-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">-- Use Global Default --</option>
                 {credentials.map(cred => (
@@ -308,7 +337,7 @@ const CreateProjectPage: React.FC = () => {
                   <select
                     value={formData.design_model || ''}
                     onChange={(e) => setFormData({ ...formData, design_model: e.target.value })}
-                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-white border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-blue-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">-- Default Model --</option>
                     {availableModels[selectedCredential].map(model => (
@@ -326,7 +355,7 @@ const CreateProjectPage: React.FC = () => {
                   <select
                     value={formData.devplan_model || ''}
                     onChange={(e) => setFormData({ ...formData, devplan_model: e.target.value })}
-                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-white border border-green-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-green-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
                     <option value="">-- Default Model --</option>
                     {availableModels[selectedCredential].map(model => (
@@ -344,7 +373,7 @@ const CreateProjectPage: React.FC = () => {
                   <select
                     value={formData.handoff_model || ''}
                     onChange={(e) => setFormData({ ...formData, handoff_model: e.target.value })}
-                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-white border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-purple-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   >
                     <option value="">-- Default Model --</option>
                     {availableModels[selectedCredential].map(model => (

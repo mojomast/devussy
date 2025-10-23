@@ -15,6 +15,8 @@ from src.web.models import (
     ProjectStatus,
     PipelineStage,
     ErrorResponse,
+    IterationRequest,
+    StageApproval,
 )
 from src.web.project_manager import ProjectManager
 
@@ -207,3 +209,121 @@ async def get_file_content(project_id: str, filename: str):
             status_code=500,
             detail=f"Failed to read file: {str(e)}"
         )
+
+
+# ============================================================================
+# NEW: Iteration Support Endpoints
+# ============================================================================
+
+@router.post("/{project_id}/iterate", response_model=ProjectResponse)
+async def iterate_on_stage(
+    project_id: str,
+    iteration_request: IterationRequest,
+    background_tasks: BackgroundTasks
+) -> ProjectResponse:
+    """Submit feedback to iterate on current stage.
+    
+    Args:
+        project_id: Unique project ID
+        iteration_request: User feedback and iteration settings
+        background_tasks: FastAPI background tasks
+        
+    Returns:
+        ProjectResponse: Updated project details
+        
+    Raises:
+        HTTPException: If project not found or not awaiting input
+    """
+    project = await project_manager.get_project(project_id)
+    
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found"
+        )
+    
+    if not project.awaiting_user_input:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project is not awaiting user input (status: {project.status})"
+        )
+    
+    # Process iteration
+    try:
+        updated_project = await project_manager.iterate_stage(
+            project_id,
+            iteration_request.feedback,
+            iteration_request.regenerate
+        )
+        
+        # If regenerate, start in background
+        if iteration_request.regenerate:
+            background_tasks.add_task(
+                project_manager.regenerate_current_stage,
+                project_id,
+                iteration_request.feedback
+            )
+        
+        return updated_project
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to iterate: {str(e)}"
+        )
+
+
+@router.post("/{project_id}/approve", response_model=ProjectResponse)
+async def approve_stage(
+    project_id: str,
+    approval: StageApproval,
+    background_tasks: BackgroundTasks
+) -> ProjectResponse:
+    """Approve current stage and move to next stage.
+    
+    Args:
+        project_id: Unique project ID
+        approval: Stage approval with optional notes
+        background_tasks: FastAPI background tasks
+        
+    Returns:
+        ProjectResponse: Updated project details
+        
+    Raises:
+        HTTPException: If project not found or not awaiting input
+    """
+    project = await project_manager.get_project(project_id)
+    
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project '{project_id}' not found"
+        )
+    
+    if not project.awaiting_user_input:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Project is not awaiting user input (status: {project.status})"
+        )
+    
+    try:
+        # Mark stage as approved and move to next
+        updated_project = await project_manager.approve_stage(
+            project_id,
+            approval.notes
+        )
+        
+        # Continue pipeline in background
+        background_tasks.add_task(
+            project_manager.continue_pipeline,
+            project_id
+        )
+        
+        return updated_project
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to approve stage: {str(e)}"
+        )
+

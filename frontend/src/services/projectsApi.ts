@@ -11,15 +11,18 @@ const API_BASE = '/api/projects';
 export enum ProjectStatus {
   PENDING = 'pending',
   RUNNING = 'running',
+  AWAITING_USER_INPUT = 'awaiting_user_input', // NEW
   COMPLETED = 'completed',
   FAILED = 'failed',
   CANCELLED = 'cancelled'
 }
 
 export enum PipelineStage {
-  DESIGN = 'DESIGN',
-  DEVPLAN = 'DEVPLAN',
-  HANDOFF = 'HANDOFF'
+  DESIGN = 'design',
+  BASIC_DEVPLAN = 'basic_devplan',
+  DETAILED_DEVPLAN = 'detailed_devplan',
+  REFINED_DEVPLAN = 'refined_devplan', // NEW
+  HANDOFF = 'handoff'
 }
 
 export interface ProjectCreateRequest {
@@ -57,6 +60,11 @@ export interface ProjectResponse {
     devplan?: string;
     handoff?: string;
   };
+  // NEW: Iteration fields
+  current_iteration?: number;
+  awaiting_user_input?: boolean;
+  iteration_prompt?: string;
+  current_stage_output?: string;
 }
 
 export interface ProjectListResponse {
@@ -65,8 +73,19 @@ export interface ProjectListResponse {
 }
 
 export interface WebSocketMessage {
-  type: 'progress' | 'stage' | 'output' | 'error' | 'complete';
+  type: 'progress' | 'stage' | 'output' | 'error' | 'complete' | 'awaiting_input' | 'regenerated';
   data: any;
+}
+
+// NEW: Iteration types
+export interface IterationRequest {
+  feedback: string;
+  regenerate?: boolean;
+}
+
+export interface StageApproval {
+  approved?: boolean;
+  notes?: string;
 }
 
 /**
@@ -135,6 +154,24 @@ export const projectsApi = {
    */
   async getFileContent(projectId: string, filename: string): Promise<string> {
     const response = await axios.get(`${API_BASE}/${projectId}/files/${filename}`);
+    return response.data;
+  },
+  
+  // NEW: Iteration support methods
+  
+  /**
+   * Submit feedback to iterate on current stage
+   */
+  async iterateStage(projectId: string, data: IterationRequest): Promise<ProjectResponse> {
+    const response = await axios.post(`${API_BASE}/${projectId}/iterate`, data);
+    return response.data;
+  },
+  
+  /**
+   * Approve current stage and move to next
+   */
+  async approveStage(projectId: string, data: StageApproval): Promise<ProjectResponse> {
+    const response = await axios.post(`${API_BASE}/${projectId}/approve`, data);
     return response.data;
   }
 };
