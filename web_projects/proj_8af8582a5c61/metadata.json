@@ -1,0 +1,22 @@
+{
+  "id": "proj_8af8582a5c61",
+  "name": "test",
+  "status": "failed",
+  "current_stage": "design",
+  "progress": 0,
+  "created_at": "2025-10-23T00:57:17.983338",
+  "updated_at": "2025-10-23T00:57:17.988253",
+  "completed_at": null,
+  "request": {
+    "name": "test",
+    "project_type": "web_app",
+    "languages": [
+      "Python"
+    ],
+    "frameworks": [],
+    "apis": [],
+    "requirements": "MAKE IT GO BRRR DO A COOL HELLO WORLD APP"
+  },
+  "files": {},
+  "error": "'ProviderCredentials' object has no attribute 'api_key'"
+}

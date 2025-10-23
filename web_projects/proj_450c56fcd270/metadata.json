@@ -1,0 +1,22 @@
+{
+  "id": "proj_450c56fcd270",
+  "name": "test",
+  "status": "failed",
+  "current_stage": "design",
+  "progress": 0,
+  "created_at": "2025-10-23T00:56:19.598232",
+  "updated_at": "2025-10-23T00:56:19.604632",
+  "completed_at": null,
+  "request": {
+    "name": "test",
+    "project_type": "web_app",
+    "languages": [
+      "Python"
+    ],
+    "frameworks": [],
+    "apis": [],
+    "requirements": "Hey there do a cool hello world html for me please make it super fancy and unique"
+  },
+  "files": {},
+  "error": "'ConfigStorage' object has no attribute 'get_credential'"
+}

@@ -34,9 +34,11 @@ export interface ProjectCreateRequest {
     enable_streaming?: boolean;
     output_dir?: string;
   };
-  // Per-stage model configuration
+  // LLM Configuration
+  credential_id?: string;  // Phase 20: Credential selection
   provider?: string;
   model?: string;
+  // Per-stage model configuration
   design_model?: string;
   devplan_model?: string;
   handoff_model?: string;

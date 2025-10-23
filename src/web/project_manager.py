@@ -258,10 +258,11 @@ class ProjectManager:
         
         return project.to_response()
     
-    async def run_pipeline(self, project_id: str):
-        """Run the pipeline for a project.
+    async def _run_current_stage(self, project_id: str):
+        """Run the current pipeline stage for a project.
         
-        This is the main integration point with the existing CLI pipeline.
+        This method runs whichever stage the project is currently on.
+        After completion, it pauses for user review.
         
         Args:
             project_id: Project ID
@@ -272,34 +273,60 @@ class ProjectManager:
             return
         
         try:
-            # Update status
+            # Update status to running
             project.status = ProjectStatus.RUNNING
+            project.awaiting_user_input = False
             project.updated_at = datetime.utcnow()
             await self._save_metadata(project)
-            await self._send_update(project_id, "status", {"status": "running"})
             
-            # Load configuration
+            # Load config and create orchestrator
             config = load_config()
             
-            # Override with request settings
+            # If a specific credential was requested, load and use it
+            if project.request.credential_id:
+                from src.web.config_storage import ConfigStorage
+                from src.web.security import SecureKeyStorage
+                import os
+                
+                storage = ConfigStorage()
+                credential = storage.load_credential(project.request.credential_id)
+                
+                if credential:
+                    # Decrypt the API key (or use plaintext in dev mode)
+                    key_storage = SecureKeyStorage()
+                    api_key = key_storage.decrypt(credential.api_key_encrypted)
+                    
+                    # Override config with credential settings
+                    config.llm.provider = credential.provider.lower()
+                    config.llm.api_key = api_key
+                    
+                    if credential.api_base:
+                        config.llm.base_url = credential.api_base
+                    
+                    if credential.organization_id:
+                        config.llm.org_id = credential.organization_id
+            
+            # Apply request overrides (these take precedence over credential)
             if project.request.provider:
-                config.llm.llm_provider = project.request.provider
+                config.llm.provider = project.request.provider
             if project.request.model:
                 config.llm.model = project.request.model
+            
+            # Handle per-stage model overrides (Phase 20 fix)
             if project.request.design_model:
                 config.llm.design_model = project.request.design_model
+            
             if project.request.devplan_model:
                 config.llm.devplan_model = project.request.devplan_model
+            
             if project.request.handoff_model:
                 config.llm.handoff_model = project.request.handoff_model
             
-            # Create pipeline orchestrator
             from src.clients.factory import create_llm_client
             from src.concurrency import ConcurrencyManager
             
-            app_config = config  # Use the config we already loaded
-            llm_client = create_llm_client(app_config)
-            concurrency_manager = ConcurrencyManager(app_config.concurrency.max_concurrent)
+            llm_client = create_llm_client(config)
+            concurrency_manager = ConcurrencyManager(config.max_concurrent_requests)
             
             orchestrator = PipelineOrchestrator(
                 llm_client=llm_client,
@@ -307,113 +334,246 @@ class ProjectManager:
                 file_manager=None,
                 git_config=None,
                 repo_path=None,
-                config=app_config,
+                config=config,
                 state_manager=None
             )
             
-            # Stage 1: Design (25% progress)
-            project.current_stage = PipelineStage.DESIGN
-            project.progress = 0
-            await self._send_update(project_id, "stage", {"stage": "design", "progress": 0})
-            
-            # Generate design
-            # Use description or requirements
-            requirements_text = project.request.description or project.request.requirements or ""
-            design = await orchestrator.project_design_gen.generate(
-                project_name=project.request.name,
-                languages=project.request.languages,
-                requirements=requirements_text.split('\n') if requirements_text else [],
-                frameworks=project.request.frameworks,
-                apis=project.request.apis,
-            )
-            
-            # Convert design to markdown
-            design_output = f"# Project Design: {project.request.name}\n\n"
-            design_output += f"## Architecture Overview\n\n{design.architecture_overview}\n\n"
-            if design.objectives:
-                design_output += "## Objectives\n\n"
-                for obj in design.objectives:
-                    design_output += f"- {obj}\n"
-                design_output += "\n"
-            if design.tech_stack:
-                design_output += f"## Tech Stack\n\n{', '.join(design.tech_stack)}\n\n"
-            
-            project.progress = 25
-            await self._send_update(project_id, "progress", {"progress": 25})
-            
-            # Save design file
-            design_file = Path(project.output_dir) / "project_design.md"
-            design_file.write_text(design_output, encoding='utf-8')
-            project.files["design"] = str(design_file)
-            
-            # NEW: PAUSE FOR USER REVIEW
-            project.status = ProjectStatus.AWAITING_USER_INPUT
-            project.awaiting_user_input = True
-            project.current_stage_output = design_output
-            project.iteration_prompt = "Please review the project design. Approve to continue to Basic DevPlan, or provide feedback to iterate."
+            # Run stage based on current_stage
+            if project.current_stage == PipelineStage.DESIGN:
+                await self._run_design_stage(project, orchestrator)
+            elif project.current_stage == PipelineStage.BASIC_DEVPLAN:
+                await self._run_basic_devplan_stage(project, orchestrator)
+            elif project.current_stage == PipelineStage.DETAILED_DEVPLAN:
+                await self._run_detailed_devplan_stage(project, orchestrator)
+            elif project.current_stage == PipelineStage.REFINED_DEVPLAN:
+                await self._run_refined_devplan_stage(project, orchestrator)
+            elif project.current_stage == PipelineStage.HANDOFF:
+                await self._run_handoff_stage(project, orchestrator)
+                
+        except Exception as e:
+            project.status = ProjectStatus.FAILED
+            project.error = str(e)
             project.updated_at = datetime.utcnow()
             await self._save_metadata(project)
-            await self._send_update(project_id, "awaiting_input", {
-                "stage": "design",
-                "prompt": project.iteration_prompt
-            })
-            # RETURN HERE - will continue when user approves
+            await self._send_update(project_id, "error", {"error": str(e)})
+    
+    async def _run_design_stage(self, project: Project, orchestrator):
+        """Run the design stage."""
+        project.progress = 0
+        await self._send_update(project.id, "stage", {"stage": "design", "progress": 0})
+        
+        # Generate design
+        requirements_text = project.request.description or project.request.requirements or ""
+        design = await orchestrator.project_design_gen.generate(
+            project_name=project.request.name,
+            languages=project.request.languages,
+            requirements=requirements_text.split('\n') if requirements_text else [],
+            frameworks=project.request.frameworks,
+            apis=project.request.apis,
+        )
+        
+        # Convert to markdown
+        design_output = f"# Project Design: {project.request.name}\n\n"
+        design_output += f"## Architecture Overview\n\n{design.architecture_overview}\n\n"
+        if design.objectives:
+            design_output += "## Objectives\n\n"
+            for obj in design.objectives:
+                design_output += f"- {obj}\n"
+            design_output += "\n"
+        if design.tech_stack:
+            design_output += f"## Tech Stack\n\n{', '.join(design.tech_stack)}\n\n"
+        
+        project.progress = 20
+        await self._send_update(project.id, "progress", {"progress": 20})
+        
+        # Save file
+        design_file = Path(project.output_dir) / "project_design.md"
+        design_file.write_text(design_output, encoding='utf-8')
+        project.files["design"] = str(design_file)
+        
+        # PAUSE for user review
+        project.status = ProjectStatus.AWAITING_USER_INPUT
+        project.awaiting_user_input = True
+        project.current_stage_output = design_output[:500]  # First 500 chars for preview
+        project.iteration_prompt = "Please review the project design. Approve to continue to Basic DevPlan, or provide feedback to iterate."
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        await self._send_update(project.id, "awaiting_input", {
+            "stage": "design",
+            "prompt": project.iteration_prompt
+        })
+    
+    async def _run_basic_devplan_stage(self, project: Project, orchestrator):
+        """Run the basic devplan stage (high-level phases)."""
+        project.progress = 25
+        await self._send_update(project.id, "stage", {"stage": "basic_devplan", "progress": 25})
+        
+        # Get design output to base devplan on
+        design_file = Path(project.output_dir) / "project_design.md"
+        design_output = design_file.read_text(encoding='utf-8') if design_file.exists() else ""
+        
+        # Generate basic devplan (4-8 phases)
+        devplan_output = await self._run_with_streaming(
+            project.id,
+            orchestrator.generate_devplan,
+            design_output,
+            PipelineStage.BASIC_DEVPLAN
+        )
+        
+        project.progress = 40
+        await self._send_update(project.id, "progress", {"progress": 40})
+        
+        # Save file
+        devplan_file = Path(project.output_dir) / "devplan_basic.md"
+        devplan_file.write_text(devplan_output, encoding='utf-8')
+        project.files["basic_devplan"] = str(devplan_file)
+        
+        # PAUSE for user review
+        project.status = ProjectStatus.AWAITING_USER_INPUT
+        project.awaiting_user_input = True
+        project.current_stage_output = devplan_output[:500]
+        project.iteration_prompt = "Please review the basic development plan (high-level phases). Approve to continue to Detailed DevPlan, or provide feedback to iterate."
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        await self._send_update(project.id, "awaiting_input", {
+            "stage": "basic_devplan",
+            "prompt": project.iteration_prompt
+        })
+    
+    async def _run_detailed_devplan_stage(self, project: Project, orchestrator):
+        """Run the detailed devplan stage (100-300 steps)."""
+        project.progress = 45
+        await self._send_update(project.id, "stage", {"stage": "detailed_devplan", "progress": 45})
+        
+        # Get basic devplan to expand on
+        basic_file = Path(project.output_dir) / "devplan_basic.md"
+        basic_output = basic_file.read_text(encoding='utf-8') if basic_file.exists() else ""
+        
+        # Generate detailed devplan
+        detailed_output = await self._run_with_streaming(
+            project.id,
+            orchestrator.generate_devplan,
+            basic_output,
+            PipelineStage.DETAILED_DEVPLAN
+        )
+        
+        project.progress = 60
+        await self._send_update(project.id, "progress", {"progress": 60})
+        
+        # Save file
+        detailed_file = Path(project.output_dir) / "devplan_detailed.md"
+        detailed_file.write_text(detailed_output, encoding='utf-8')
+        project.files["detailed_devplan"] = str(detailed_file)
+        
+        # PAUSE for user review
+        project.status = ProjectStatus.AWAITING_USER_INPUT
+        project.awaiting_user_input = True
+        project.current_stage_output = detailed_output[:500]
+        project.iteration_prompt = "Please review the detailed development plan (100-300 steps). Approve to continue to Refined DevPlan, or provide feedback to iterate."
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        await self._send_update(project.id, "awaiting_input", {
+            "stage": "detailed_devplan",
+            "prompt": project.iteration_prompt
+        })
+    
+    async def _run_refined_devplan_stage(self, project: Project, orchestrator):
+        """Run the refined devplan stage (agent-ready)."""
+        project.progress = 65
+        await self._send_update(project.id, "stage", {"stage": "refined_devplan", "progress": 65})
+        
+        # Get detailed devplan to refine
+        detailed_file = Path(project.output_dir) / "devplan_detailed.md"
+        detailed_output = detailed_file.read_text(encoding='utf-8') if detailed_file.exists() else ""
+        
+        # Generate refined devplan
+        refined_output = await self._run_with_streaming(
+            project.id,
+            orchestrator.generate_devplan,
+            detailed_output,
+            PipelineStage.REFINED_DEVPLAN
+        )
+        
+        project.progress = 80
+        await self._send_update(project.id, "progress", {"progress": 80})
+        
+        # Save file
+        refined_file = Path(project.output_dir) / "devplan_refined.md"
+        refined_file.write_text(refined_output, encoding='utf-8')
+        project.files["refined_devplan"] = str(refined_file)
+        
+        # PAUSE for user review
+        project.status = ProjectStatus.AWAITING_USER_INPUT
+        project.awaiting_user_input = True
+        project.current_stage_output = refined_output[:500]
+        project.iteration_prompt = "Please review the refined development plan (handoff-ready). Approve to continue to Handoff generation, or provide feedback to iterate."
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        await self._send_update(project.id, "awaiting_input", {
+            "stage": "refined_devplan",
+            "prompt": project.iteration_prompt
+        })
+    
+    async def _run_handoff_stage(self, project: Project, orchestrator):
+        """Run the handoff generation stage."""
+        project.progress = 85
+        await self._send_update(project.id, "stage", {"stage": "handoff", "progress": 85})
+        
+        # Get refined devplan for handoff
+        refined_file = Path(project.output_dir) / "devplan_refined.md"
+        refined_output = refined_file.read_text(encoding='utf-8') if refined_file.exists() else ""
+        
+        # Generate handoff
+        handoff_output = await self._run_with_streaming(
+            project.id,
+            orchestrator.generate_handoff,
+            (refined_output, project.request.name),
+            PipelineStage.HANDOFF
+        )
+        
+        project.progress = 100
+        await self._send_update(project.id, "progress", {"progress": 100})
+        
+        # Save file
+        handoff_file = Path(project.output_dir) / "handoff_prompt.md"
+        handoff_file.write_text(handoff_output, encoding='utf-8')
+        project.files["handoff"] = str(handoff_file)
+        
+        # Mark complete (no pause after handoff)
+        project.status = ProjectStatus.COMPLETED
+        project.completed_at = datetime.utcnow()
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        await self._send_update(project.id, "complete", {
+            "message": "Pipeline completed successfully",
+            "files": project.files
+        })
+
+    async def run_pipeline(self, project_id: str):
+        """Run the pipeline for a project.
+        
+        This is the main integration point with the existing CLI pipeline.
+        Starts from Design stage and proceeds through user-approved iterations.
+        
+        Args:
+            project_id: Project ID
+        """
+        project = _projects.get(project_id)
+        
+        if not project:
             return
-            
-            # Stage 2: DevPlan (50% progress)
-            project.current_stage = PipelineStage.BASIC_DEVPLAN
-            await self._send_update(project_id, "stage", {"stage": "devplan", "progress": 25})
-            
-            devplan_output = await self._run_with_streaming(
-                project_id,
-                orchestrator.generate_devplan,
-                design_output,
-                PipelineStage.BASIC_DEVPLAN
-            )
-            
-            project.progress = 75
-            await self._send_update(project_id, "progress", {"progress": 75})
-            
-            # Save devplan file
-            devplan_file = Path(project.output_dir) / "devplan.md"
-            devplan_file.write_text(devplan_output, encoding='utf-8')
-            project.files["devplan"] = str(devplan_file)
-            
-            # Stage 3: Handoff (100% progress)
-            project.current_stage = PipelineStage.HANDOFF
-            await self._send_update(project_id, "stage", {"stage": "handoff", "progress": 75})
-            
-            handoff_output = await self._run_with_streaming(
-                project_id,
-                orchestrator.generate_handoff,
-                (devplan_output, project.request.name),
-                PipelineStage.HANDOFF
-            )
-            
-            # Save handoff file
-            handoff_file = Path(project.output_dir) / "handoff_prompt.md"
-            handoff_file.write_text(handoff_output, encoding='utf-8')
-            project.files["handoff"] = str(handoff_file)
-            
-            # Mark complete
-            project.status = ProjectStatus.COMPLETED
-            project.progress = 100
-            project.completed_at = datetime.utcnow()
-            project.updated_at = datetime.utcnow()
-            
-            await self._save_metadata(project)
-            await self._send_update(project_id, "complete", {
-                "message": "Pipeline completed successfully",
-                "files": project.files
-            })
-            
-        except asyncio.CancelledError:
-            project.status = ProjectStatus.CANCELLED
+        
+        try:
+            # Set initial stage
+            project.current_stage = PipelineStage.DESIGN
             project.updated_at = datetime.utcnow()
             await self._save_metadata(project)
-            await self._send_update(project_id, "cancelled", {"message": "Project cancelled"})
+            
+            # Run the design stage (will pause for review)
+            await self._run_current_stage(project_id)
             
         except Exception as e:
+            # Handle errors in initial pipeline setup
             project.status = ProjectStatus.FAILED
             project.error = str(e)
             project.updated_at = datetime.utcnow()
@@ -730,23 +890,34 @@ class ProjectManager:
             return
         
         # Determine next stage based on current
+        next_stage = None
         if project.current_stage == PipelineStage.DESIGN:
-            project.current_stage = PipelineStage.BASIC_DEVPLAN
+            next_stage = PipelineStage.BASIC_DEVPLAN
         elif project.current_stage == PipelineStage.BASIC_DEVPLAN:
-            project.current_stage = PipelineStage.DETAILED_DEVPLAN
+            next_stage = PipelineStage.DETAILED_DEVPLAN
         elif project.current_stage == PipelineStage.DETAILED_DEVPLAN:
-            project.current_stage = PipelineStage.REFINED_DEVPLAN
+            next_stage = PipelineStage.REFINED_DEVPLAN
         elif project.current_stage == PipelineStage.REFINED_DEVPLAN:
-            project.current_stage = PipelineStage.HANDOFF
+            next_stage = PipelineStage.HANDOFF
         else:
             # Already at handoff, complete
             project.status = ProjectStatus.COMPLETED
             project.completed_at = datetime.utcnow()
             project.updated_at = datetime.utcnow()
             await self._save_metadata(project)
+            await self._send_update(project_id, "complete", {
+                "message": "Pipeline completed successfully",
+                "files": project.files
+            })
             return
         
-        # Continue with next stage
+        # Move to next stage
+        project.current_stage = next_stage
+        project.updated_at = datetime.utcnow()
+        await self._save_metadata(project)
+        
+        # Run the next stage
+        await self._run_current_stage(project_id)
         # For now, just run the full pipeline
         # TODO: Make pipeline truly iterative
         await self.run_pipeline(project_id)

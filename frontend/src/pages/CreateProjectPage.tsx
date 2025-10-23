@@ -61,33 +61,6 @@ const CreateProjectPage: React.FC = () => {
     }
   };
 
-  // Helper function to extract error message from various error formats
-  const extractErrorMessage = (err: any): string => {
-    const detail = err.response?.data?.detail;
-    
-    // If detail is a string, return it
-    if (typeof detail === 'string') {
-      return detail;
-    }
-    
-    // If detail is an array (Pydantic validation errors)
-    if (Array.isArray(detail)) {
-      return detail.map((e: any) => {
-        const field = e.loc?.join('.') || 'field';
-        const message = e.msg || 'validation error';
-        return `${field}: ${message}`;
-      }).join('; ');
-    }
-    
-    // If detail is an object with msg property
-    if (detail && typeof detail === 'object' && detail.msg) {
-      return detail.msg;
-    }
-    
-    // Fallback to generic error message
-    return err.message || 'Failed to create project';
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -109,7 +82,13 @@ const CreateProjectPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const createPromise = projectsApi.createProject(formData);
+      // Add selected credential to the request
+      const projectRequest = {
+        ...formData,
+        credential_id: selectedCredential || undefined,
+      };
+      
+      const createPromise = projectsApi.createProject(projectRequest);
       
       toast.promise(createPromise, {
         loading: 'Creating project...',

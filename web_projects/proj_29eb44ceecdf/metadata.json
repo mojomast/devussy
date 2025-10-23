@@ -1,0 +1,22 @@
+{
+  "id": "proj_29eb44ceecdf",
+  "name": "test",
+  "status": "failed",
+  "current_stage": "design",
+  "progress": 0,
+  "created_at": "2025-10-23T00:47:42.905745",
+  "updated_at": "2025-10-23T00:47:42.910257",
+  "completed_at": null,
+  "request": {
+    "name": "test",
+    "project_type": "web_app",
+    "languages": [
+      "Python"
+    ],
+    "frameworks": [],
+    "apis": [],
+    "requirements": "HEY CAN YOU MAKE A COOL HELLO WORLD IN JAVASCRIPT AND HTML5 THAT LOOKS COOL"
+  },
+  "files": {},
+  "error": "The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable"
+}

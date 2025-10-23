@@ -19,10 +19,22 @@ class SecureKeyStorage:
     
     The encryption key is loaded from the DEVUSSY_ENCRYPTION_KEY environment variable.
     If not set, a new key is generated (not recommended for production).
+    
+    Set DEVUSSY_DEV_MODE=true to disable encryption entirely during development.
     """
     
     def __init__(self):
         """Initialize the secure key storage with encryption key from environment."""
+        # Check if development mode (no encryption)
+        dev_mode = os.getenv("DEVUSSY_DEV_MODE", "").lower() in ("true", "1", "yes")
+        
+        if dev_mode:
+            logger.info("🔓 Development mode: API key encryption DISABLED")
+            self.dev_mode = True
+            self.cipher = None
+            return
+        
+        self.dev_mode = False
         key = os.getenv("DEVUSSY_ENCRYPTION_KEY")
         
         if not key:
@@ -32,7 +44,9 @@ class SecureKeyStorage:
                 f"No DEVUSSY_ENCRYPTION_KEY found. Generated new key: {key_bytes.decode()}\n"
                 "Store this in your environment to persist encryption:\n"
                 "[System.Environment]::SetEnvironmentVariable('DEVUSSY_ENCRYPTION_KEY', "
-                f"'{key_bytes.decode()}', 'User')"
+                f"'{key_bytes.decode()}', 'User')\n\n"
+                "Or disable encryption during development:\n"
+                "[System.Environment]::SetEnvironmentVariable('DEVUSSY_DEV_MODE', 'true', 'User')"
             )
             self.key = key_bytes
         else:
@@ -45,14 +59,20 @@ class SecureKeyStorage:
         """
         Encrypt an API key.
         
+        In development mode, returns the key as-is without encryption.
+        
         Args:
             api_key: The plaintext API key to encrypt
             
         Returns:
-            The encrypted API key as a base64-encoded string
+            The encrypted API key as a base64-encoded string (or plaintext in dev mode)
         """
         if not api_key:
             raise ValueError("API key cannot be empty")
+        
+        # Development mode: no encryption
+        if self.dev_mode:
+            return api_key
         
         try:
             encrypted_bytes = self.cipher.encrypt(api_key.encode())
@@ -65,8 +85,10 @@ class SecureKeyStorage:
         """
         Decrypt an encrypted API key.
         
+        In development mode, returns the key as-is (no decryption needed).
+        
         Args:
-            encrypted_key: The encrypted API key (base64-encoded string)
+            encrypted_key: The encrypted API key (base64-encoded string, or plaintext in dev mode)
             
         Returns:
             The decrypted API key as plaintext
@@ -76,6 +98,10 @@ class SecureKeyStorage:
         """
         if not encrypted_key:
             raise ValueError("Encrypted key cannot be empty")
+        
+        # Development mode: no decryption needed
+        if self.dev_mode:
+            return encrypted_key
         
         try:
             decrypted_bytes = self.cipher.decrypt(encrypted_key.encode())

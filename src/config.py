@@ -43,6 +43,17 @@ class LLMConfig(BaseModel):
     api_timeout: int = Field(
         default=60, ge=1, description="API request timeout in seconds"
     )
+    
+    # Per-stage model overrides (Phase 18/20)
+    design_model: Optional[str] = Field(
+        default=None, description="Model override for Design stage"
+    )
+    devplan_model: Optional[str] = Field(
+        default=None, description="Model override for DevPlan stages"
+    )
+    handoff_model: Optional[str] = Field(
+        default=None, description="Model override for Handoff stage"
+    )
 
     @field_validator("provider")
     @classmethod

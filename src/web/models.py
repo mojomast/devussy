@@ -61,6 +61,7 @@ class ProjectCreateRequest(BaseModel):
     options: Optional[dict] = Field(None, description="Additional options")
     
     # LLM configuration overrides
+    credential_id: Optional[str] = Field(None, description="Credential ID to use for this project")
     provider: Optional[str] = Field(None, description="LLM provider (openai, generic, requesty)")
     model: Optional[str] = Field(None, description="Model name")
     design_model: Optional[str] = Field(None, description="Model for design stage")

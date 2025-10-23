@@ -1,0 +1,22 @@
+{
+  "id": "proj_f93eabd0a02d",
+  "name": "test 3",
+  "status": "failed",
+  "current_stage": "design",
+  "progress": 0,
+  "created_at": "2025-10-23T00:33:29.172154",
+  "updated_at": "2025-10-23T00:33:29.176225",
+  "completed_at": null,
+  "request": {
+    "name": "test 3",
+    "project_type": "web_app",
+    "languages": [
+      "Python"
+    ],
+    "frameworks": [],
+    "apis": [],
+    "requirements": "hi!!! make it go brrrrrr please\n"
+  },
+  "files": {},
+  "error": "The api_key client option must be set either by passing api_key to the client or by setting the OPENAI_API_KEY environment variable"
+}

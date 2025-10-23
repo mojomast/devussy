@@ -26,6 +26,23 @@ const ProjectDetailPage: React.FC = () => {
   // NEW: Iteration state
   const [iterationFeedback, setIterationFeedback] = useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  
+  // NEW: Verbose API logging
+  const [apiLogs, setApiLogs] = useState<Array<{
+    timestamp: string;
+    method: string;
+    url: string;
+    status?: number;
+    request?: any;
+    response?: any;
+    error?: string;
+  }>>([]);
+  const apiLogsEndRef = useRef<HTMLDivElement>(null);
+  
+  const addApiLog = (log: typeof apiLogs[0]) => {
+    setApiLogs(prev => [...prev, log]);
+    setTimeout(() => apiLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  };
 
   useEffect(() => {
     if (!projectId) return;
@@ -46,13 +63,27 @@ const ProjectDetailPage: React.FC = () => {
   const loadProject = async () => {
     if (!projectId) return;
     
+    const logEntry = {
+      timestamp: new Date().toLocaleTimeString(),
+      method: 'GET',
+      url: `/api/projects/${projectId}`,
+    };
+    
     try {
       setLoading(true);
       setError(null);
       const data = await projectsApi.getProject(projectId);
       setProject(data);
+      addApiLog({ ...logEntry, status: 200, response: data });
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load project');
+      const errorMsg = err.response?.data?.detail || 'Failed to load project';
+      setError(errorMsg);
+      addApiLog({ 
+        ...logEntry, 
+        status: err.response?.status || 500, 
+        error: errorMsg,
+        response: err.response?.data 
+      });
     } finally {
       setLoading(false);
     }
@@ -629,20 +660,91 @@ const ProjectDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Logs Section */}
+      {/* Logs Section - Collapsible */}
       <div className="mt-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 transition-colors">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Live Logs</h2>
-        <div className="bg-gray-900 dark:bg-black text-gray-100 dark:text-gray-300 rounded p-4 h-64 overflow-y-auto font-mono text-sm border border-gray-700">
-          {logs.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400">No logs yet...</p>
+        <details className="group">
+          <summary className="text-lg font-semibold text-gray-900 dark:text-white mb-4 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-2">
+            <span className="group-open:rotate-90 transition-transform">▶</span>
+            Live Logs {logs.length > 0 && <span className="text-sm text-gray-500">({logs.length})</span>}
+          </summary>
+          <div className="bg-gray-900 dark:bg-black text-gray-100 dark:text-gray-300 rounded p-4 h-64 overflow-y-auto font-mono text-sm border border-gray-700">
+            {logs.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400">No logs yet...</p>
+            ) : (
+              logs.map((log, index) => (
+                <div key={index} className="mb-1">
+                  {log}
+                </div>
+              ))
+            )}
+            <div ref={logsEndRef} />
+          </div>
+        </details>
+      </div>
+
+      {/* Verbose API Console */}
+      <div className="mt-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 transition-colors">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          API Console (Verbose) 🔍
+        </h2>
+        <div className="bg-gray-900 dark:bg-black text-gray-100 dark:text-gray-300 rounded p-4 h-96 overflow-y-auto font-mono text-xs border border-gray-700">
+          {apiLogs.length === 0 ? (
+            <p className="text-gray-500 dark:text-gray-400">No API calls yet...</p>
           ) : (
-            logs.map((log, index) => (
-              <div key={index} className="mb-1">
-                {log}
-              </div>
-            ))
+            <div className="space-y-3">
+              {apiLogs.map((log, index) => (
+                <div key={index} className="border-b border-gray-700 pb-2">
+                  {/* Request Header */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-gray-400">[{log.timestamp}]</span>
+                    <span className="font-bold text-blue-400">{log.method}</span>
+                    <span className="text-gray-300">{log.url}</span>
+                    {log.status && (
+                      <span className={`ml-auto px-2 py-0.5 rounded text-xs font-bold ${
+                        log.status >= 400 ? 'bg-red-600 text-white' : 
+                        log.status >= 300 ? 'bg-yellow-600 text-white' :
+                        'bg-green-600 text-white'
+                      }`}>
+                        {log.status}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Request Body */}
+                  {log.request && (
+                    <details className="ml-4 mt-1">
+                      <summary className="text-cyan-400 cursor-pointer hover:text-cyan-300">
+                        📤 Request Body
+                      </summary>
+                      <pre className="text-gray-400 ml-4 mt-1 text-[10px] overflow-x-auto">
+                        {JSON.stringify(log.request, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  
+                  {/* Response Body */}
+                  {log.response && (
+                    <details className="ml-4 mt-1">
+                      <summary className="text-green-400 cursor-pointer hover:text-green-300">
+                        📥 Response Body
+                      </summary>
+                      <pre className="text-gray-300 ml-4 mt-1 text-[10px] overflow-x-auto">
+                        {JSON.stringify(log.response, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                  
+                  {/* Error */}
+                  {log.error && (
+                    <div className="ml-4 mt-1 text-red-400">
+                      ❌ Error: {log.error}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div ref={apiLogsEndRef} />
+            </div>
           )}
-          <div ref={logsEndRef} />
         </div>
       </div>
 

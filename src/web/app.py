@@ -54,12 +54,17 @@ def create_app() -> FastAPI:
     )
     
     # CORS middleware for frontend access
+    # In development, allow all localhost ports to make life easier
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "http://localhost:3000",  # React dev server
-            "http://localhost:5173",  # Vite dev server
+            "http://localhost:3000",  # React dev server (default)
+            "http://localhost:3001",  # Vite dev server (alternate port)
+            "http://localhost:3002",  # Vite dev server (alternate port 2)
+            "http://localhost:5173",  # Vite dev server (default)
             "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+            "http://127.0.0.1:3002",
             "http://127.0.0.1:5173",
         ],
         allow_credentials=True,

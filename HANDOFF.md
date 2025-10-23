@@ -32,21 +32,43 @@ Error
 
 ---
 
-## 🎯 YOUR MISSION: FIX PHASE 20 IMMEDIATELY
+## 📖 QUICK START GUIDE
 
-**DO NOT proceed with any other work until Phase 20 is complete.**
+**📘 READ THIS FIRST:** `REQUESTY_API_FIX_GUIDE.md` - Complete diagnostic and implementation guide
+
+**📚 THEN READ:** Requesty API documentation at https://docs.requesty.ai/quickstart
+
+**🔍 THEN CHECK:** `PHASE_20_PROGRESS.md` - What was fixed tonight and what's still broken
+
+---
+
+## 🎯 YOUR MISSION: FIX REQUESTY API INTEGRATION
+
+**CRITICAL PRIORITY: Debug and fix the 400 Bad Request error from Requesty API.**
 
 ### Why This Is Critical
 
-Phase 18 implemented the **iterative workflow backend models and API endpoints**, but the integration is incomplete:
-1. ✅ Backend models support iteration (ProjectStatus.AWAITING_USER_INPUT exists)
-2. ✅ API endpoints exist (/iterate, /approve)  
-3. ✅ Frontend UI components exist (yellow iteration card in ProjectDetailPage)
-4. ❌ **Backend doesn't pause after stages** (iteration state never set)
-5. ❌ **LLMConfig missing per-stage model fields** (causes validation error)
-6. ❌ **Frontend UI never displays** (backend never sets awaiting_user_input flag)
+The entire application is functional EXCEPT for the actual LLM API calls:
+1. ✅ Frontend UI is complete and working
+2. ✅ Backend pipeline orchestration is implemented
+3. ✅ Credential storage and loading works
+4. ✅ Project creation and state management works
+5. ❌ **Requesty API returns 400 Bad Request** (all projects fail immediately)
+6. ❌ **No verbose API logging** (cannot debug what's wrong)
+7. ❌ **No detailed error messages** (don't know what Requesty is rejecting)
 
-**Result:** Beautiful UI that never shows up + validation errors that block project creation.
+**Result:** Beautiful, fully functional app that can't generate any content because API calls fail.
+
+### Root Cause Analysis Required
+
+**Possible causes of 400 Bad Request:**
+1. **Invalid Model Name Format**: Model might not match Requesty's expected format
+   - ✅ Correct: `"openai/gpt-4o"`, `"anthropic/claude-3-5-sonnet"`
+   - ❌ Wrong: `"gpt-4o"`, `"claude-3-5-sonnet"` (missing provider prefix)
+2. **Missing Required Headers**: Requesty might require specific headers
+3. **Invalid Parameters**: Temperature, max_tokens, or other params out of range
+4. **Malformed Payload**: Request structure doesn't match OpenAI format
+5. **Authentication Issue**: API key not being passed correctly
 
 ---
 
@@ -54,125 +76,182 @@ Phase 18 implemented the **iterative workflow backend models and API endpoints**
 
 Copy this to your working notes. Check off each task as you complete it.
 
+### 🔴 TASK 0: READ REQUESTY DOCUMENTATION ⚠️ DO THIS FIRST
+
+**BEFORE ANY CODING, READ:**
+- **URL:** https://docs.requesty.ai/quickstart
+- **Focus on:**
+  - Model name format (must be `"provider/model"` like `"openai/gpt-4o"`)
+  - Required headers (HTTP-Referer, X-Title are optional but recommended)
+  - Authentication format (`Bearer {api_key}`)
+  - Request payload structure (OpenAI-compatible format)
+  - Error response format (to improve error messages)
+  - Available models list (https://docs.requesty.ai/models)
+
+**Key Findings from Docs:**
+```python
+# Correct Requesty API usage:
+client = openai.OpenAI(
+    api_key="YOUR_REQUESTY_API_KEY",
+    base_url="https://router.requesty.ai/v1",
+    default_headers={
+        "HTTP-Referer": "<YOUR_SITE_URL>",  # Optional
+        "X-Title": "<YOUR_SITE_NAME>",       # Optional
+    }
+)
+
+response = client.chat.completions.create(
+    model="openai/gpt-4o",  # ← MUST have provider prefix!
+    messages=[{"role": "user", "content": "Hello"}]
+)
+```
+
 ### 🔴 Backend Fixes (CRITICAL PATH)
 
-- [ ] **TASK 1: Fix LLMConfig Schema** ⚠️ BLOCKS EVERYTHING
-  - **File:** `src/config.py`
-  - **Add Fields:** `design_model: Optional[str] = None`, `devplan_model: Optional[str] = None`, `handoff_model: Optional[str] = None`
-  - **Update:** `load_config()` to read these from config.yaml
-  - **Test:** `pytest tests/test_config.py -v`
-  - **Verify:** No validation errors when creating projects
-
-- [ ] **TASK 2: Implement Iteration State Management** ⚠️ MAKES UI WORK
+- [ ] **TASK 1: Add Verbose API Logging** ⚠️ NEEDED TO DEBUG
+  - **User Request:** "I want there to be a verbose console section below live logs that shows me the exact api requests and responses please."
   - **File:** `src/web/project_manager.py`
-  - **Method:** `run_pipeline()`
-  - **After Design Stage Completes:**
+  - **Add:** Logging of full request payload before sending to Requesty
+  - **Add:** Logging of full response (or error) from Requesty
+  - **Add:** Save API logs to `web_projects/{project_id}/api_log.json`
+  - **Test:** Create project, check api_log.json has full request/response details
+
+- [ ] **TASK 2: Fix Requesty Client Request Format** ⚠️ FIXES 400 ERROR
+  - **File:** `src/clients/requesty_client.py`
+  - **Check:** Model name format - MUST have provider prefix
+    - Current: `self._model = getattr(llm, "model", "openai/gpt-4o-mini")`
+    - Verify: Model names in config/credentials have `provider/` prefix
+  - **Add:** Optional headers for better analytics:
     ```python
-    project.status = ProjectStatus.AWAITING_USER_INPUT
-    project.awaiting_user_input = True
-    project.iteration_prompt = "Please review the design and provide feedback..."
-    project.current_stage_output = design_file_content[:500]
-    self._emit_websocket(project.id, {"type": "awaiting_input", "data": {"prompt": project.iteration_prompt}})
+    headers = {
+        "Authorization": f"Bearer {self._api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://devussy.app",  # Optional but recommended
+        "X-Title": "DevUssY",  # Optional but recommended
+    }
     ```
-  - **Repeat for:** Basic DevPlan, Detailed DevPlan, Refined DevPlan stages
-  - **Test:** Create project, verify pause after Design
-
-- [ ] **TASK 3: Add Credential Selection to API**
-  - **File:** `src/web/models.py` - Add `credential_id: Optional[str] = Field(None)`
-  - **File:** `src/web/project_manager.py` - Use credential if specified
-  - **Test:** Create project with specific credential
-
-- [ ] **TASK 4: Integrate Per-Stage Model Selection**
-  - **File:** `src/web/project_manager.py`
-  - **When Creating LLM Clients:**
+  - **Add:** Better error handling to capture Requesty's error response:
     ```python
-    if request.design_model:
-        design_client = create_llm_client(config, override_model=request.design_model)
+    async with session.post(...) as resp:
+        if resp.status >= 400:
+            error_body = await resp.text()
+            raise Exception(f"Requesty API error {resp.status}: {error_body}")
+        resp.raise_for_status()
     ```
-  - **Test:** Create project with different models per stage
+  - **Test:** Create project, verify successful API call to Requesty
 
-- [ ] **TASK 5: Integrate Prompt Templates**
-  - **Files:** `src/pipeline/compose.py` or generation modules
-  - **Load:** Templates from `src/prompts/*.txt`
-  - **Pass:** User feedback into iteration prompts
-  - **Test:** Regenerate with feedback includes user's text
+- [ ] **TASK 3: Validate Model Names in Credentials**
+  - **File:** `src/web/routes/config.py`
+  - **In:** `test_credential()` endpoint
+  - **Add:** Warning if model name doesn't have provider prefix
+  - **Add:** Suggestion to use format like `"openai/gpt-4o"`
+  - **File:** `frontend/src/components/config/CredentialsTab.tsx`
+  - **Add:** Help text showing correct model format for Requesty
+  - **Example:** "For Requesty, use format: provider/model (e.g., openai/gpt-4o)"
+  - **Test:** Test credential with correct model format
 
-### 🔵 Frontend Verification
+- [ ] **TASK 4: Check Default Model Configuration**
+  - **File:** `config/config.yaml`
+  - **Verify:** Default model has provider prefix for Requesty
+  - **Current:** Check what `model:` is set to
+  - **Fix:** If using Requesty, ensure format is `"openai/gpt-4o"` not just `"gpt-4o"`
+  - **Test:** Create project without selecting credential (uses default)
 
-- [ ] **TASK 6: Debug Iteration UI Rendering**
+### 🔵 Frontend Enhancements
+
+- [ ] **TASK 5: Add Verbose API Console to UI** ⚠️ USER REQUEST
   - **File:** `frontend/src/pages/ProjectDetailPage.tsx`
-  - **Add:** `console.log('Project state:', project.status, project.awaiting_user_input)`
-  - **Verify:** Yellow card renders when `status === AWAITING_USER_INPUT && awaiting_user_input === true`
-  - **Test:** Open project in browser, check console logs
+  - **Add:** New state for API logs
+    ```typescript
+    const [apiLogs, setApiLogs] = useState<Array<{
+      timestamp: string;
+      method: string;
+      url: string;
+      status?: number;
+      request?: any;
+      response?: any;
+      error?: string;
+    }>>([]);
+    ```
+  - **Add:** New section in UI below Live Logs:
+    ```tsx
+    <div className="bg-gray-900 text-gray-100 p-4 rounded-lg">
+      <h3 className="font-semibold mb-2">API Console (Verbose)</h3>
+      <div className="space-y-2 max-h-96 overflow-y-auto font-mono text-xs">
+        {/* Display request/response logs */}
+      </div>
+    </div>
+    ```
+  - **Add:** WebSocket handler for `api_log` events from backend
+  - **Add:** Pretty-printed JSON for request/response bodies
+  - **Test:** Create project, see exact API requests/responses in verbose console
 
-- [ ] **TASK 7: Verify Credential Selector**
+- [ ] **TASK 6: Add Model Format Help Text**
   - **File:** `frontend/src/pages/CreateProjectPage.tsx`
-  - **Ensure:** `selectedCredential` is in formData sent to API
-  - **Test:** Network tab shows credential_id in POST /api/projects
-
-- [ ] **TASK 8: Standardize Error Handling** (21+ instances)
-  - **Files:** All component files with API calls
-  - **Replace:** `err.response?.data?.detail ||` with `extractErrorMessage(err)`
-  - **Test:** Trigger validation errors, verify readable messages
-
-- [ ] **TASK 9: Test Form Styling**
-  - **Verify:** Dark mode works
-  - **Verify:** All inputs visible (white text on white background fixed)
-  - **Test:** Submit forms with missing/invalid data
+  - **Add:** Helper text near model selector
+  - **Text:** "For Requesty: use provider/model format (e.g., openai/gpt-4o, anthropic/claude-3-5-sonnet)"
+  - **Add:** Link to Requesty models page: https://docs.requesty.ai/models
+  - **Test:** Check UI shows helpful guidance
 
 ### 🟢 Integration Testing (MUST PASS)
 
-- [ ] **TASK 10: End-to-End Workflow Test**
-  1. Start backend: `python -m uvicorn src.web.app:app --reload`
+- [ ] **TASK 7: Test Requesty API Integration**
+  1. Start backend: `$env:DEVUSSY_DEV_MODE='true'; python -m uvicorn src.web.app:app --host 127.0.0.1 --port 8000 --reload`
   2. Start frontend: `cd frontend; npm run dev`
-  3. Go to Settings, configure API credential, test it ✅
-  4. Create new project with:
-     - Name: "E2E Test Project"
-     - Description: "Testing the full iterative workflow"
-     - Select specific credential
-     - Select different model for each stage
-  5. **VERIFY:** Project pauses after Design stage
-  6. **VERIFY:** Yellow "User Review Required" card displays
-  7. **VERIFY:** Iteration prompt text visible
-  8. **VERIFY:** Feedback textarea visible and styled
-  9. Click "Approve & Continue" → moves to Basic DevPlan
-  10. Repeat for all 5 stages
-  11. **VERIFY:** All files generated
-  12. **VERIFY:** Download files works
+  3. Go to Settings → Credentials
+  4. Create/Edit Requesty credential:
+     - Provider: requesty
+     - Model: `openai/gpt-4o-mini` (MUST have provider prefix!)
+     - API Key: Your Requesty API key
+     - Base URL: `https://router.requesty.ai/v1`
+  5. Click "Test" button - **VERIFY:** Success ✅
+  6. Click "List Models" - **VERIFY:** Shows available models ✅
+  7. Create new project:
+     - Name: "Requesty API Test"
+     - Description: "Testing Requesty integration"
+     - Select the Requesty credential
+     - Model: `openai/gpt-4o-mini`
+  8. **VERIFY:** Project starts and Design stage begins ✅
+  9. **VERIFY:** Verbose API console shows request/response ✅
+  10. **VERIFY:** No 400 errors from Requesty ✅
+  11. **VERIFY:** Design file is generated ✅
+  12. **VERIFY:** Project pauses for iteration (yellow card shows) ✅
 
-- [ ] **TASK 11: Error Scenario Testing**
-  - Test with invalid credential
-  - Test with missing project name
-  - Test with missing description  
-  - Test canceling mid-pipeline
-  - Test WebSocket disconnect/reconnect
-  - **VERIFY:** All errors display as readable text (not objects)
+- [ ] **TASK 8: Test Error Scenarios**
+  - Test with invalid API key → **VERIFY:** Clear error message
+  - Test with wrong model name format (e.g., `"gpt-4o"` without prefix) → **VERIFY:** Helpful error
+  - Test with missing project name → **VERIFY:** Validation error displays
+  - Test canceling mid-pipeline → **VERIFY:** Project cancels cleanly
+  - **VERIFY:** All errors display as readable text in verbose console
 
-- [ ] **TASK 12: UI Polish Check**
-  - Dark mode works everywhere
-  - Responsive on mobile/tablet/desktop
-  - No console errors
-  - No React warnings
-  - Loading states display properly
+- [ ] **TASK 9: Test Full Iteration Workflow**
+  - Create project that completes Design stage
+  - **VERIFY:** Yellow "User Review Required" card shows
+  - **VERIFY:** Iteration prompt displays
+  - **VERIFY:** Feedback textarea visible and styled
+  - Click "Approve & Continue" → **VERIFY:** Moves to Basic DevPlan
+  - Test "Regenerate with Feedback" → **VERIFY:** Sends feedback to API
+  - Complete all 5 stages → **VERIFY:** All files generated
+  - **VERIFY:** Download files works
 
 ### ✅ Definition of Done
 
 Phase 20 is complete when ALL of these are ✅:
 
-- [ ] User can create project with chosen credential
-- [ ] User can select different model per phase
-- [ ] Project pauses after Design stage with iteration UI visible
-- [ ] Yellow "User Review Required" card displays
-- [ ] Iteration prompt text visible
-- [ ] Feedback textarea visible and properly styled
-- [ ] "Approve & Continue" button works
-- [ ] "Regenerate with Feedback" button works
-- [ ] Full pipeline completes all 5 stages
-- [ ] No React errors in browser console
-- [ ] No Python errors in backend terminal
-- [ ] Error messages are readable (no object rendering)
+- [ ] **Requesty API calls succeed** (no more 400 errors)
+- [ ] **Verbose API console displays** in UI showing exact requests/responses
+- [ ] **Model names validated** in correct format (provider/model)
+- [ ] **Projects complete Design stage** successfully
+- [ ] **Iteration UI displays** after Design stage (yellow card)
+- [ ] **User can provide feedback** and regenerate stages
+- [ ] **User can approve stages** and progress through pipeline
+- [ ] **Full pipeline completes** all 5 stages (Design → Basic → Detailed → Refined → Handoff)
+- [ ] **API errors are clear** and helpful (show Requesty's actual error message)
+- [ ] **No React errors** in browser console
+- [ ] **No Python errors** in backend terminal
+- [ ] **Documentation updated** with Requesty model format requirements
 
-**Current Status:** ❌ NOT COMPLETE
+**Current Status:** ❌ NOT COMPLETE - API Integration Broken
 
 ---
 
@@ -445,7 +524,18 @@ Kyle's vision has been **FULLY IMPLEMENTED**! DevUssY now supports a complete it
 ### Server Status
 **Both servers should be running:**
 - Backend API: http://localhost:8000 (FastAPI)
-- Frontend Dev Server: http://localhost:3000 (Vite)
+- Frontend Dev Server: http://localhost:3000 or 3001 (Vite, uses alternate port if 3000 is taken)
+
+**Start servers with dev mode (recommended):**
+```powershell
+# Terminal 1: Backend
+$env:DEVUSSY_DEV_MODE='true'
+python -m uvicorn src.web.app:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+```
 
 **Quick test:**
 1. Visit http://localhost:3000
@@ -739,9 +829,62 @@ python -m pytest tests/unit/test_web_security.py tests/unit/test_config_storage.
 
 ---
 
-## 🐛 Known Issues
+## �️ Development Configuration
+
+### CORS Settings
+The backend allows requests from multiple localhost ports for development:
+- Port 3000 (React dev server default)
+- Port 3001 (Vite alternate port)
+- Port 5173 (Vite default)
+
+**Location:** `src/web/app.py` - CORSMiddleware configuration
+
+If you need to add more ports or origins, update the `allow_origins` list.
+
+### Development Mode (No Encryption)
+**To disable API key encryption during development:**
+
+**PowerShell:**
+```powershell
+$env:DEVUSSY_DEV_MODE = 'true'
+```
+
+**Or set permanently:**
+```powershell
+[System.Environment]::SetEnvironmentVariable('DEVUSSY_DEV_MODE', 'true', 'User')
+```
+
+**Bash/Linux:**
+```bash
+export DEVUSSY_DEV_MODE=true
+```
+
+When `DEVUSSY_DEV_MODE=true`:
+- API keys stored in plaintext (no encryption)
+- Faster development workflow
+- Easier debugging
+- **DO NOT use in production!**
+
+**Location:** `src/web/security.py` - SecureKeyStorage class
+
+### Starting the Servers
+
+**Backend (with dev mode):**
+```powershell
+$env:DEVUSSY_DEV_MODE='true'
+python -m uvicorn src.web.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Frontend:**
+```powershell
+cd frontend
+npm run dev
+```
+
+## �🐛 Known Issues
 
 ### Recently Fixed ✅
+- ✅ **CORS Error** (Fixed Oct 22) - Added port 3001 to allowed origins
 - ✅ **API Key Testing Error** (Fixed Oct 22) - "api_key client option must be set" error resolved
   - Root cause: LLMConfig wasn't wrapped in proper structure
   - Solution: Created SimpleNamespace wrapper matching client expectations
