@@ -7,7 +7,11 @@ DevUssY (DevPlan Orchestrator) is an AI-powered development planning tool that g
 **Current Status:** Phase 20 - Iterative Workflow Integration (IN PROGRESS 🟡 80% Complete)  
 **Version:** 0.4.1-alpha
 
-**📌 URGENT:** See `PHASE_20_PROGRESS.md` for detailed status, fixes completed tonight, and next steps!
+> **� Archive Note:** Historical session notes, phase summaries, and debug scripts have been moved to `archive/` directory. Check there if you need context from previous development sessions:
+> - `archive/session_notes/` - SESSION_SUMMARY_*.md, HANDOFF_backup_*.md, PHASE_*.md files
+> - `archive/old_docs/` - Historical documentation and design files  
+> - `archive/debug_scripts/` - Debug utilities and fix scripts
+> - `archive/test_outputs/` - Previous test run outputs
 
 ---
 

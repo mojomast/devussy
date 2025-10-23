@@ -37,10 +37,15 @@
 
 ##  Essential Documents (Read in Order)
 
-1. **HANDOFF_PHASE20_COMPLETE.md**  START HERE! Complete Phase 20 handoff
-2. **PHASE_20_PROGRESS.md** - Detailed progress report with all fixes
-3. **devplan.md** - Phase 20 section with implementation details
-4. **REQUESTY_API_FIX_GUIDE.md** - Original diagnostic guide (context)
+1. **devplan.md** - Current development plan and phase tracking
+2. **README.md** - Project overview and quick start
+3. **This file (HANDOFF.md)** - Current development status
+
+> **📁 Note:** Historical session notes, handoff backups, and phase summaries have been archived in the `archive/` directory. If you need context from previous sessions, check:
+> - `archive/session_notes/` - All SESSION_SUMMARY_*.md and PHASE_*.md files
+> - `archive/old_docs/` - Historical documentation and design files
+> - `archive/debug_scripts/` - Old debug and fix scripts
+> - `archive/test_outputs/` - Previous test run outputs
 
 ---
 
