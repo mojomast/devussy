@@ -86,15 +86,28 @@ Outputs (in docs/ by default):
 
 This 0.1 release is tailored for Requesty. If a Requesty key isn’t detected, you’ll be prompted at startup.
 
-Run the interview with Requesty in one command:
+### From a clone (no pip install)
+```bash
+# clone
+git clone https://github.com/mojomast/devussy.git
+cd devussy
+
+# set your Requesty key (or you will be prompted)
+# PowerShell
+$env:REQUESTY_API_KEY = "<your_key>"
+# bash/zsh
+export REQUESTY_API_KEY="<your_key>"
+
+# run
+python -m src.entry
+```
+
+### If installed (editable or package)
 ```bash
 devussy launch
 ```
-Or via Python module entry:
-```bash
-python -m src.entry
-```
-Options:
+
+Options (both forms):
 - `--provider` to override (defaults to requesty for 0.1)
 
 The launcher will:
