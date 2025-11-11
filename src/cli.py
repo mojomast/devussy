@@ -1901,7 +1901,7 @@ def interactive_design(
                     project_design=design,
                     feedback_manager=None,
                 )
-                handoff = orchestrator.handoff_gen.generate(
+                handoff = await orchestrator.run_handoff_only(
                     devplan=detailed_devplan,
                     project_name=inputs["name"],
                     project_summary=detailed_devplan.summary or "",
@@ -1916,8 +1916,8 @@ def interactive_design(
             try:
                 for h in console_handlers:
                     h.setLevel(logging.WARNING)
-                with console.status("Generating DevPlan and Handoff...", spinner="dots"):
-                    design_result, devplan_result, handoff_result = asyncio.run(_run_devplan_and_handoff())
+                # Allow orchestrator to render streaming progress directly (no outer spinner)
+                design_result, devplan_result, handoff_result = asyncio.run(_run_devplan_and_handoff())
             finally:
                 for h, lvl in zip(console_handlers, old_levels):
                     h.setLevel(lvl)

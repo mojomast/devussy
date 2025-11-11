@@ -590,17 +590,37 @@ class PipelineOrchestrator:
                 logger.error(f"Failed to switch to provider {provider_override}: {e}")
                 raise
 
-        basic_devplan = await self.basic_devplan_gen.generate(
-            project_design, feedback_manager=feedback_manager, **llm_kwargs
-        )
+        # Stage: Basic DevPlan
+        self.progress_reporter.start_stage("Basic DevPlan", 2)
+        with self.progress_reporter.create_spinner_context("Creating basic development plan..."):
+            basic_devplan = await self.basic_devplan_gen.generate(
+                project_design, feedback_manager=feedback_manager, **llm_kwargs
+            )
+        self._update_progress_tokens(self.devplan_client)
+        self.progress_reporter.end_stage("Basic DevPlan")
 
-        detailed_devplan = await self.detailed_devplan_gen.generate(
-            basic_devplan,
-            project_design.project_name,
-            project_design.tech_stack,
-            feedback_manager=feedback_manager,
-            **llm_kwargs,
-        )
+        # Stage: Detailed DevPlan with per-phase progress
+        total_phases = len(basic_devplan.phases)
+        if total_phases > 0:
+            self.progress_reporter.show_concurrent_phases(total_phases)
+            self.progress_reporter.start_phase_progress(total_phases, description="Generating detailed phases")
+        with self.progress_reporter.create_spinner_context("Generating detailed phase plans..."):
+            detailed_devplan = await self.detailed_devplan_gen.generate(
+                basic_devplan,
+                project_design.project_name,
+                project_design.tech_stack,
+                feedback_manager=feedback_manager,
+                on_phase_complete=lambda ph: (
+                    self.progress_reporter.advance_phase(),
+                    self.progress_reporter.console.print(
+                        f"  [green]✓[/green] Phase {ph.number} ready ({len(ph.steps)} steps)"
+                    )
+                ),
+                **llm_kwargs,
+            )
+        self.progress_reporter.stop_phase_progress()
+        self._update_progress_tokens(self.devplan_client)
+        self.progress_reporter.end_stage("Detailed DevPlan")
 
         return detailed_devplan
 
@@ -933,7 +953,12 @@ class PipelineOrchestrator:
             HandoffPrompt
         """
         logger.info("Generating handoff prompt from existing devplan")
-        return self.handoff_gen.generate(devplan, project_name, **kwargs)
+        # Stage: Handoff Prompt
+        self.progress_reporter.start_stage("Handoff Prompt", 4)
+        with self.progress_reporter.create_spinner_context("Composing handoff prompt..."):
+            handoff = self.handoff_gen.generate(devplan, project_name, **kwargs)
+        self.progress_reporter.end_stage("Handoff Prompt")
+        return handoff
 
     def _devplan_to_markdown(self, devplan: DevPlan) -> str:
         """Convert a DevPlan to markdown index/dashboard format.

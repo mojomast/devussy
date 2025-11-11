@@ -7,6 +7,7 @@ including spinners, token counts, and file creation updates.
 from __future__ import annotations
 
 from typing import Any, Optional
+from contextlib import contextmanager
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
@@ -40,6 +41,8 @@ class PipelineProgressReporter:
         self._phase_progress: Progress | None = None
         self._phase_task_id: int | None = None
         self._phase_total: int = 0
+        # Track if we paused status for a nested progress/spinner
+        self._status_paused_for_progress: bool = False
         
     def start_pipeline(self, project_name: str) -> None:
         """Display pipeline start banner.
@@ -195,6 +198,10 @@ class PipelineProgressReporter:
         
     def start_phase_progress(self, total: int, description: str = "Generating phases") -> None:
         if self._phase_progress is None:
+            # Avoid overlapping Live renders: pause status bar if running
+            if self._status_live is not None:
+                self.stop_status()
+                self._status_paused_for_progress = True
             self._phase_total = total
             self._phase_progress = Progress(
                 SpinnerColumn(),
@@ -223,6 +230,11 @@ class PipelineProgressReporter:
             self._phase_progress = None
             self._phase_task_id = None
             self._phase_total = 0
+            # Resume status bar if we paused it for progress
+            if self._status_paused_for_progress:
+                self.start_status()
+                self.refresh_status()
+                self._status_paused_for_progress = False
 
     def create_spinner_context(self, description: str, show_tokens: bool = True):
         """Create a context manager for spinner display during async operations.
@@ -240,11 +252,32 @@ class PipelineProgressReporter:
             token_display = f" (tokens: {prompt_tokens}→{completion_tokens})"
         else:
             token_display = ""
-            
-        return self.console.status(
-            f"[cyan]{description}{token_display}[/cyan]",
-            spinner="dots"
-        )
+
+        @contextmanager
+        def _spinner_cm():
+            # If a Progress bar is active, avoid creating another Live context.
+            # Just yield a no-op so calling code can use `with` uniformly.
+            if self._phase_progress is not None:
+                try:
+                    yield None
+                finally:
+                    return
+            # To prevent clashing Live renderers, pause status if running
+            status_was_running = self._status_live is not None
+            if status_was_running:
+                self.stop_status()
+            try:
+                with self.console.status(
+                    f"[cyan]{description}{token_display}[/cyan]",
+                    spinner="dots",
+                ) as _cm:
+                    yield _cm
+            finally:
+                if status_was_running:
+                    self.start_status()
+                    self.refresh_status()
+
+        return _spinner_cm()
         
     def display_summary(self) -> None:
         """Display a summary of the completed pipeline."""

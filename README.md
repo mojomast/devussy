@@ -63,6 +63,8 @@ python -m src.entry
 ```
 - Type answers or use slash-commands like /done, /help, /settings.
 - The bottom status line shows model and token usage and remains active through generation.
+- After design is generated, confirm the prompt to continue and you'll see streaming progress
+  for DevPlan (including a per-phase progress bar with ✓ as phases complete) and Handoff.
 
 Full pipeline (non-interactive):
 ```bash
@@ -81,6 +83,7 @@ Outputs (in docs/ by default):
 - Stage spinners while each phase runs
 - A per-phase progress bar during detailed plan generation (updates as phases finish)
 - A persistent bottom status line showing current stage, model, and token usage (prompt/completion/total + accumulated)
+ - The interactive “continue” flow uses the same streaming UI for DevPlan and Handoff
 
 ## Launch (0.1 Requesty-focused)
 
@@ -120,6 +123,8 @@ Interactive design interview (recommended):
 ```bash
 python -m src.cli interactive-design
 ```
+After the interview, confirm the “Proceed to run full pipeline now?” prompt to stream
+DevPlan and Handoff progress live in your terminal.
 
 One-shot full pipeline:
 ```bash
