@@ -41,7 +41,7 @@ pip install "git+https://github.com/mojomast/devussy.git#egg=devussy"
 
 Then verify:
 ```bash
-devussy version
+python -m src.cli version
 ```
 
 ## Configure API keys
@@ -59,14 +59,14 @@ You can also set per-stage keys in config or via env if desired.
 
 Interactive interview (LLM-driven):
 ```bash
-devussy interactive-design
+python -m src.entry
 ```
 - Type answers or use slash-commands like /done, /help, /settings.
 - The bottom status line shows model and token usage and remains active through generation.
 
 Full pipeline (non-interactive):
 ```bash
-devussy run-full-pipeline \
+python -m src.cli run-full-pipeline \
   --name "My Web App" \
   --languages "Python,TypeScript" \
   --requirements "Build a REST API with auth" \
@@ -102,12 +102,7 @@ export REQUESTY_API_KEY="<your_key>"
 python -m src.entry
 ```
 
-### If installed (editable or package)
-```bash
-devussy launch
-```
-
-Options (both forms):
+Options:
 - `--provider` to override (defaults to requesty for 0.1)
 
 The launcher will:
@@ -118,22 +113,22 @@ The launcher will:
 
 Initialize a new repo with a docs/ folder and templates:
 ```bash
-devussy init-repo ./my-project
+python -m src.cli init-repo ./my-project
 ```
 
 Interactive design interview (recommended):
 ```bash
-devussy interactive-design
+python -m src.cli interactive-design
 ```
 
 One-shot full pipeline:
 ```bash
-devussy run-full-pipeline --name "My App" --languages "Python" --requirements "Build an API"
+python -m src.cli run-full-pipeline --name "My App" --languages "Python" --requirements "Build an API"
 ```
 
 Only design:
 ```bash
-devussy generate-design --name "My App" --languages "Python" --requirements "Build an API"
+python -m src.cli generate-design --name "My App" --languages "Python" --requirements "Build an API"
 ```
 
 Only devplan from an in-memory design (advanced) or resume via checkpoints (see below).
@@ -154,12 +149,12 @@ You can also align stages or set stage-specific models in config; Devussy will c
 ## Checkpoints
 Devussy saves checkpoints between stages so you can resume.
 ```bash
-devussy list-checkpoints
+python -m src.cli list-checkpoints
 # Resume using a key printed by the pipeline, e.g. <project>_pipeline
-# devussy run-full-pipeline --resume-from "myproj_pipeline"
+# python -m src.cli run-full-pipeline --resume-from "myproj_pipeline"
 
-devussy delete-checkpoint <key>
-devussy cleanup-checkpoints --keep 5
+python -m src.cli delete-checkpoint <key>
+python -m src.cli cleanup-checkpoints --keep 5
 ```
 
 ## Configuration (basics)
