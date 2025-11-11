@@ -15,6 +15,7 @@ from .cli import (
     _load_app_config,
     _resolve_requesty_api_key,
     interactive_design,
+    _render_splash,
 )
 
 
@@ -25,6 +26,15 @@ def main(
     output_dir: Optional[str] = None,
     verbose: bool = False,
 ) -> None:
+    # Show the same splash as the CLI unless disabled via env
+    try:
+        env_off = os.getenv("DEVUSSY_NO_SPLASH", "").strip().lower() in {"1", "true", "yes"}
+        if not env_off:
+            _render_splash()
+    except Exception:
+        # Never fail due to splash
+        pass
+
     provider = provider or "requesty"
     cfg = _load_app_config(config_path, provider, model, output_dir, verbose)
 
