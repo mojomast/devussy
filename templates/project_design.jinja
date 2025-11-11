@@ -1,0 +1,60 @@
+You are an expert software architect and project planner. A developer is starting a new project and needs a comprehensive project design document.
+
+## Project Information
+
+**Project Name:** {{ project_name }}
+**Primary Languages:** {{ languages | join(", ") }}
+**Frameworks:** {{ frameworks | join(", ") if frameworks else "None specified" }}
+**External APIs/Services:** {{ apis | join(", ") if apis else "None specified" }}
+**Additional Requirements:** {{ requirements }}
+
+## Your Task
+
+Create a comprehensive project design document that includes the following sections. Be specific, detailed, and actionable.
+
+### 1. High-Level Project Objectives
+- What is the primary purpose and goal of this project?
+- What problems does it solve?
+- Who is the target user or audience?
+- What are the key success criteria?
+
+### 2. Technology Stack Recommendations
+- Evaluate the specified languages and frameworks
+- Recommend additional libraries, tools, or frameworks that would be beneficial
+- Justify each major technology choice
+- Consider factors like: scalability, maintainability, developer experience, community support
+
+### 3. Architecture Overview
+- Describe the overall system architecture
+- Identify major components and their responsibilities
+- Explain how components interact with each other
+- Consider patterns: MVC, microservices, event-driven, layered architecture, etc.
+- Include data flow and control flow descriptions
+
+### 4. Key Dependencies
+- List all critical external dependencies (libraries, APIs, services)
+- Explain why each dependency is necessary
+- Assess risks associated with each dependency
+- Suggest alternatives where applicable
+
+### 5. Project Structure
+- Recommend a directory/file structure
+- Explain the organization of code, tests, documentation, configuration
+- Consider best practices for the chosen technology stack
+
+### 6. Potential Challenges and Mitigations
+- Identify technical challenges or risks
+- Suggest mitigation strategies for each challenge
+- Consider: performance bottlenecks, security concerns, scalability issues, integration complexity
+
+### 7. Development Approach
+- Recommend development methodology (agile, TDD, etc.)
+- Suggest testing strategy (unit, integration, e2e tests)
+- Recommend CI/CD approach
+- Consider documentation needs
+
+## Output Format
+
+Please structure your response as a well-formatted markdown document with clear sections and subsections. Use bullet points, code blocks, and diagrams (ASCII art or mermaid) where helpful.
+
+Be thorough but concise. Focus on actionable insights that will guide the development process.

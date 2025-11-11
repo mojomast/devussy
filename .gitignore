@@ -1,0 +1,70 @@
+# Git backup
+.git.backup/
+
+# Virtual environments (common names)
+venv/
+.venv/
+env/
+ENV/
+venv/*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.env.local
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# State
+.devussy_state/
+
+# Generated project folders (timestamped)
+# Pattern: docs/project-name_YYYYMMDD_HHMMSS/
+# To commit a specific project, use: git add -f docs/project-name_timestamp/
+docs/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/
+
+# Logs
+logs/
+*.log
+logs/interviews/
+
+# Web configuration (sensitive)
+web_projects/.config/credentials/
+web_projects/.config/projects/
+web_projects/.config/global_config.json
+*.lock
+
+# Test directories
+test_config_storage/
+test_dir_creation/
+
+# Node.js / npm
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/
+dist/
+.vite/
