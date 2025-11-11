@@ -1695,6 +1695,9 @@ def interactive_design(
                 if action == "quit":
                     raise typer.Exit(code=0)
                 # Any other actions are handled inside run_main_menu (e.g., Options/Readme)
+        except typer.Exit:
+            # Propagate exit so CLI terminates as requested
+            raise
         except Exception as e:
             if verbose:
                 typer.echo(f"(startup menu unavailable: {e})")
