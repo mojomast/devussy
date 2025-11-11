@@ -2061,11 +2061,9 @@ def launch(
     provider: Annotated[Optional[str], typer.Option("--provider", help="LLM provider override (default: requesty)")] = None,
     model: Annotated[Optional[str], typer.Option("--model", help="Model override")] = None,
     output_dir: Annotated[Optional[str], typer.Option("--output-dir", help="Output directory")] = None,
-    skip_backend: Annotated[bool, typer.Option("--skip-backend", help="Do not start local backend process")] = False,
-    backend_script: Annotated[Optional[str], typer.Option("--backend-script", help="Path to backend start script")]=None,
     verbose: Annotated[bool, typer.Option("--verbose", help="Verbose logs")] = False,
 ) -> None:
-    """Launch Devussy: start backend (optional) then run the interview."""
+    """Launch Devussy: resolve Requesty key (0.1), then run the interview."""
     try:
         # Load config; default provider to requesty for 0.1
         effective_provider = provider or "requesty"
@@ -2079,58 +2077,23 @@ def launch(
                 typer.echo(f"\n❌ Could not resolve Requesty API key: {e}", err=True, color=True)
                 raise typer.Exit(code=1)
 
-        # Optionally start backend
-        proc = None
-        if not skip_backend:
-            try:
-                import subprocess, os, platform
-                script_path = backend_script or (Path.cwd() / "start-backend.ps1")
-                if platform.system().lower().startswith("win") and script_path.exists():
-                    typer.echo("\n🟢 Starting backend (PowerShell)...")
-                    # Pass current env including any API keys resolved above
-                    env = os.environ.copy()
-                    # Ensure REQUESTY key is available to backend
-                    if getattr(cfg.llm, "api_key", None):
-                        env.setdefault("REQUESTY_API_KEY", cfg.llm.api_key)
-                    proc = subprocess.Popen(
-                        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script_path)],
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        env=env,
-                    )
-                else:
-                    typer.echo("\nℹ️ Backend start script not found or unsupported platform. Skipping backend.")
-            except Exception as e:
-                typer.echo(f"\n⚠️  Failed to start backend: {e}", color=True)
-                proc = None
-
         # Run the LLM interview flow (same as interactive_design with defaults)
-        try:
-            # Prefer requesty provider by default
-            interactive_design(
-                config_path=config_path,
-                provider=effective_provider,
-                model=model,
-                output_dir=output_dir,
-                temperature=None,
-                max_tokens=None,
-                select_model=False,
-                save_session=None,
-                resume_session=None,
-                llm_interview=True,
-                scripted=False,
-                streaming=False,
-                verbose=verbose,
-                debug=False,
-            )
-        finally:
-            # Try to terminate backend if we spawned it
-            if proc is not None:
-                try:
-                    proc.terminate()
-                except Exception:
-                    pass
+        interactive_design(
+            config_path=config_path,
+            provider=effective_provider,
+            model=model,
+            output_dir=output_dir,
+            temperature=None,
+            max_tokens=None,
+            select_model=False,
+            save_session=None,
+            resume_session=None,
+            llm_interview=True,
+            scripted=False,
+            streaming=False,
+            verbose=verbose,
+            debug=False,
+        )
 
     except typer.Exit:
         raise

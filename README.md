@@ -86,17 +86,19 @@ Outputs (in docs/ by default):
 
 This 0.1 release is tailored for Requesty. If a Requesty key isn’t detected, you’ll be prompted at startup.
 
-Start backend (if available) and run the interview in one command:
+Run the interview with Requesty in one command:
 ```bash
 devussy launch
 ```
+Or via Python module entry:
+```bash
+python -m src.entry
+```
 Options:
-- `--skip-backend` to run without starting the local backend
 - `--provider` to override (defaults to requesty for 0.1)
 
 The launcher will:
 - ensure REQUESTY_API_KEY is set (prompts if missing)
-- attempt to run `start-backend.ps1` on Windows
 - open the LLM-driven interview
 
 ## Core commands
