@@ -59,10 +59,6 @@ dev = [
     "isort>=5.13.0",
     "pdoc>=14.1.0",
 ]
-web = [
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-]
 
 [project.urls]
 Homepage = "https://github.com/mojomast/devussy-fresh"
