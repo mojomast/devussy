@@ -1,0 +1,154 @@
+# Refined Development Plan for Handoff
+
+You are preparing a development plan for a **coding agent** that will execute it autonomously.
+
+## Detailed Development Plan
+{detailed_devplan}
+
+## Your Task
+Refine the detailed plan to make it **perfect for autonomous agent execution**.
+
+### Enhancements to Make:
+
+1. **Add Troubleshooting Guidance**
+   - Common errors for each step
+   - How to verify success
+   - What to do if step fails
+
+2. **Clarify Dependencies**
+   - Explicit "must complete X before Y"
+   - Optional dependencies
+   - Parallel execution opportunities
+
+3. **Add Success Validation**
+   - Command to run to verify
+   - Expected output
+   - How to confirm correctness
+
+4. **Improve Code Examples**
+   - Complete, runnable code snippets
+   - Not just fragments
+   - Include imports and context
+
+5. **Add Agent Instructions**
+   - Update this devplan as you go
+   - Mark completed steps with ✅
+   - Note any deviations
+   - Git commit after every 10 steps
+
+### Enhanced Step Format:
+```
+### Step X: [Action Title] - Status: ⏳
+**Action:** [What to do]
+**Files:** [Files affected]
+**Code:** 
+```python
+# Complete, working code
+```
+**Validation:**
+```bash
+# Commands to verify this step worked
+pytest tests/test_feature.py -v
+# Expected output: All tests passing
+```
+**Troubleshooting:**
+- If error X occurs: Try Y
+- If tests fail: Check Z
+**Dependencies:** Must complete Step X, Step Y first
+**Completion Criteria:** 
+- ✅ File created/modified
+- ✅ Tests pass
+- ✅ No linting errors
+**Estimated Time:** Xm
+**Agent Notes:** _Leave blank - agent will fill during execution_
+```
+
+### Add These Special Sections:
+
+#### Agent Execution Protocol
+```markdown
+## 🤖 Agent Execution Instructions
+
+### Getting Started
+1. Read this entire document
+2. Set up development environment (Steps 1-10)
+3. Create progress tracking file: `progress.md`
+4. Begin execution from Step 1
+
+### Execution Rules
+- ✅ Mark each completed step with ✅ in Status field
+- 📝 Update "Agent Notes" with any findings or deviations
+- 🔄 After every 10 steps: Git commit with message "feat: completed steps X-Y"
+- ⚠️ If blocked: Document in "Agent Notes", skip and continue
+- 📊 Update progress.md with: current step, blockers, questions
+
+### Milestone Protocol
+After each major milestone (approx every 20-30 steps):
+1. Run all tests: `pytest -v`
+2. Update documentation affected
+3. Git commit with descriptive milestone message
+4. Update CHANGELOG.md or progress.md
+
+### Self-Updating Protocol
+- Update this devplan.md as you learn better approaches
+- If you discover step X should be split: Split it
+- If you find steps can be parallelized: Note it
+- If you find a step is unnecessary: Mark as [SKIP]
+
+### Creating Next Handoff
+When you reach 50%+ completion OR a major milestone:
+1. Update HANDOFF.md with current status
+2. List completed features
+3. List remaining work
+4. Note any blockers or decisions needed
+5. Prepare context for next agent
+```
+
+### Quality Checklist
+Add this at the end:
+```markdown
+## ✅ Definition of Done
+
+Project is complete when ALL of the following are true:
+
+### Code Quality
+- [ ] All steps marked ✅
+- [ ] All tests passing (100% of written tests)
+- [ ] No linting errors
+- [ ] Code follows project style guide
+- [ ] All files have appropriate docstrings/comments
+
+### Documentation
+- [ ] README.md updated with setup instructions
+- [ ] API documentation generated/updated
+- [ ] All environment variables documented
+- [ ] Deployment guide created
+
+### Testing
+- [ ] Unit tests for all features
+- [ ] Integration tests for critical paths
+- [ ] Test coverage > 80%
+- [ ] All edge cases covered
+
+### Production Readiness
+- [ ] Error handling implemented
+- [ ] Logging configured
+- [ ] Security best practices followed
+- [ ] Performance optimized
+- [ ] Docker configuration working
+
+### Git Hygiene
+- [ ] Meaningful commit messages
+- [ ] Clean git history
+- [ ] No secrets in repository
+- [ ] .gitignore properly configured
+```
+
+## Output Format
+Generate the REFINED development plan with:
+1. Agent Execution Protocol section at the top
+2. All steps enhanced with validation, troubleshooting, code examples
+3. Quality checklist at the end
+4. Clear instructions for self-updating and handoff creation
+
+This should be a production-ready document that a coding agent can execute autonomously with minimal human intervention.

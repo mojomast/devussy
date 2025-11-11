@@ -1,0 +1,85 @@
+# DevPlan Orchestrator Configuration
+
+# Global LLM Provider Configuration (fallback for all stages)
+llm_provider: requesty  # Options: openai, generic, requesty
+model: openai/gpt-5-mini  # Default model for general operations
+temperature: 0.7
+max_tokens: 20000
+
+# Per-Stage LLM Configuration (optional overrides)
+# Uncomment and configure to use different models/providers for each stage
+# 
+# You can optionally override Design stage separately
+# (uncomment to customize)
+# design_llm_provider: requesty
+# design_model: openai/gpt-5-mini
+# design_temperature: 0.7
+# design_max_tokens: 20000
+# design_api_timeout: 300
+# design_reasoning_effort: medium  # one of: low, medium, high
+#
+devplan_llm_provider: requesty
+devplan_model: openai/gpt-5
+devplan_temperature: 0.3
+devplan_max_tokens: 81920
+devplan_api_timeout: 300
+#
+handoff_llm_provider: requesty
+handoff_model: openai/gpt-5
+handoff_temperature: 0.5
+handoff_max_tokens: 86000
+handoff_api_timeout: 300
+#
+# You can also set per-stage API keys via environment variables:
+# DESIGN_API_KEY=sk-...
+# DEVPLAN_API_KEY=sk-...
+# HANDOFF_API_KEY=sk-...
+
+# API Configuration
+api_timeout: 300  # Request timeout in seconds
+max_concurrent_requests: 5  # Maximum number of concurrent API calls
+
+# Retry Configuration
+retry:
+  max_attempts: 3  # Maximum number of retry attempts
+  initial_delay: 1  # Initial delay in seconds
+  max_delay: 60  # Maximum delay in seconds
+  exponential_base: 2  # Exponential backoff base
+
+# Streaming Configuration
+streaming_enabled: false  # Enable/disable token streaming
+streaming_callback: null  # Custom streaming callback function
+
+# Output Configuration
+output_dir: ./docs  # Directory for generated documentation
+state_dir: ./.devussy_state  # Directory for state persistence
+
+# Logging Configuration
+log_level: INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_file: logs/devussy.log  # Log file path
+log_format: "[%(asctime)s] %(levelname)s - %(name)s - %(message)s"
+
+# Git Configuration
+git_enabled: true  # Enable/disable automatic git commits
+git_commit_after_design: true
+git_commit_after_devplan: true
+git_commit_after_handoff: true
+
+# Documentation Configuration
+documentation:
+  auto_generate: true  # Automatically generate documentation
+  include_citations: true  # Include citations in documentation
+  timestamp_updates: true  # Add timestamps to documentation updates
+  generate_index: true  # Generate documentation index
+
+# Pipeline Configuration
+pipeline:
+  save_intermediate_results: true  # Save intermediate pipeline results
+  validate_output: true  # Validate pipeline output
+  enable_checkpoints: true  # Enable progress checkpoints for resumable workflows
+
+# Detour experimentation toggles
+detour:
+  enabled: true  # Master switch for detour behaviors
+  instrumentation_enabled: true  # Collect detailed timing/metrics per stage
+  metadata_logging_enabled: true  # Log metadata write frequency/size
