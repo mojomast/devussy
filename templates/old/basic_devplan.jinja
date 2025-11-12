@@ -1,6 +1,3 @@
-{% import "_circular_macros.jinja" as circ with context %}
-{{ circ.quickstart_banner() }}
-
 You are an expert project manager and software architect. You have been given a project design document and need to create a high-level development plan that breaks the project into logical phases.
 
 {% if interactive_session %}
@@ -142,9 +139,3 @@ If a file does not exist, create it and include the anchors.
 - handoff_prompt.md → succinct status summary (completed, in-progress, next {{ task_group_size | default(3) }} steps), and any decisions/tradeoffs.
 
 Do not skip this ritual. Stop after each group, perform the updates, then continue.
-
-{{ circ.context_budget_rules() }}
-
-{{ circ.update_anchors_help() }}
-
-{{ circ.devplan_anchors(num_phases=8) }}

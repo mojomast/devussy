@@ -1,6 +1,3 @@
-{% import "_circular_macros.jinja" as circ with context %}
-{{ circ.quickstart_banner() }}
-
 You are an expert software developer creating a detailed, step-by-step implementation plan. You have been given a high-level phase description and need to break it down into precise, numbered, actionable steps that a "lesser coding agent" (an AI with basic coding skills) can execute.
 
 {% if interactive_context %}
@@ -120,9 +117,3 @@ Focus on making each step implementable and verifiable. The goal is that someone
   6. Only then continue to the next steps.
 
 If a target file does not exist, create it and include the anchors so future models can reliably update it.
-
-{{ circ.context_budget_rules() }}
-
-{{ circ.update_anchors_help() }}
-
-{{ circ.devplan_anchors(num_phases=10) }}

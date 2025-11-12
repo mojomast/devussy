@@ -1,0 +1,76 @@
+{# _circular_macros.jinja #}
+{% macro quickstart_banner() -%}
+> **QuickStart:** Say “read handoff and resume”.  
+> **Rhythm:** Do {{ task_group_size|default(3) }} steps → update anchors (devplan, phaseN, HANDOFF) → repeat.  
+> **Stay small:** Read only anchors and active step files unless blocked.
+{%- endmacro %}
+
+{% macro context_budget_rules() -%}
+### Context Budget (Read-Minimal Rules)
+- Read only:
+  - `devplan.md` sections inside: `<!-- PROGRESS_LOG_* -->`, `<!-- NEXT_TASK_GROUP_* -->`, `<!-- PHASE_*_STATUS_* -->`
+  - Active `phaseN.md` inside: `<!-- PHASE_PROGRESS_* -->`
+  - `HANDOFF.md` inside: `<!-- HANDOFF_NOTES_* -->`
+- Only open code files referenced by the next {{ task_group_size|default(3) }} steps.
+- If blocked (missing info), write a one-line blocker note to `HANDOFF.md`, then stop for handoff.
+{%- endmacro %}
+
+{% macro update_anchors_help() -%}
+### Update Ritual (Non-negotiable)
+- After each group of {{ task_group_size|default(3) }} steps:
+  1) **devplan.md:**  
+     - `<!-- PROGRESS_LOG_START --> … `<!-- PROGRESS_LOG_END -->` (append `P.N` step numbers + 1-line results)  
+     - `<!-- NEXT_TASK_GROUP_START --> … `<!-- NEXT_TASK_GROUP_END -->` (list the next {{ task_group_size|default(3) }} steps)  
+     - `<!-- PHASE_N_STATUS_START --> … `<!-- PHASE_N_STATUS_END -->` (set `completed: X/Y`)
+  2) **phaseN.md:**  
+     - `<!-- PHASE_PROGRESS_START --> … `<!-- PHASE_PROGRESS_END -->` (2–5 bullets: outcomes, files changed, blockers)
+  3) **HANDOFF.md:**  
+     - `<!-- HANDOFF_NOTES_START --> … `<!-- HANDOFF_NOTES_END -->` (status snapshot + next {{ task_group_size|default(3) }})
+{%- endmacro %}
+
+{% macro resume_contract() -%}
+### “RESUME” Contract (what to do when you resume)
+1) Identify **current phase** from `devplan.md` phase status anchors.  
+2) Read only the **next {{ task_group_size|default(3) }} steps**.  
+3) Execute steps in order; for each step, ensure it has **clear acceptance checks** and **tests/verification**.  
+4) Run quality gates (lint, format, tests) before updates.  
+5) Perform the **Update Ritual** (devplan, phaseN, HANDOFF).  
+6) Stop. Do **not** continue beyond the group unless explicitly instructed.
+{%- endmacro %}
+
+{% macro decisions_and_blockers() -%}
+### Decisions & Blockers
+- `<!-- DECISIONS_START -->`  
+  - (append dated one-liners, e.g., “2025-11-11: chose SQLite for prototyping”)  
+- `<!-- DECISIONS_END -->`
+
+- `<!-- BLOCKERS_START -->`  
+  - (list current blockers + what’s needed)  
+- `<!-- BLOCKERS_END -->`
+{%- endmacro %}
+
+{% macro devplan_anchors(num_phases=10) -%}
+<!-- PROGRESS_LOG_START -->
+<!-- PROGRESS_LOG_END -->
+
+<!-- NEXT_TASK_GROUP_START -->
+<!-- NEXT_TASK_GROUP_END -->
+
+{% for n in range(1, (num_phases or 10) + 1) -%}
+<!-- PHASE_{{n}}_STATUS_START -->
+completed: 0/0
+<!-- PHASE_{{n}}_STATUS_END -->
+{% endfor -%}
+
+{{ decisions_and_blockers() }}
+{%- endmacro %}
+
+{% macro phase_anchors() -%}
+<!-- PHASE_PROGRESS_START -->
+<!-- PHASE_PROGRESS_END -->
+{%- endmacro %}
+
+{% macro handoff_anchors() -%}
+<!-- HANDOFF_NOTES_START -->
+<!-- HANDOFF_NOTES_END -->
+{%- endmacro %}
