@@ -22,6 +22,7 @@ class HandoffPromptGenerator:
         architecture_notes: str = "",
         dependencies_notes: str = "",
         config_notes: str = "",
+        task_group_size: int = 5,
         **kwargs: Any,
     ) -> HandoffPrompt:
         """Generate a handoff prompt from a devplan and progress state.
@@ -33,6 +34,7 @@ class HandoffPromptGenerator:
             architecture_notes: Notes about architecture
             dependencies_notes: Notes about dependencies
             config_notes: Notes about configuration
+            task_group_size: Number of upcoming tasks to execute before the next mandatory update
             **kwargs: Additional context
 
         Returns:
@@ -44,8 +46,8 @@ class HandoffPromptGenerator:
         completed_phases = [p for p in devplan.phases if self._is_phase_complete(p)]
         in_progress_phase = self._get_in_progress_phase(devplan.phases)
 
-        # Get next steps to work on
-        next_steps = self._get_next_steps(devplan.phases, limit=5)
+        # Get next steps to work on (limited by task_group_size)
+        next_steps = self._get_next_steps(devplan.phases, limit=task_group_size)
 
         # Prepare template context
         context: Dict[str, Any] = {
@@ -57,6 +59,7 @@ class HandoffPromptGenerator:
             "architecture_notes": architecture_notes or "Not specified",
             "dependencies_notes": dependencies_notes or "Not specified",
             "config_notes": config_notes or "Not specified",
+            "task_group_size": task_group_size,
         }
 
         # Render the template

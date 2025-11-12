@@ -28,6 +28,7 @@ class BasicDevPlanGenerator:
         self,
         project_design: ProjectDesign,
         feedback_manager: Optional[Any] = None,
+        task_group_size: int = 3,
         **llm_kwargs: Any,
     ) -> DevPlan:
         """Generate a high-level devplan from a project design.
@@ -45,7 +46,7 @@ class BasicDevPlanGenerator:
         )
 
         # Prepare template context
-        context = {"project_design": project_design}
+        context = {"project_design": project_design, "task_group_size": task_group_size}
 
         # Render the prompt template
         prompt = render_template("basic_devplan.jinja", context)

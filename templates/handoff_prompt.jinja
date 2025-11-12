@@ -156,4 +156,20 @@ Resume work by executing the next steps listed above. Start with step {{ next_st
 All planned work is complete! Consider reviewing the devplan for next phases.
 {% endif %}
 
+---
+
+## Task Group Size and Update Ritual (Non‑negotiable)
+
+- Task group size: {{ task_group_size | default(5) }} steps per group
+- After each group of {{ task_group_size | default(5) }} steps:
+  1. Update `devplan.md` between `<!-- PROGRESS_LOG_START -->` and `<!-- PROGRESS_LOG_END -->` with the steps completed.
+  2. Update `devplan.md` between `<!-- NEXT_TASK_GROUP_START -->` and `<!-- NEXT_TASK_GROUP_END -->` listing the next {{ task_group_size | default(5) }} steps.
+  3. Update `phase.md` between `<!-- PHASE_PROGRESS_START -->` and `<!-- PHASE_PROGRESS_END -->` with outcomes, files changed, and blockers (if any).
+  4. Update the handoff notes/prompt between `<!-- HANDOFF_NOTES_START -->` and `<!-- HANDOFF_NOTES_END -->` with current status and next steps.
+  5. Only then proceed to the next group.
+
+If an artifact doesn’t exist, create it and include the anchors above so future models can reliably update it.
+
+---
+
 **Good luck! 🚀**

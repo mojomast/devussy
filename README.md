@@ -97,6 +97,52 @@ Outputs (in docs/ by default):
 - devplan.md (+ phase1.md … phaseN.md)
 - handoff_prompt.md
 
+### Mandatory update ritual (after every N tasks)
+
+To keep all models in sync, Devussy enforces a simple update ritual. After completing a group of tasks, pause to update the artifacts, then continue.
+
+- Task group size: configurable; defaults to 3 for devplan generation and 5 for handoff prompts
+- After each group, update all three locations before proceeding:
+  1) devplan.md — add progress and next tasks
+  2) phase.md (the active phase file) — summarize outcomes and blockers
+  3) handoff (handoff_prompt.md or prompt content) — brief status and next steps
+
+Use these anchors so any model can reliably update the right sections:
+
+- In devplan.md:
+  - <!-- PROGRESS_LOG_START --> ... <!-- PROGRESS_LOG_END -->
+  - <!-- NEXT_TASK_GROUP_START --> ... <!-- NEXT_TASK_GROUP_END -->
+- In the current phase file (phaseX.md):
+  - <!-- PHASE_PROGRESS_START --> ... <!-- PHASE_PROGRESS_END -->
+- In handoff (handoff_prompt.md or the generated prompt):
+  - <!-- HANDOFF_NOTES_START --> ... <!-- HANDOFF_NOTES_END -->
+
+If a file doesn’t exist, create it and include the anchors.
+
+Example (devplan.md):
+
+```
+<!-- PROGRESS_LOG_START -->
+- Completed 2.1 Implement DB schema – added tables, indexes, migration file
+- Completed 2.2 Connection manager – pooled connections, retry, logging
+<!-- PROGRESS_LOG_END -->
+
+<!-- NEXT_TASK_GROUP_START -->
+- 2.3: Write unit tests for DB layer
+- 2.4: Code quality checks (black/flake8/isort)
+- 2.5: Commit changes (feat: db layer)
+<!-- NEXT_TASK_GROUP_END -->
+```
+
+### Configure task group size
+
+Programmatic API:
+- Basic plan generation: BasicDevPlanGenerator.generate(..., task_group_size=3)
+- Detailed plan generation: DetailedDevPlanGenerator.generate(..., task_group_size=3)
+- Handoff prompt: HandoffPromptGenerator.generate(..., task_group_size=5)
+
+CLI: the default group sizes apply unless you integrate a flag in your own wrapper.
+
 ## What you’ll see (UX)
 - Stage spinners while each phase runs
 - A per-phase progress bar during detailed plan generation (updates as phases finish)

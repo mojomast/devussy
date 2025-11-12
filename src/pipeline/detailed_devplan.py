@@ -39,6 +39,7 @@ class DetailedDevPlanGenerator:
         tech_stack: List[str] | None = None,
         feedback_manager: Optional[Any] = None,
         on_phase_complete: Optional[Callable[[DevPlanPhase], None]] = None,
+        task_group_size: int = 3,
         **llm_kwargs: Any,
     ) -> DevPlan:
         """Generate detailed steps for each phase in the devplan.
@@ -62,7 +63,12 @@ class DetailedDevPlanGenerator:
             asyncio.create_task(
                 self.concurrency_manager.run_with_limit(
                     self._generate_phase_details(
-                        phase, project_name, tech_stack or [], feedback_manager, **llm_kwargs
+                        phase,
+                        project_name,
+                        tech_stack or [],
+                        feedback_manager,
+                        task_group_size=task_group_size,
+                        **llm_kwargs,
                     )
                 )
             )
@@ -103,6 +109,7 @@ class DetailedDevPlanGenerator:
         project_name: str,
         tech_stack: List[str],
         feedback_manager: Optional[Any] = None,
+        task_group_size: int = 3,
         **llm_kwargs: Any,
     ) -> DevPlanPhase:
         """Generate detailed steps for a single phase.
@@ -126,6 +133,7 @@ class DetailedDevPlanGenerator:
             "phase_description": "",  # Could add this to the model
             "project_name": project_name,
             "tech_stack": tech_stack,
+            "task_group_size": task_group_size,
         }
 
         # Render the prompt template
