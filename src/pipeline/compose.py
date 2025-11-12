@@ -1076,14 +1076,33 @@ class PipelineOrchestrator:
         for phase in devplan.phases:
             lines.append(f"- **[Phase {phase.number}: {phase.title}](phase{phase.number}.md)**\n")
 
+        # Automation hooks to allow agents to reliably update progress
         lines.extend([
             "\n---\n\n",
+            "## 🔧 Automation Hooks (Do Not Remove)\n\n",
+            "<!-- PROGRESS_LOG_START -->\n<!-- PROGRESS_LOG_END -->\n\n",
+            "<!-- NEXT_TASK_GROUP_START -->\n<!-- NEXT_TASK_GROUP_END -->\n\n",
+            "<!-- COMPLETION_SUMMARY_START -->\n<!-- COMPLETION_SUMMARY_END -->\n\n",
             "## 📊 Overall Progress\n\n",
             f"**Total Phases**: {len(devplan.phases)}\n",
             f"**Total Steps**: {sum(len(phase.steps) for phase in devplan.phases)}\n",
             f"**Completed Steps**: {sum(sum(1 for step in phase.steps if step.done) for phase in devplan.phases)}\n\n",
             "*Last updated: " + self._get_timestamp() + "*\n"
         ])
+
+        # Expose per-phase status anchors so agents can update completion deterministically
+        lines.extend([
+            "\n---\n\n",
+            "## 🔒 Phase Status Anchors (Do Not Remove)\n\n",
+        ])
+        for phase in devplan.phases:
+            total_steps = len(phase.steps)
+            completed_steps = sum(1 for s in phase.steps if s.done)
+            lines.append(
+                f"<!-- PHASE_{phase.number}_STATUS_START -->\n"
+                f"phase: {phase.number}\nname: {phase.title}\ncompleted: {completed_steps}/{total_steps}\n"
+                f"<!-- PHASE_{phase.number}_STATUS_END -->\n\n"
+            )
 
         return "\n".join(lines)
 
@@ -1156,6 +1175,8 @@ class PipelineOrchestrator:
             "3. **Add notes** - Document any important decisions or issues\n",
             "4. **Test thoroughly** - Ensure each step works before proceeding\n",
             "5. **Update main devplan** - Return to main devplan.md to update overall progress\n\n",
+            "### Automation Hooks (Do Not Remove)\n\n",
+            "<!-- PHASE_PROGRESS_START -->\n<!-- PHASE_PROGRESS_END -->\n\n",
             "### Dependencies:\n",
             "- Ensure previous phases are complete before starting this phase\n",
             "- Follow the project's established patterns and conventions\n",
