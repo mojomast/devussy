@@ -517,13 +517,21 @@ class PipelineOrchestrator:
 
         if save_artifacts:
             devplan_md = self._devplan_to_markdown(detailed_devplan)
-            self.file_manager.write_markdown(f"{output_dir}/devplan.md", devplan_md)
-            logger.info("Saved devplan.md dashboard")
-            self.progress_reporter.report_file_created(
-                f"{output_dir}/devplan.md",
-                "DevPlan Dashboard",
-                len(devplan_md)
-            )
+            ok, written_path = self.file_manager.safe_write_devplan(f"{output_dir}/devplan.md", devplan_md)
+            if ok:
+                logger.info("Saved devplan.md dashboard (validated)")
+                self.progress_reporter.report_file_created(
+                    written_path,
+                    "DevPlan Dashboard",
+                    len(devplan_md)
+                )
+            else:
+                logger.warning("Devplan write redirected to tmp due to failed validation: %s", written_path)
+                self.progress_reporter.report_file_created(
+                    written_path,
+                    "DevPlan Dashboard (tmp)",
+                    len(devplan_md)
+                )
 
             # Generate individual phase files
             phase_files = self._generate_phase_files(detailed_devplan, output_dir)
@@ -845,8 +853,11 @@ class PipelineOrchestrator:
         # Save devplan artifact if requested
         if save_artifacts:
             devplan_md = self._devplan_to_markdown(detailed_devplan)
-            self.file_manager.write_markdown(f"{output_dir}/devplan.md", devplan_md)
-            logger.info("Saved devplan.md")
+            ok, written_path = self.file_manager.safe_write_devplan(f"{output_dir}/devplan.md", devplan_md)
+            if ok:
+                logger.info("Saved devplan.md (validated)")
+            else:
+                logger.warning("Devplan write redirected to tmp due to failed validation: %s", written_path)
 
             # Commit devplan if Git integration is enabled
             if self.git_manager and self.git_config.commit_after_devplan:

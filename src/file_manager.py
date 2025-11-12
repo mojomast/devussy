@@ -5,6 +5,11 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple, List
+
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class FileManager:
@@ -18,6 +23,76 @@ class FileManager:
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
+
+    # --- Safe devplan writing helpers ---
+    def _validate_devplan_content(self, content: str) -> Tuple[bool, List[str]]:
+        """Validate that devplan dashboard content keeps required invariants.
+
+        Returns (is_valid, reasons_if_invalid).
+        """
+        reasons: List[str] = []
+        def has(s: str) -> bool:
+            return s in content
+        # Minimal invariants
+        if not (has("# Development Plan") or has("## 📋 Project Dashboard")):
+            reasons.append("missing dashboard header")
+        if not (has("### 🚀 Phase Overview") and ("| Phase |" in content)):
+            reasons.append("missing phase overview table")
+        if "<!-- PROGRESS_LOG_START -->" not in content:
+            reasons.append("missing PROGRESS_LOG anchors")
+        if "<!-- NEXT_TASK_GROUP_START -->" not in content:
+            reasons.append("missing NEXT_TASK_GROUP anchors")
+        return (len(reasons) == 0, reasons)
+
+    def safe_write_devplan(self, path: str | Path, content: str) -> Tuple[bool, str]:
+        """Safely write devplan.md with backup and invariant checks.
+
+        - Creates a .bak of the existing file (if present) before any write.
+        - Validates the new content keeps dashboard/table and core anchors.
+        - If invalid, writes to <path>.tmp instead and keeps the original.
+
+        Returns (success, written_path).
+        """
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+
+        # Create backup if file exists
+        if p.exists():
+            try:
+                bak = p.with_suffix(p.suffix + ".bak")
+                bak.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+                logger.info(f"Backed up devplan to {bak}")
+            except Exception as e:
+                logger.warning(f"Failed to create backup for {p}: {e}")
+
+        is_valid, reasons = self._validate_devplan_content(content)
+        if not is_valid:
+            tmp_path = str(p) + ".tmp"
+            try:
+                Path(tmp_path).write_text(content, encoding="utf-8")
+                logger.warning(
+                    "Refused to overwrite devplan.md due to invariants missing: %s. "
+                    "Wrote candidate content to %s",
+                    ", ".join(reasons),
+                    tmp_path,
+                )
+            except Exception as e:
+                logger.error(f"Failed to write devplan tmp file {tmp_path}: {e}")
+            return False, tmp_path
+
+        # Proceed with normal write
+        try:
+            p.write_text(content, encoding="utf-8")
+            logger.info(f"Wrote devplan dashboard to {p}")
+            return True, str(p)
+        except Exception as e:
+            logger.error(f"Failed to write devplan {p}: {e}")
+            tmp_path = str(p) + ".tmp"
+            try:
+                Path(tmp_path).write_text(content, encoding="utf-8")
+            except Exception:
+                pass
+            return False, tmp_path
 
     def append_to_file(self, path: str | Path, content: str) -> None:
         p = Path(path)

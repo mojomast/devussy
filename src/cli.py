@@ -748,11 +748,15 @@ def generate_devplan(
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
 
         devplan_md = orchestrator._devplan_to_markdown(devplan)
-        with open(output_file, "w", encoding="utf-8") as f:
-            f.write(devplan_md)
-
-        typer.echo(f"✓ DevPlan saved to: {output_file}", color=True)
-        logger.info(f"DevPlan saved to: {output_file}")
+        from .file_manager import FileManager
+        fm = FileManager()
+        ok, written_path = fm.safe_write_devplan(output_file, devplan_md)
+        if ok:
+            typer.echo(f"✓ DevPlan saved to: {output_file}", color=True)
+            logger.info(f"DevPlan saved to: {output_file}")
+        else:
+            typer.echo(f"⚠️  DevPlan content failed validation; wrote candidate to: {written_path}", err=True, color=True)
+            logger.warning(f"DevPlan write redirected to tmp: {written_path}")
 
     except typer.Exit:
         raise
