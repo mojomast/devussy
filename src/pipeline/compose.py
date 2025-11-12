@@ -18,6 +18,7 @@ from ..state_manager import StateManager
 from .basic_devplan import BasicDevPlanGenerator
 from .detailed_devplan import DetailedDevPlanGenerator
 from .handoff_prompt import HandoffPromptGenerator
+from .design_review import DesignReviewRefiner
 from .project_design import ProjectDesignGenerator
 
 logger = get_logger(__name__)
@@ -143,6 +144,7 @@ class PipelineOrchestrator:
             self.devplan_client, self.concurrency_manager
         )
         self.handoff_gen = HandoffPromptGenerator()
+        self.design_review_refiner = DesignReviewRefiner(self.devplan_client)
 
     def _write_rerun_command_file(
         self,
@@ -260,6 +262,7 @@ class PipelineOrchestrator:
         save_artifacts: bool = True,
         provider_override: Optional[str] = None,
         feedback_manager: Optional[Any] = None,
+        pre_review: bool = False,
         **llm_kwargs: Any,
     ) -> Tuple[ProjectDesign, DevPlan, HandoffPrompt]:
         """Run the complete pipeline from inputs to handoff prompt.
@@ -374,6 +377,50 @@ class PipelineOrchestrator:
                     logger.info("Committed project design to Git")
                 except Exception as e:
                     logger.warning(f"Failed to commit project design: {e}")
+
+        # Optional: Pre-review design with devplan model to catch issues early
+        if pre_review:
+            with self.progress_reporter.create_spinner_context(
+                "Reviewing project design for compatibility/workflow/backend issues..."
+            ):
+                try:
+                    updated_design, review_md, changed = await self.design_review_refiner.refine(
+                        project_design, **llm_kwargs
+                    )
+                    if save_artifacts:
+                        self.file_manager.write_markdown(f"{output_dir}/design_review.md", review_md)
+                        self.progress_reporter.report_file_created(
+                            f"{output_dir}/design_review.md", "Design Review", len(review_md)
+                        )
+                    if changed:
+                        project_design = updated_design
+                        logger.info("Applied design improvements from pre-review")
+                        # Save checkpoint after review
+                        try:
+                            self.state_manager.save_checkpoint(
+                                checkpoint_key=f"{project_name}_pipeline",
+                                stage="design_review",
+                                data={
+                                    "project_design": project_design.model_dump(),
+                                    "project_name": project_name,
+                                    "languages": languages,
+                                    "requirements": requirements,
+                                    "frameworks": frameworks,
+                                    "apis": apis,
+                                },
+                                metadata={
+                                    "provider": self.get_current_provider(),
+                                    "output_dir": output_dir,
+                                    "llm_kwargs": llm_kwargs,
+                                },
+                            )
+                            self.progress_reporter.show_checkpoint_saved(
+                                f"{project_name}_pipeline", "design_review"
+                            )
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.warning(f"Design pre-review failed: {e}; continuing with original design")
 
         # Stage 2: Generate basic devplan
         self.progress_reporter.start_stage("Basic DevPlan", 2)
@@ -567,6 +614,7 @@ class PipelineOrchestrator:
         project_design: ProjectDesign,
         provider_override: Optional[str] = None,
         feedback_manager: Optional[Any] = None,
+        pre_review: bool = False,
         **llm_kwargs: Any,
     ) -> DevPlan:
         """Generate only the devplan from an existing project design.
@@ -589,6 +637,21 @@ class PipelineOrchestrator:
             except Exception as e:
                 logger.error(f"Failed to switch to provider {provider_override}: {e}")
                 raise
+
+        # Optional: Pre-review design with devplan model to catch issues early
+        if pre_review:
+            with self.progress_reporter.create_spinner_context(
+                "Reviewing project design for compatibility/workflow/backend issues..."
+            ):
+                try:
+                    updated_design, review_md, changed = await self.design_review_refiner.refine(
+                        project_design, **llm_kwargs
+                    )
+                    if changed:
+                        project_design = updated_design
+                        logger.info("Applied design improvements from pre-review")
+                except Exception as e:
+                    logger.warning(f"Design pre-review failed: {e}; continuing with original design")
 
         # Stage: Basic DevPlan
         self.progress_reporter.start_stage("Basic DevPlan", 2)
@@ -1013,14 +1076,33 @@ class PipelineOrchestrator:
         for phase in devplan.phases:
             lines.append(f"- **[Phase {phase.number}: {phase.title}](phase{phase.number}.md)**\n")
 
+        # Automation hooks to allow agents to reliably update progress
         lines.extend([
             "\n---\n\n",
+            "## 🔧 Automation Hooks (Do Not Remove)\n\n",
+            "<!-- PROGRESS_LOG_START -->\n<!-- PROGRESS_LOG_END -->\n\n",
+            "<!-- NEXT_TASK_GROUP_START -->\n<!-- NEXT_TASK_GROUP_END -->\n\n",
+            "<!-- COMPLETION_SUMMARY_START -->\n<!-- COMPLETION_SUMMARY_END -->\n\n",
             "## 📊 Overall Progress\n\n",
             f"**Total Phases**: {len(devplan.phases)}\n",
             f"**Total Steps**: {sum(len(phase.steps) for phase in devplan.phases)}\n",
             f"**Completed Steps**: {sum(sum(1 for step in phase.steps if step.done) for phase in devplan.phases)}\n\n",
             "*Last updated: " + self._get_timestamp() + "*\n"
         ])
+
+        # Expose per-phase status anchors so agents can update completion deterministically
+        lines.extend([
+            "\n---\n\n",
+            "## 🔒 Phase Status Anchors (Do Not Remove)\n\n",
+        ])
+        for phase in devplan.phases:
+            total_steps = len(phase.steps)
+            completed_steps = sum(1 for s in phase.steps if s.done)
+            lines.append(
+                f"<!-- PHASE_{phase.number}_STATUS_START -->\n"
+                f"phase: {phase.number}\nname: {phase.title}\ncompleted: {completed_steps}/{total_steps}\n"
+                f"<!-- PHASE_{phase.number}_STATUS_END -->\n\n"
+            )
 
         return "\n".join(lines)
 
@@ -1093,6 +1175,8 @@ class PipelineOrchestrator:
             "3. **Add notes** - Document any important decisions or issues\n",
             "4. **Test thoroughly** - Ensure each step works before proceeding\n",
             "5. **Update main devplan** - Return to main devplan.md to update overall progress\n\n",
+            "### Automation Hooks (Do Not Remove)\n\n",
+            "<!-- PHASE_PROGRESS_START -->\n<!-- PHASE_PROGRESS_END -->\n\n",
             "### Dependencies:\n",
             "- Ensure previous phases are complete before starting this phase\n",
             "- Follow the project's established patterns and conventions\n",
