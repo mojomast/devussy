@@ -27,6 +27,9 @@ class SessionSettings(BaseModel):
     max_tokens: Optional[int] = None
     streaming: Optional[bool] = None
     api_key: Optional[str] = None
+    base_url: Optional[str] = None  # Added for generic provider endpoint
+    provider_keys: Optional[Dict[str, str]] = Field(default_factory=dict)
+    provider_base_urls: Optional[Dict[str, str]] = Field(default_factory=dict)
     # GPT-5 reasoning level: low | medium | high
     reasoning_effort: Optional[str] = None
     last_token_usage: Optional[Dict[str, int]] = Field(default=None)
@@ -59,6 +62,7 @@ def _current_settings_snapshot(config: AppConfig, session: Optional[SessionSetti
         f"DevPlan Timeout: {(session.devplan_api_timeout if session and session.devplan_api_timeout is not None else (config.devplan_llm.api_timeout if config.devplan_llm and getattr(config.devplan_llm, 'api_timeout', None) is not None else '-'))}s",
         f"Handoff Timeout: {(session.handoff_api_timeout if session and session.handoff_api_timeout is not None else (config.handoff_llm.api_timeout if config.handoff_llm and getattr(config.handoff_llm, 'api_timeout', None) is not None else '-'))}s",
         f"API Key: {'set' if (session and session.api_key) or llm.api_key else 'not set'}",
+        f"Base URL: {(session.base_url if session and session.base_url else llm.base_url) or 'default'}",
     ]
     if session and session.last_token_usage:
         usage = session.last_token_usage
@@ -100,6 +104,8 @@ def _submenu_models(config: AppConfig, session: SessionSettings) -> None:
                     text=_current_settings_snapshot(config, session),
                     values=[
                         ("provider", "Provider"),
+                        ("api_key_current", "API Key (active provider)"),
+                        ("base_url_current", "Base URL (active provider)"),
                         ("interview_model", "Interview Model"),
                         ("final_stage_model", "Final Stage Model"),
                         ("back", "Back"),
@@ -116,15 +122,93 @@ def _submenu_models(config: AppConfig, session: SessionSettings) -> None:
                         values=[
                             ("openai", "OpenAI"),
                             ("generic", "Generic (OpenAI-compatible)"),
+                            ("aether", "Aether AI"),
+                            ("agentrouter", "AgentRouter"),
                             ("requesty", "Requesty"),
                         ],
                     ).run()
                     or provider_default
                 )
                 session.provider = provider
+
+                # Prompt for API key for this provider if missing
+                if not (session.provider_keys or {}).get(provider):
+                    try:
+                        try:
+                            api_key_input = input_dialog(
+                                title=f"{provider.capitalize()} API Key",
+                                text="Enter API key (leave blank to skip, '-' to clear):",
+                                password=True,
+                            ).run()
+                        except TypeError:
+                            api_key_input = prompt("Enter API key (leave blank to skip, '-' to clear): ", is_password=True)
+                        if api_key_input is not None:
+                            api_key_input = api_key_input.strip()
+                            if api_key_input == "-":
+                                session.provider_keys.pop(provider, None)
+                            elif api_key_input:
+                                session.provider_keys[provider] = api_key_input
+                                session.api_key = api_key_input
+                    except Exception:
+                        pass
+                
+                # If generic provider selected and no base URL is set, prompt for it
+                if provider == "generic" and not session.provider_base_urls.get(provider) and not config.llm.base_url:
+                    try:
+                        base_url_input = input_dialog(
+                            title="Base URL Required",
+                            text="Generic provider requires a base URL (e.g., https://api.example.com):",
+                        ).run()
+                        if base_url_input and base_url_input.strip():
+                            session.provider_base_urls[provider] = base_url_input.strip()
+                    except Exception:
+                        pass
+                # For Aether/AgentRouter, auto-populate defaults silently if missing
+                if provider == "aether" and not session.provider_base_urls.get(provider):
+                    session.provider_base_urls[provider] = "https://api.aetherapi.dev"
+                if provider == "agentrouter" and not session.provider_base_urls.get(provider):
+                    session.provider_base_urls[provider] = "https://agentrouter.org/"
+                
+                continue
+            if pick == "api_key_current":
+                try:
+                    active_provider = (session.provider or config.llm.provider or "openai").lower()
+                    try:
+                        api_key_input = input_dialog(
+                            title=f"{active_provider.capitalize()} API Key",
+                            text="Enter API key (leave blank to keep current, '-' to clear):",
+                            password=True,
+                        ).run()
+                    except TypeError:
+                        api_key_input = prompt("Enter API key (leave blank to keep current, '-' to clear): ", is_password=True)
+                    if api_key_input is not None:
+                        api_key_input = api_key_input.strip()
+                        if api_key_input == "-":
+                            session.provider_keys.pop(active_provider, None)
+                        elif api_key_input:
+                            session.provider_keys[active_provider] = api_key_input
+                            session.api_key = api_key_input
+                except Exception:
+                    pass
+                continue
+            if pick == "base_url_current":
+                try:
+                    active_provider = (session.provider or config.llm.provider or "openai").lower()
+                    base_url_input = input_dialog(
+                        title="Base URL",
+                        text=f"Enter base URL for current provider '{active_provider}' (leave blank to keep current, '-' to clear):",
+                    ).run()
+                    if base_url_input is not None:
+                        base_url_input = base_url_input.strip()
+                        if base_url_input == "-":
+                            session.provider_base_urls.pop(active_provider, None)
+                        elif base_url_input:
+                            session.provider_base_urls[active_provider] = base_url_input
+                except Exception:
+                    pass
                 continue
             if pick == "interview_model":
-                selected = _requesty_model_picker(
+                selected = _combined_model_picker(
                     config,
                     session,
                     title="Interview Model",
@@ -134,7 +218,7 @@ def _submenu_models(config: AppConfig, session: SessionSettings) -> None:
                     session.interview_model = selected.strip()
                 continue
             if pick == "final_stage_model":
-                selected = _requesty_model_picker(
+                selected = _combined_model_picker(
                     config,
                     session,
                     title="Final Stage Model",
@@ -149,21 +233,49 @@ def _submenu_models(config: AppConfig, session: SessionSettings) -> None:
         while True:
             print("\n=== Models & Provider ===")
             print("  1) Provider")
-            print("  2) Interview Model")
-            print("  3) Final Stage Model")
-            print("  4) Back")
-            raw = (input("Enter 1-4 [4]: ").strip() or "4")
+            print("  2) API Key (active provider)")
+            print("  3) Base URL (active provider)")
+            print("  4) Interview Model")
+            print("  5) Final Stage Model")
+            print("  6) Back")
+            raw = (input("Enter 1-6 [6]: ").strip() or "6")
             if raw == "1":
-                print("Providers: 1) OpenAI  2) Generic  3) Requesty")
+                print("Providers: 1) OpenAI  2) Generic  3) Aether AI  4) AgentRouter  5) Requesty")
                 p = input("Choose provider [current]: ").strip().lower()
-                mapping = {"1": "openai", "2": "generic", "3": "requesty"}
+                mapping = {"1": "openai", "2": "generic", "3": "aether", "4": "agentrouter", "5": "requesty"}
                 if p in mapping:
                     session.provider = mapping[p]
+                    # Prompt API key if missing
+                    active = session.provider
+                    if not (session.provider_keys or {}).get(active):
+                        k = input("Enter API key (leave blank to skip): ")
+                        if k and k.strip():
+                            session.provider_keys[active] = k.strip()
+                            session.api_key = k.strip()
             elif raw == "2":
+                active = (session.provider or config.llm.provider or "openai").lower()
+                k = input(f"Enter API key for {active} (leave blank to keep, '-' to clear): ")
+                if k is not None:
+                    k = k.strip()
+                    if k == "-":
+                        session.provider_keys.pop(active, None)
+                    elif k:
+                        session.provider_keys[active] = k
+                        session.api_key = k
+            elif raw == "3":
+                active = (session.provider or config.llm.provider or "openai").lower()
+                url = input(f"Enter base URL for '{active}' (leave blank to keep, '-' to clear): ")
+                if url is not None:
+                    url = url.strip()
+                    if url == "-":
+                        session.provider_base_urls.pop(active, None)
+                    elif url:
+                        session.provider_base_urls[active] = url
+            elif raw == "4":
                 m = input(f"Interview model (current: {session.interview_model or config.llm.model}): ").strip()
                 if m:
                     session.interview_model = m
-            elif raw == "3":
+            elif raw == "5":
                 m = input(
                     f"Final stage model (current: {session.final_stage_model or (config.devplan_llm.model if config.devplan_llm else config.llm.model)}): "
                 ).strip()
@@ -291,7 +403,6 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                             ("max_tokens", "Max Tokens"),
                             ("reasoning", "Reasoning Effort (gpt-5)"),
                             ("streaming", "Streaming On/Off"),
-                            ("api_key", "API Key"),
                             ("back", "Back"),
                         ],
                     ).run()
@@ -371,21 +482,7 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                 ).run()
                 session.streaming = bool(streaming_choice)
                 continue
-            if choice == "api_key":
-                try:
-                    try:
-                        api_key_input = input_dialog(
-                            title="API Key",
-                            text="Enter API key (leave blank to keep current):",
-                            password=True,
-                        ).run()
-                    except TypeError:
-                        api_key_input = prompt("Enter API key (leave blank to keep current): ", is_password=True)
-                    if api_key_input and api_key_input.strip():
-                        session.api_key = api_key_input.strip()
-                except Exception:
-                    pass
-                continue
+            # API creds editing moved into Provider & Models submenu
             if choice == "back":
                 # Final summary before returning
                 _save_prefs(session)
@@ -406,10 +503,11 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
             print("  4) Max Tokens")
             print("  5) Streaming On/Off")
             print("  6) API Key")
-            print("  7) Reasoning Effort (gpt-5)")
-            print("  8) Back")
+            print("  7) Base URL (for Generic/Aether/AgentRouter providers)")
+            print("  8) Reasoning Effort (gpt-5)")
+            print("  9) Back")
             try:
-                raw = input("Enter 1-8 [8]: ").strip() or "8"
+                raw = input("Enter 1-9 [9]: ").strip() or "9"
             except Exception:
                 raw = "8"
 
@@ -441,13 +539,20 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                 k = input("Enter API key (leave blank to keep current): ")
                 if k and k.strip():
                     session.api_key = k.strip()
+                    active_provider = (session.provider or config.llm.provider or "openai").lower()
+                    session.provider_keys[active_provider] = session.api_key
             elif raw == "7":
+                active_provider = (session.provider or config.llm.provider or "openai").lower()
+                url = input(f"Enter base URL for current provider '{active_provider}' (leave blank to keep current): ")
+                if url and url.strip():
+                    session.provider_base_urls[active_provider] = url.strip()
+            elif raw == "8":
                 val = input("Reasoning effort (low/medium/high, blank to unset): ").strip().lower()
                 if val in {"low", "medium", "high"}:
                     session.reasoning_effort = val
                 elif val == "":
                     session.reasoning_effort = None
-            elif raw == "8":
+            elif raw == "9":
                 _save_prefs(session)
                 return session
         except (KeyboardInterrupt, EOFError):
@@ -475,26 +580,64 @@ def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> App
     if session.reasoning_effort is not None:
         config.llm.reasoning_effort = session.reasoning_effort
 
-    if session.api_key:
+    # Resolve API key and base_url for the active provider from per-provider maps
+    active_provider = (session.provider or config.llm.provider or "openai").lower()
+    resolved_api_key = (session.provider_keys or {}).get(active_provider)
+    if not resolved_api_key and session.api_key:
+        # Backward-compatibility: use legacy session.api_key if available
+        resolved_api_key = session.api_key
+    if resolved_api_key:
         # Set on global and per-stage configs if present
-        config.llm.api_key = session.api_key
+        config.llm.api_key = resolved_api_key
         if config.design_llm:
-            config.design_llm.api_key = session.api_key
+            config.design_llm.api_key = resolved_api_key
         if config.devplan_llm:
-            config.devplan_llm.api_key = session.api_key
+            config.devplan_llm.api_key = resolved_api_key
         if config.handoff_llm:
-            config.handoff_llm.api_key = session.api_key
+            config.handoff_llm.api_key = resolved_api_key
+
+    # Resolve base URL for the active provider
+    resolved_base_url = (session.provider_base_urls or {}).get(active_provider)
+    if resolved_base_url:
+        # Set on global and per-stage configs if present
+        config.llm.base_url = resolved_base_url
+        if config.design_llm:
+            config.design_llm.base_url = resolved_base_url
+        if config.devplan_llm:
+            config.devplan_llm.base_url = resolved_base_url
+        if config.handoff_llm:
+            config.handoff_llm.base_url = resolved_base_url
+    else:
+        # Clear potentially stale base_url for providers that have safe defaults
+        if active_provider in {"openai", "requesty", "aether", "agentrouter"}:
+            config.llm.base_url = None
+            if config.design_llm:
+                config.design_llm.base_url = None
+            if config.devplan_llm:
+                config.devplan_llm.base_url = None
+            if config.handoff_llm:
+                config.handoff_llm.base_url = None
 
     if session.final_stage_model:
-        # Ensure per-stage models are set for devplan/handoff
+        # Ensure per-stage models are set for devplan/handoff and align provider with active provider
         if config.devplan_llm is None:
             config.devplan_llm = LLMConfig(model=session.final_stage_model, provider=config.llm.provider)
         else:
             config.devplan_llm.model = session.final_stage_model
+            config.devplan_llm.provider = config.llm.provider
         if config.handoff_llm is None:
             config.handoff_llm = LLMConfig(model=session.final_stage_model, provider=config.llm.provider)
         else:
             config.handoff_llm.model = session.final_stage_model
+            config.handoff_llm.provider = config.llm.provider
+
+    # Always align stage providers with active provider (prevents stale provider mismatch)
+    if config.design_llm is not None:
+        config.design_llm.provider = config.llm.provider
+    if config.devplan_llm is not None:
+        config.devplan_llm.provider = config.llm.provider
+    if config.handoff_llm is not None:
+        config.handoff_llm.provider = config.llm.provider
 
     # Timeouts
     if session.api_timeout is not None:
@@ -590,73 +733,258 @@ def _requesty_model_picker(
             # Manual entry fallback
             return input_dialog(title=title, text=f"Enter model id (current: {current})").run()
 
-    if provider == "requesty":
-        used_requesty = True
-        api_key = (
-            session.api_key
-            or getattr(config.llm, "api_key", None)
-            or os.getenv("REQUESTY_API_KEY")
-        )
-        base_url = (
-            getattr(config.llm, "base_url", None)
-            or os.getenv("REQUESTY_BASE_URL")
-            or "https://router.requesty.ai/v1"
-        )
 
-        if not api_key:
+def _fetch_openai_compatible_models_sync(api_key: str, base_url: str) -> list:
+    """Fetch models from an OpenAI-compatible endpoint synchronously.
+
+    Tries {base}/models if base ends with '/v1', else {base}/v1/models.
+    Returns a list of dicts with at least {'id': str}.
+    """
+    import aiohttp  # lazy import
+
+    async def _fetch() -> dict:
+        base = base_url.rstrip("/")
+        endpoint = f"{base}/models" if base.endswith("/v1") else f"{base}/v1/models"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(endpoint, headers=headers) as resp:
+                if resp.status >= 400:
+                    # Return empty list on error
+                    return {"data": []}
+                return await resp.json()
+
+    data = asyncio.run(_fetch())
+    models = data.get("data", [])
+    sanitized = []
+    for raw in models:
+        model_id = raw.get("id") or raw.get("name")
+        if not model_id:
+            continue
+        sanitized.append({"id": model_id})
+    return sanitized
+
+
+def _combined_model_picker(
+    config: AppConfig,
+    session: SessionSettings,
+    title: str,
+    current: str,
+) -> Optional[str]:
+    """Aggregate models across all providers with configured API keys.
+
+    - Attempts to list models for each provider that has a configured key.
+    - Requesty uses its models endpoint. Others use OpenAI-compatible /models if available.
+    - Falls back to manual entry if no lists can be fetched.
+    """
+    providers = ["openai", "generic", "aether", "agentrouter", "requesty"]
+    # Before fetching, ensure active provider has credentials so we can include it
+    try:
+        active = (session.provider or config.llm.provider or "openai").lower()
+        # Prompt API key if missing
+        if _is_tty() and not (session.provider_keys or {}).get(active):
             try:
                 try:
-                    api_key = input_dialog(
-                        title="Requesty API Key",
-                        text="Enter Requesty API key:",
+                    api_key_input = input_dialog(
+                        title=f"{active.capitalize()} API Key",
+                        text="Enter API key (leave blank to skip, '-' to clear):",
                         password=True,
                     ).run()
                 except TypeError:
-                    api_key = prompt("Enter Requesty API key: ", is_password=True)
-                if api_key and api_key.strip():
-                    session.api_key = api_key.strip()
+                    api_key_input = prompt("Enter API key (leave blank to skip, '-' to clear): ", is_password=True)
+                if api_key_input is not None:
+                    api_key_input = api_key_input.strip()
+                    if api_key_input == "-":
+                        session.provider_keys.pop(active, None)
+                    elif api_key_input:
+                        session.provider_keys[active] = api_key_input
+                        session.api_key = api_key_input
             except Exception:
-                api_key = None
-
-        if api_key:
+                pass
+        # Prompt Base URL if required provider and missing
+        if _is_tty() and not (session.provider_base_urls or {}).get(active) and active in {"generic"}:
             try:
-                models = _fetch_requesty_models_sync(api_key, base_url)
-            except Exception as exc:
-                message_dialog(
-                    title="Requesty Error",
-                    text=f"Failed to fetch Requesty models.\n{exc}",
-                    ok_text="OK",
+                default_map = {
+                    "generic": "",
+                }
+                base_url_input = input_dialog(
+                    title=f"Base URL for {active.capitalize()}",
+                    text=f"Enter base URL (default: {default_map.get(active, '')}):",
                 ).run()
-                models = []
+                if base_url_input is not None:
+                    base_url_input = base_url_input.strip()
+                    if base_url_input:
+                        session.provider_base_urls[active] = base_url_input
+            except Exception:
+                pass
+        # Silently set defaults for Aether/AgentRouter if missing
+        if not (session.provider_base_urls or {}).get(active):
+            if active == "aether":
+                session.provider_base_urls.setdefault("aether", "https://api.aetherapi.dev")
+            elif active == "agentrouter":
+                session.provider_base_urls.setdefault("agentrouter", "https://agentrouter.org/")
+    except Exception:
+        pass
+    items: list[tuple[str, str]] = []
 
-    if models:
-        values = []
-        if current:
-            values.append((current, f"Keep current: {current}"))
-        for m in models:
-            mid = m.get("id") or m.get("name")
-            if not mid:
-                continue
-            ctx = m.get("context_window") or m.get("max_tokens")
-            label = f"{mid}" + (f" (ctx: {ctx})" if ctx else "")
-            values.append((mid, label))
-        values.append(("__manual__", "Manual entry..."))
+    def get_key_and_base(p: str) -> tuple[Optional[str], Optional[str], str]:
+        # API key resolution: per-provider map -> env -> legacy session.api_key when active
+        key = (session.provider_keys or {}).get(p)
+        if not key:
+            if p == "openai":
+                key = os.getenv("OPENAI_API_KEY")
+            elif p == "generic":
+                key = os.getenv("GENERIC_API_KEY")
+            elif p == "aether":
+                key = os.getenv("AETHER_API_KEY")
+            elif p == "agentrouter":
+                key = os.getenv("AGENTROUTER_API_KEY")
+            elif p == "requesty":
+                key = os.getenv("REQUESTY_API_KEY")
+        # final fallback: if this provider is currently active and legacy session.api_key exists
+        if not key:
+            active = (session.provider or config.llm.provider or "openai").lower()
+            if p == active and session.api_key:
+                key = session.api_key
+        # Base URL resolution
+        base = (session.provider_base_urls or {}).get(p)
+        if not base:
+            if p == "openai":
+                base = "https://api.openai.com/v1"
+            elif p == "generic":
+                base = os.getenv("GENERIC_BASE_URL")
+            elif p == "aether":
+                base = os.getenv("AETHER_BASE_URL") or "https://api.aetherapi.dev"
+            elif p == "agentrouter":
+                base = os.getenv("AGENTROUTER_BASE_URL") or "https://agentrouter.org"
+            elif p == "requesty":
+                base = os.getenv("REQUESTY_BASE_URL") or "https://router.requesty.ai/v1"
+        return key, base, p
 
+    # Build combined list
+    for p in providers:
+        api_key, base_url, provider_id = get_key_and_base(p)
+        if not api_key or not base_url:
+            continue
+        try:
+            if provider_id == "requesty":
+                lst = _fetch_requesty_models_sync(api_key, base_url)
+                for m in lst:
+                    mid = m.get("id") or m.get("name")
+                    if mid:
+                        label = f"{mid}  [Requesty]"
+                        # encode provider with model so we can switch provider on selection
+                        items.append((f"requesty::{mid}", label))
+            else:
+                lst = _fetch_openai_compatible_models_sync(api_key, base_url)
+                for m in lst:
+                    mid = m.get("id") or m.get("name")
+                    if mid:
+                        pretty = provider_id.capitalize() if provider_id != "agentrouter" else "AgentRouter"
+                        label = f"{mid}  [{pretty}]"
+                        items.append((f"{provider_id}::{mid}", label))
+        except Exception:
+            continue
+
+    # De-duplicate while preserving order (by provider::model key)
+    seen = set()
+    deduped: list[tuple[str, str]] = []
+    for t in items:
+        if t[0] in seen:
+            continue
+        seen.add(t[0])
+        deduped.append(t)
+
+    # Build dialog values
+    values = []
+    if current:
+        values.append((current, f"Keep current: {current}"))
+    values.extend(deduped)
+    values.append(("__manual__", "Manual entry..."))
+
+    if values and _is_tty():
         pick = radiolist_dialog(
             title=title,
-            text=(
-                f"Select a model (current: {current})\n"
-                + ("Provider: Requesty\n" if used_requesty else "")
-            ),
+            text=(f"Select a model (current: {current})\n"),
             values=values,
         ).run()
-
         if pick == "__manual__":
             return input_dialog(title=title, text="Enter model id:").run()
+        # If the pick encodes provider, switch provider accordingly and return plain model id
+        if isinstance(pick, str) and "::" in pick:
+            prov, mid = pick.split("::", 1)
+            if prov:
+                session.provider = prov
+            return mid
         return pick
 
     # Manual fallback
     return input_dialog(title=title, text=f"Enter model id (current: {current})").run()
+
+
+def _submenu_api_credentials(config: AppConfig, session: SessionSettings) -> None:
+    """Manage per-provider API keys and base URLs to avoid overlap."""
+    providers = [
+        ("openai", "OpenAI"),
+        ("generic", "Generic (OpenAI-compatible)"),
+        ("aether", "Aether AI"),
+        ("agentrouter", "AgentRouter"),
+        ("requesty", "Requesty"),
+    ]
+    while True:
+        pick = (
+            radiolist_dialog(
+                title="Provider API Keys & Endpoints",
+                text="Select provider to edit API Key/Base URL",
+                values=providers + [("back", "Back")],
+            ).run()
+            or "back"
+        )
+        if pick == "back":
+            return
+        # Edit credentials for selected provider
+        try:
+            # API Key
+            try:
+                key_in = input_dialog(
+                    title=f"{dict(providers).get(pick, pick)} API Key",
+                    text="Enter API key (leave blank to keep current, input '-' to clear):",
+                    password=True,
+                ).run()
+            except TypeError:
+                key_in = prompt("Enter API key (leave blank to keep current, '-' to clear): ", is_password=True)
+            if key_in is not None:
+                key_in = key_in.strip()
+                if key_in == "-":
+                    session.provider_keys.pop(pick, None)
+                elif key_in:
+                    session.provider_keys[pick] = key_in
+
+            # Base URL
+            base_default = (
+                session.provider_base_urls.get(pick)
+                or ("https://api.openai.com/v1" if pick == "openai" else None)
+                or ("https://api.aetherapi.dev" if pick == "aether" else None)
+                or ("https://agentrouter.org" if pick == "agentrouter" else None)
+                or ("https://router.requesty.ai/v1" if pick == "requesty" else None)
+                or ""
+            )
+            base_in = input_dialog(
+                title=f"{dict(providers).get(pick, pick)} Base URL",
+                text=f"Enter Base URL (leave blank to keep current, input '-' to clear). Default: {base_default}",
+            ).run()
+            if base_in is not None:
+                base_in = base_in.strip()
+                if base_in == "-":
+                    session.provider_base_urls.pop(pick, None)
+                elif base_in:
+                    session.provider_base_urls[pick] = base_in
+        except Exception:
+            # Ignore UI errors, return to list
+            pass
 
 def show_readme() -> None:
     """Show a concise readme explaining circular development, DevPlan, phases, and handoff.

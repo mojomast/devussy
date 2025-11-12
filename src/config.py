@@ -1,6 +1,7 @@
 """Configuration loader for DevPlan Orchestrator."""
 
 import os
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -47,6 +48,8 @@ class LLMConfig(BaseModel):
         default=None,
         description="Reasoning effort for GPT-5 models (one of: low, medium, high)",
     )
+    spoof_as: Optional[str] = Field(default=None, description="AgentRouter spoof profile")
+    extra_headers: Optional[dict] = Field(default=None, description="Provider-specific extra headers")
     
     # Per-stage model overrides (Phase 18/20)
     design_model: Optional[str] = Field(
@@ -63,7 +66,7 @@ class LLMConfig(BaseModel):
     @classmethod
     def validate_provider(cls, v: str) -> str:
         """Validate provider is one of the supported options."""
-        allowed = ["openai", "generic", "requesty"]
+        allowed = ["openai", "generic", "aether", "agentrouter", "requesty"]
         if v.lower() not in allowed:
             raise ValueError(f"Provider must be one of {allowed}, got: {v}")
         return v.lower()
@@ -77,6 +80,17 @@ class LLMConfig(BaseModel):
         if str(v).lower() not in allowed:
             raise ValueError(f"reasoning_effort must be one of {sorted(allowed)} or None, got: {v}")
         return str(v).lower()
+
+    @field_validator("spoof_as")
+    @classmethod
+    def validate_spoof_as(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        allowed = {"roocode", "claude-code", "codex"}
+        val = str(v).lower()
+        if val not in allowed:
+            raise ValueError(f"spoof_as must be one of {sorted(allowed)} or None, got: {v}")
+        return val
 
     def merge_with(self, override: Optional["LLMConfig"]) -> "LLMConfig":
         """Merge this config with an override config.
@@ -296,6 +310,10 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
             # Use provider-specific API key based on configured provider
             if provider == "requesty" and os.getenv("REQUESTY_API_KEY"):
                 llm_config["api_key"] = os.getenv("REQUESTY_API_KEY")
+            elif provider == "aether" and os.getenv("AETHER_API_KEY"):
+                llm_config["api_key"] = os.getenv("AETHER_API_KEY")
+            elif provider == "agentrouter" and os.getenv("AGENTROUTER_API_KEY"):
+                llm_config["api_key"] = os.getenv("AGENTROUTER_API_KEY")
             elif provider == "openai" and os.getenv("OPENAI_API_KEY"):
                 llm_config["api_key"] = os.getenv("OPENAI_API_KEY")
             elif provider == "generic" and os.getenv("GENERIC_API_KEY"):
@@ -305,6 +323,10 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
                 llm_config["api_key"] = os.getenv("OPENAI_API_KEY")
             elif os.getenv("REQUESTY_API_KEY"):
                 llm_config["api_key"] = os.getenv("REQUESTY_API_KEY")
+            elif os.getenv("AETHER_API_KEY"):
+                llm_config["api_key"] = os.getenv("AETHER_API_KEY")
+            elif os.getenv("AGENTROUTER_API_KEY"):
+                llm_config["api_key"] = os.getenv("AGENTROUTER_API_KEY")
             elif os.getenv("GENERIC_API_KEY"):
                 llm_config["api_key"] = os.getenv("GENERIC_API_KEY")
         
@@ -324,8 +346,22 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
         if not prefix:
             if os.getenv("GENERIC_BASE_URL"):
                 llm_config["base_url"] = os.getenv("GENERIC_BASE_URL")
+            elif os.getenv("AETHER_BASE_URL"):
+                llm_config["base_url"] = os.getenv("AETHER_BASE_URL")
+            elif os.getenv("AGENTROUTER_BASE_URL"):
+                llm_config["base_url"] = os.getenv("AGENTROUTER_BASE_URL")
             elif os.getenv("REQUESTY_BASE_URL"):
                 llm_config["base_url"] = os.getenv("REQUESTY_BASE_URL")
+
+        # AgentRouter spoofing extras
+        if not prefix and (llm_config.get("provider") == "agentrouter" or os.getenv("LLM_PROVIDER", "").lower() == "agentrouter"):
+            if os.getenv("AGENTROUTER_SPOOF_AS"):
+                llm_config["spoof_as"] = os.getenv("AGENTROUTER_SPOOF_AS")
+            if os.getenv("AGENTROUTER_EXTRA_HEADERS"):
+                try:
+                    llm_config["extra_headers"] = json.loads(os.getenv("AGENTROUTER_EXTRA_HEADERS"))
+                except Exception:
+                    pass
         
         base_url_env = f"{prefix.upper()}BASE_URL" if prefix else None
         if base_url_env and os.getenv(base_url_env):

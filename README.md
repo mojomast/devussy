@@ -16,10 +16,11 @@ Devussy turns a short project idea into a complete, actionable development plan.
 
 • Repo: https://github.com/mojomast/devussy
 • Python: 3.9+
+• Version: 0.1.1
 
 ## Why Devussy
 - Multi-stage pipeline: Design → Basic DevPlan → Detailed DevPlan (per-phase files) → Handoff
-- Provider-agnostic: OpenAI and OpenAI-compatible endpoints (plus “Requesty”)
+- Provider-agnostic: OpenAI, Generic OpenAI-compatible, Requesty, Aether AI, AgentRouter
 - Fast: Async concurrency for phase generation
 - Resumable: Checkpoints you can list/resume/clean
 - Great UX: Live spinners, per-phase progress bar, persistent status line with model & token usage
@@ -45,13 +46,30 @@ python -m src.cli version
 ```
 
 ## Configure API keys
-Create a .env file (or set env vars directly):
+Create a .env file (or set env vars directly). Keys can also be set in-app via Settings → Provider & Models and are persisted per provider.
+
 ```bash
+# OpenAI
 OPENAI_API_KEY=sk-...
-# Optional for custom endpoints:
-# GENERIC_API_KEY=...
-# GENERIC_BASE_URL=https://api.your-openai-compatible.com/v1
-# REQUESTY_API_KEY=...
+
+# Generic OpenAI-compatible
+GENERIC_API_KEY=...
+GENERIC_BASE_URL=https://api.your-openai-compatible.com/v1
+
+# Requesty
+REQUESTY_API_KEY=...
+# Optional (default: https://router.requesty.ai/v1)
+# REQUESTY_BASE_URL=https://router.requesty.ai/v1
+
+# Aether AI
+AETHER_API_KEY=...
+# Optional (default: https://api.aetherapi.dev)
+# AETHER_BASE_URL=https://api.aetherapi.dev
+
+# AgentRouter
+AGENTROUTER_API_KEY=...
+# Optional (default: https://agentrouter.org/)
+# AGENTROUTER_BASE_URL=https://agentrouter.org/
 ```
 You can also set per-stage keys in config or via env if desired.
 
@@ -83,34 +101,18 @@ Outputs (in docs/ by default):
 - Stage spinners while each phase runs
 - A per-phase progress bar during detailed plan generation (updates as phases finish)
 - A persistent bottom status line showing current stage, model, and token usage (prompt/completion/total + accumulated)
- - The interactive “continue” flow uses the same streaming UI for DevPlan and Handoff
+- The interactive “continue” flow uses the same streaming UI for DevPlan and Handoff
 
-## Launch (0.1 Requesty-focused)
+## Launch
 
-This 0.1 release is tailored for Requesty. If a Requesty key isn’t detected, you’ll be prompted at startup.
-
-### From a clone (no pip install)
+From a clone (no pip install):
 ```bash
-# clone
 git clone https://github.com/mojomast/devussy.git
 cd devussy
-
-# set your Requesty key (or you will be prompted)
-# PowerShell
-$env:REQUESTY_API_KEY = "<your_key>"
-# bash/zsh
-export REQUESTY_API_KEY="<your_key>"
-
-# run
 python -m src.entry
 ```
 
-Options:
-- `--provider` to override (defaults to requesty for 0.1)
-
-The launcher will:
-- ensure REQUESTY_API_KEY is set (prompts if missing)
-- open the LLM-driven interview
+At startup, Devussy applies your last-used preferences automatically (provider, per-provider API keys, base URLs). You can change them anytime under Settings → Provider & Models. Only the Generic provider prompts for a Base URL; others use safe defaults.
 
 ## Core commands
 
@@ -139,7 +141,7 @@ python -m src.cli generate-design --name "My App" --languages "Python" --require
 Only devplan from an in-memory design (advanced) or resume via checkpoints (see below).
 
 ## Providers & models
-You can override provider/model on the CLI or via config:
+You can override provider/model on the CLI or via config. You can also manage them in the app via Settings → Provider & Models.
 ```bash
 # OpenAI default
 --provider openai --model gpt-4
@@ -148,8 +150,28 @@ You can override provider/model on the CLI or via config:
 export GENERIC_BASE_URL="https://api.example.com/v1"
 export GENERIC_API_KEY=...
 --provider generic --model gpt-4o-mini
+
+# Aether AI
+export AETHER_API_KEY=...
+--provider aether --model gpt-4o
+
+# AgentRouter
+export AGENTROUTER_API_KEY=...
+--provider agentrouter --model gpt-4o
 ```
 You can also align stages or set stage-specific models in config; Devussy will create stage clients accordingly.
+
+### Unified model picker
+- Devussy aggregates available models from all configured providers that have API keys.
+- Picking a model automatically switches the active provider.
+- Aether and other OpenAI-compatible providers use `GET /v1/models` for discovery.
+
+### Base URLs and defaults
+- OpenAI: `https://api.openai.com/v1`
+- Requesty: `https://router.requesty.ai/v1`
+- Aether: `https://api.aetherapi.dev` (client appends `/v1` automatically for API calls)
+- AgentRouter: `https://agentrouter.org/`
+- Generic: you must provide a base URL.
 
 ## Checkpoints
 Devussy saves checkpoints between stages so you can resume.
@@ -179,9 +201,10 @@ black src && isort src && flake8 src
 ```
 
 ## Troubleshooting
-- No output files? Ensure OPENAI_API_KEY (or your provider’s key) is set.
+- No output files? Ensure the appropriate provider key is set (OPENAI_API_KEY, AETHER_API_KEY, REQUESTY_API_KEY, AGENTROUTER_API_KEY, or GENERIC_API_KEY).
 - Status line missing? Make sure your terminal supports ANSI; non-TTY environments will still print stage lines and progress.
-- Custom endpoints: confirm GENERIC_BASE_URL and GENERIC_API_KEY are set and the server is OpenAI-compatible.
+- Aether 404 for `/chat/completions`? Ensure Base URL is `https://api.aetherapi.dev` (the client automatically calls `/v1/chat/completions`).
+- Model not found? Use the unified model picker to select a valid model for the active provider.
 
 ## License
 MIT

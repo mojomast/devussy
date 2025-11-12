@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from ..llm_client import LLMClient
+from .aether_client import AetherClient
 from .generic_client import GenericOpenAIClient
 from .openai_client import OpenAIClient
 from .requesty_client import RequestyClient
+from .agentrouter_client import AgentRouterClient
 
 
 def create_llm_client(config: Any) -> LLMClient:
@@ -28,6 +30,10 @@ def create_llm_client(config: Any) -> LLMClient:
         return OpenAIClient(config)
     if provider == "generic":
         return GenericOpenAIClient(config)
+    if provider == "aether":
+        return AetherClient(config)
+    if provider == "agentrouter":
+        return AgentRouterClient(config)
     if provider == "requesty":
         return RequestyClient(config)
 

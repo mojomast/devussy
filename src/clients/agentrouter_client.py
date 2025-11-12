@@ -1,13 +1,7 @@
-"""Generic OpenAI-compatible client using aiohttp.
-
-Works with any provider that implements the OpenAI-compatible
-Chat Completions API at <base_url>/v1/chat/completions.
-"""
-
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Iterable, List
+from typing import Any, Iterable, List, Dict
 import logging
 
 import aiohttp
@@ -16,43 +10,73 @@ from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 from ..llm_client import LLMClient
 
 
-class GenericOpenAIClient(LLMClient):
-    """Generic client for OpenAI-compatible endpoints."""
-
+class AgentRouterClient(LLMClient):
     def __init__(self, config: Any) -> None:
         super().__init__(config)
         llm = getattr(config, "llm", None)
         self._api_key = getattr(llm, "api_key", None)
-        self._base_url = getattr(llm, "base_url", None)
+        # AgentRouter OpenAI-compatible base (can be overridden)
+        self._base_url = getattr(llm, "base_url", None) or "https://agentrouter.org"
         self._model = getattr(llm, "model", "gpt-4")
         self._temperature = getattr(llm, "temperature", 0.7)
         self._max_tokens = getattr(llm, "max_tokens", 4096)
-        
-        # Check for debug/verbose mode
+
+        # Spoof profile: one of {"roocode", "claude-code", "codex"}
+        # Default to roocode since docs emphasize OpenAI-compatible setup
+        self._spoof_as = getattr(llm, "spoof_as", None) or getattr(config, "spoof_as", None) or "roocode"
+        # Optional custom headers map to merge/override
+        self._extra_headers: Dict[str, str] = getattr(llm, "extra_headers", None) or {}
+
         self._debug = getattr(config, "debug", False) or getattr(llm, "debug", False)
-        # Expose last usage metadata for UI/diagnostics
-        self.last_usage_metadata: dict | None = None
+        self._logger = logging.getLogger(__name__)
 
         retry_cfg = getattr(config, "retry", None)
         self._max_attempts = getattr(retry_cfg, "max_attempts", 3) or 3
         self._initial_delay = getattr(retry_cfg, "initial_delay", 1.0) or 1.0
         self._max_delay = getattr(retry_cfg, "max_delay", 60.0) or 60.0
         self._exp_base = getattr(retry_cfg, "exponential_base", 2.0) or 2.0
-        
-        self._logger = logging.getLogger(__name__)
 
     @property
     def _endpoint(self) -> str:
-        """Return the OpenAI-compatible chat completions endpoint."""
-        if not self._base_url:
-            raise ValueError("base_url is required for generic provider")
         base = self._base_url.rstrip("/")
+        # OpenAI-compatible path
+        if base.endswith("/chat"):
+            return f"{base}/completions"
+        if base.endswith("/v1"):
+            return f"{base}/chat/completions"
         return f"{base}/v1/chat/completions"
 
+    def _spoof_headers(self) -> Dict[str, str]:
+        # Minimal, plausible headers to mimic known tools
+        profiles = {
+            "roocode": {
+                "User-Agent": "Mozilla/5.0 VSCode/RooCode",
+                "X-Client-Name": "RooCode",
+                "X-Extension-Name": "RooCode",
+                "HTTP-Referer": "vscode://roocode",
+                "X-Title": "RooCode",
+            },
+            "claude-code": {
+                "User-Agent": "@anthropic-ai/claude-code",
+                "X-Client-Name": "claude-code",
+                "HTTP-Referer": "https://anthropic.com/claude-code",
+                "X-Title": "Claude Code",
+            },
+            "codex": {
+                "User-Agent": "@openai/codex-cli",
+                "X-Client-Name": "codex",
+                "HTTP-Referer": "https://openai.com/codex",
+                "X-Title": "Codex",
+            },
+        }
+        base_headers = profiles.get(str(self._spoof_as).lower(), profiles["roocode"]).copy()
+        # Merge user-specified overrides
+        base_headers.update(self._extra_headers or {})
+        return base_headers
+
     async def _post_chat(self, prompt: str, **kwargs: Any) -> str:
-        """Post to OpenAI-compatible chat completions endpoint."""
         import json
-        
+
         model = kwargs.get("model", self._model)
         temperature = kwargs.get("temperature", self._temperature)
         max_tokens = kwargs.get("max_tokens", self._max_tokens)
@@ -61,72 +85,68 @@ class GenericOpenAIClient(LLMClient):
         headers = {
             "Authorization": f"Bearer {self._api_key}" if self._api_key else "",
             "Content-Type": "application/json",
-            "User-Agent": "DevUssY/1.0",
+            "Accept": "application/json",
         }
-        
+        headers.update(self._spoof_headers())
+
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": prompt}] ,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
         if top_p is not None:
             payload["top_p"] = top_p
 
-        # DEBUG LOGGING
+        # Reasoning effort pass-through for gpt-5 only
+        resolved_reasoning = kwargs.get(
+            "reasoning_effort",
+            getattr(getattr(self._config, "llm", None), "reasoning_effort", None),
+        )
+        if ("gpt-5" in str(model)) and resolved_reasoning:
+            payload["reasoning"] = {"effort": str(resolved_reasoning)}
+
         if self._debug:
-            print("\n" + "="*80)
-            print("[GENERIC DEBUG] Making API call")
+            print("\n" + "=" * 80)
+            print("[AGENTROUTER DEBUG] Making API call")
             print(f"Endpoint: {self._endpoint}")
             print(f"Model: {model}")
-            print(f"Headers: {json.dumps(headers, indent=2)}")
+            dbg_headers = dict(headers)
+            if "Authorization" in dbg_headers and isinstance(dbg_headers["Authorization"], str):
+                dbg_headers["Authorization"] = dbg_headers["Authorization"][:24] + "…" if dbg_headers["Authorization"] else ""
+            print(f"Headers: {json.dumps(dbg_headers, indent=2)}")
             dbg_payload = dict(payload)
             dbg_payload["messages"] = [{"role": "user", "content": f"{prompt[:100]}..."}]
             print(f"Payload: {json.dumps(dbg_payload, indent=2)}")
-            print("="*80 + "\n")
-        
-        self._logger.info(f"[GENERIC] Calling {self._endpoint} with model {model}")
-        
+            print("=" * 80 + "\n")
+
         timeout_seconds = kwargs.get("api_timeout", getattr(self._config.llm, "api_timeout", 60))
         try:
             timeout_seconds = int(timeout_seconds) if timeout_seconds is not None else 60
         except Exception:
             timeout_seconds = 60
-        
+
         timeout = aiohttp.ClientTimeout(
             total=timeout_seconds,
             connect=30,
             sock_connect=30,
             sock_read=timeout_seconds,
         )
-        
+
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    self._endpoint, json=payload, headers=headers
-                ) as resp:
+                async with session.post(self._endpoint, json=payload, headers=headers) as resp:
                     if resp.status >= 400:
-                        error_body = await resp.text()
-                        if self._debug:
-                            print("\n" + "="*80)
-                            print(f"[GENERIC ERROR] Response status: {resp.status}")
-                            print(f"[GENERIC ERROR] Response body: {error_body}")
-                            print("="*80 + "\n")
-                        self._logger.error(f"[GENERIC ERROR] {resp.status}: {error_body}")
+                        text = await resp.text()
+                        self._logger.error(f"[AGENTROUTER ERROR] {resp.status}: {text}")
                         raise Exception(
-                            f"Generic API error {resp.status}: {error_body}\n"
-                            f"Request model: {model}\n"
-                            f"Endpoint: {self._endpoint}"
+                            f"AgentRouter API error {resp.status}: {text}\nModel: {model}\nEndpoint: {self._endpoint}"
                         )
-                    
                     data = await resp.json()
-                    
-                    # OpenAI format: choices[0].message.content
                     content = (
-                        data.get("choices", [{}])[0].get("message", {}).get("content")
-                    ) or ""
-                    
-                    # Record usage metadata if present
+                        data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    )
+                    # Usage metadata
                     try:
                         usage = data.get("usage")
                         if usage:
@@ -138,30 +158,11 @@ class GenericOpenAIClient(LLMClient):
                             }
                     except Exception:
                         self.last_usage_metadata = None
-                    
-                    # DEBUG LOGGING - Success response
-                    if self._debug:
-                        print("\n" + "="*80)
-                        print(f"[GENERIC DEBUG] Response status: {resp.status}")
-                        print(f"[GENERIC DEBUG] Response data keys: {list(data.keys())}")
-                        print(f"[GENERIC DEBUG] Content length: {len(content)} chars")
-                        print(f"[GENERIC DEBUG] Content preview: {content[:200]}...")
-                        print("="*80 + "\n")
-                    
-                    self._logger.info(f"[GENERIC] Success: {resp.status}, content length: {len(content)} chars")
-                    
-                    if not content:
-                        self._logger.error(f"[GENERIC ERROR] Empty content in response! Full response: {data}")
-                        print(f"\n{'='*80}\n[GENERIC ERROR] Empty content received!\nFull response: {json.dumps(data, indent=2)}\n{'='*80}\n")
-                    
-                    return content
-        except asyncio.TimeoutError as te:
+                    return content or ""
+        except asyncio.TimeoutError:
             self._logger.error(
-                f"[GENERIC TIMEOUT] Request exceeded timeout of {timeout_seconds}s for model {model} at {self._endpoint}"
+                f"[AGENTROUTER TIMEOUT] Exceeded {timeout_seconds}s for model {model} at {self._endpoint}"
             )
-            raise te
-        except aiohttp.ClientError as ce:
-            self._logger.error(f"[GENERIC CLIENT ERROR] {type(ce).__name__}: {ce}")
             raise
 
     async def generate_completion(self, prompt: str, **kwargs: Any) -> str:
@@ -187,12 +188,9 @@ class GenericOpenAIClient(LLMClient):
 
         return await asyncio.gather(*(_one(p) for p in prompts))
 
-    async def _post_chat_streaming(
-        self, prompt: str, callback: Callable[[str], Any], **kwargs: Any
-    ) -> str:
-        """Internal streaming chat method for generic OpenAI-compatible endpoints."""
+    async def _post_chat_streaming(self, prompt: str, callback: Any, **kwargs: Any) -> str:
         import json
-        
+
         model = kwargs.get("model", self._model)
         temperature = kwargs.get("temperature", self._temperature)
         max_tokens = kwargs.get("max_tokens", self._max_tokens)
@@ -201,38 +199,32 @@ class GenericOpenAIClient(LLMClient):
         headers = {
             "Authorization": f"Bearer {self._api_key}" if self._api_key else "",
             "Content-Type": "application/json",
-            "User-Agent": "DevUssY/1.0",
+            "Accept": "text/event-stream, application/json",
         }
+        headers.update(self._spoof_headers())
+
         payload: dict[str, Any] = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "stream": True,  # Enable streaming
+            "stream": True,
         }
         if top_p is not None:
             payload["top_p"] = top_p
 
-        timeout = aiohttp.ClientTimeout(
-            total=getattr(self._config.llm, "api_timeout", 60)
-        )
+        timeout = aiohttp.ClientTimeout(total=getattr(self._config.llm, "api_timeout", 60))
 
         full_content = ""
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                self._endpoint, json=payload, headers=headers
-            ) as resp:
+            async with session.post(self._endpoint, json=payload, headers=headers) as resp:
                 resp.raise_for_status()
-
-                # Handle Server-Sent Events (SSE) streaming
                 async for line in resp.content:
                     line_str = line.decode("utf-8").strip()
                     if line_str.startswith("data: "):
-                        data_str = line_str[6:]  # Remove "data: " prefix
-
+                        data_str = line_str[6:]
                         if data_str == "[DONE]":
                             break
-
                         try:
                             data = json.loads(data_str)
                             if "choices" in data and len(data["choices"]) > 0:
@@ -245,15 +237,10 @@ class GenericOpenAIClient(LLMClient):
                                     else:
                                         callback(content)
                         except json.JSONDecodeError:
-                            # Skip malformed JSON chunks
                             continue
-
         return full_content
 
-    async def generate_completion_streaming(
-        self, prompt: str, callback: Callable[[str], Any], **kwargs: Any
-    ) -> str:
-        """Generate completion with streaming for generic OpenAI-compatible APIs."""
+    async def generate_completion_streaming(self, prompt: str, callback: Any, **kwargs: Any) -> str:
         async for attempt in AsyncRetrying(
             reraise=True,
             stop=stop_after_attempt(self._max_attempts),

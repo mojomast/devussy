@@ -47,6 +47,19 @@ logger = get_logger(__name__)
 console = Console()
 
 
+def _apply_last_prefs_to_config(config: AppConfig) -> None:
+    """Apply last-used UI/session preferences to the given config.
+
+    Ensures persisted provider selection, per-provider API keys, and base URLs
+    are applied before creating clients or running any steps.
+    """
+    try:
+        prefs = load_last_used_preferences()
+        apply_settings_to_config(config, prefs)
+    except Exception:
+        pass
+
+
 def _find_project_root(start: Path) -> Path:
     """Find project root by looking for markers like pyproject.toml or .git.
 
@@ -336,6 +349,9 @@ def _create_orchestrator(config: AppConfig) -> PipelineOrchestrator:
     Returns:
         PipelineOrchestrator: Initialized orchestrator
     """
+    # Before creating clients, apply last-used preferences as a final safeguard
+    _apply_last_prefs_to_config(config)
+
     # Create LLM client
     llm_client = create_llm_client(config)
 
@@ -463,6 +479,13 @@ def generate_design(
             temperature,
             max_tokens,
         )
+
+        # Apply last-used preferences (provider, models, per-provider API keys/base URLs)
+        try:
+            prefs = load_last_used_preferences()
+            apply_settings_to_config(config, prefs)
+        except Exception:
+            pass
 
         if select_model:
             _select_requesty_model_interactively(config)
@@ -799,6 +822,13 @@ def generate_handoff(
             temperature,
             max_tokens,
         )
+
+        # Apply last-used preferences
+        try:
+            prefs = load_last_used_preferences()
+            apply_settings_to_config(config, prefs)
+        except Exception:
+            pass
 
         if select_model:
             _select_requesty_model_interactively(config)

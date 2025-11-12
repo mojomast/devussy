@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "devussy"
-version = "0.2.3"
+version = "0.1.1"
 description = "A Python-based LLM orchestration tool that automatically generates and maintains development plans"
 readme = "README.md"
 requires-python = ">=3.9"

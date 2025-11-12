@@ -1,6 +1,6 @@
 """Version information for DevPlan Orchestrator."""
 
-__version__ = "0.2.3"
+__version__ = "0.1.1"
 __version_info__ = tuple(int(i) for i in __version__.split(".") if i.isdigit())
 
 __title__ = "devussy"
@@ -14,6 +14,17 @@ __url__ = "https://github.com/mojomast/devussy-fresh"
 
 # Version history
 VERSION_HISTORY = {
+    "0.1.1": {
+        "date": "2025-11-11",
+        "changes": [
+            "Provider & Models menu now includes API Key and Base URL for the active provider",
+            "Unified model picker aggregates models across configured providers and auto-switches provider on selection",
+            "Per-provider API keys and base URLs persist across sessions via StateManager",
+            "Aether endpoint normalized to /v1/chat/completions; default base URL https://api.aetherapi.dev",
+            "Only Generic prompts for Base URL; others auto-populate defaults",
+            "Last-used provider/keys/base URLs are auto-applied on startup before client creation",
+        ],
+    },
     "0.2.3": {
         "date": "2025-10-21",
         "changes": [
