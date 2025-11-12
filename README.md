@@ -104,8 +104,8 @@ To keep all models in sync, Devussy enforces a simple update ritual. After compl
 - Task group size: configurable; defaults to 3 for devplan generation and 5 for handoff prompts
 - After each group, update all three locations before proceeding:
   1) devplan.md — add progress and next tasks
-  2) phase.md (the active phase file) — summarize outcomes and blockers
-  3) handoff (handoff_prompt.md or prompt content) — brief status and next steps
+  2) phaseX.md (the active phase file) — summarize outcomes and blockers
+  3) handoff_prompt.md — brief status and next steps
 
 Use these anchors so any model can reliably update the right sections:
 
@@ -114,7 +114,7 @@ Use these anchors so any model can reliably update the right sections:
   - <!-- NEXT_TASK_GROUP_START --> ... <!-- NEXT_TASK_GROUP_END -->
 - In the current phase file (phaseX.md):
   - <!-- PHASE_PROGRESS_START --> ... <!-- PHASE_PROGRESS_END -->
-- In handoff (handoff_prompt.md or the generated prompt):
+- In handoff_prompt.md:
   - <!-- HANDOFF_NOTES_START --> ... <!-- HANDOFF_NOTES_END -->
 
 If a file doesn’t exist, create it and include the anchors.

@@ -165,8 +165,8 @@ All planned work is complete! Consider reviewing the devplan for next phases.
   1. Update `devplan.md` between `<!-- PROGRESS_LOG_START -->` and `<!-- PROGRESS_LOG_END -->` with the steps completed.
   2. Update `devplan.md` between `<!-- NEXT_TASK_GROUP_START -->` and `<!-- NEXT_TASK_GROUP_END -->` listing the next {{ task_group_size | default(5) }} steps.
   3. Update per-phase completion in `devplan.md` via `<!-- PHASE_N_STATUS_START -->...<!-- PHASE_N_STATUS_END -->` for the active phase (set `completed: X/Y`).
-  4. Update `phase.md` between `<!-- PHASE_PROGRESS_START -->` and `<!-- PHASE_PROGRESS_END -->` with outcomes, files changed, and blockers (if any).
-  5. Update the handoff notes/prompt between `<!-- HANDOFF_NOTES_START -->` and `<!-- HANDOFF_NOTES_END -->` with current status and next steps.
+  4. Update the active phase file (`phaseN.md`) between `<!-- PHASE_PROGRESS_START -->` and `<!-- PHASE_PROGRESS_END -->` with outcomes, files changed, and blockers (if any).
+  5. Update the handoff notes in `handoff_prompt.md` between `<!-- HANDOFF_NOTES_START -->` and `<!-- HANDOFF_NOTES_END -->` with current status and next steps.
   6. Only then proceed to the next group.
 
 If an artifact doesn’t exist, create it and include the anchors above so future models can reliably update it.

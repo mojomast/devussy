@@ -7,8 +7,8 @@ This document defines the non‑negotiable update ritual and the stable anchors 
 - Work in groups of N tasks (task_group_size). Default: 3 for devplan generation, 5 for handoff.
 - After each group, pause and update:
   1. devplan.md – Progress log and next task group
-  2. phase.md (active phase) – Outcomes and blockers
-  3. handoff (handoff_prompt.md or the generated prompt) – Status snapshot and next steps
+  2. phaseX.md (active phase) – Outcomes and blockers
+  3. handoff_prompt.md – Status snapshot and next steps
 - Only then proceed to the next group.
 
 If a file does not exist, create it and include the anchors below.
@@ -24,14 +24,14 @@ Use these stable markers so any model can find and update the right sections det
 - phaseX.md (the current phase file)
   - <!-- PHASE_PROGRESS_START --> ... <!-- PHASE_PROGRESS_END -->
 
-- handoff (handoff_prompt.md or the generated prompt)
+- handoff_prompt.md
   - <!-- HANDOFF_NOTES_START --> ... <!-- HANDOFF_NOTES_END -->
 
 ## Minimal content at each update
 
 - devplan.md → Progress Log: bullet list of just‑completed steps with step numbers; Next Task Group: the next N steps to execute.
-- phase.md → Phase Progress: 2–5 bullets summarizing outcomes, links to changed files, and blockers.
-- handoff → Short status (completed, in progress, next N steps) and any decisions/tradeoffs.
+- phaseX.md → Phase Progress: 2–5 bullets summarizing outcomes, links to changed files, and blockers.
+- handoff_prompt.md → Short status (completed, in progress, next N steps) and any decisions/tradeoffs.
 
 ### Example: devplan.md
 
@@ -48,7 +48,7 @@ Use these stable markers so any model can find and update the right sections det
 <!-- NEXT_TASK_GROUP_END -->
 ```
 
-### Example: phase.md
+### Example: phaseX.md
 
 ```
 <!-- PHASE_PROGRESS_START -->

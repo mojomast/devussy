@@ -113,8 +113,8 @@ To ensure consistent, traceable progress across models, follow this ritual stric
 - Task group size: {{ task_group_size | default(3) }} tasks per group
 - After completing each group of {{ task_group_size | default(3) }} tasks, you MUST:
   1. Update `devplan.md` progress and mark completed steps.
-  2. Update `phase.md` for the current phase with a concise progress summary.
-  3. Refresh/update the handoff notes (`handoff.md` or handoff prompt) with current status and next steps.
+  2. Update the active phase file (`phaseN.md`, where N is the current phase) with a concise progress summary.
+  3. Refresh/update the handoff notes in `handoff_prompt.md` with current status and next steps.
   4. Only then proceed to the next group of tasks.
 
 ### How to update the artifacts reliably
@@ -125,9 +125,9 @@ Use these stable anchor markers so any model can locate and update the right sec
   - `<!-- PROGRESS_LOG_START --> ... <!-- PROGRESS_LOG_END -->`
   - `<!-- NEXT_TASK_GROUP_START --> ... <!-- NEXT_TASK_GROUP_END -->`
   - `<!-- PHASE_N_STATUS_START --> ... <!-- PHASE_N_STATUS_END -->` for each phase N (update `completed: X/Y`)
-- In `phase.md` (for the active phase):
+- In the active phase file (`phaseN.md`):
   - `<!-- PHASE_PROGRESS_START --> ... <!-- PHASE_PROGRESS_END -->`
-- In `handoff.md` (or the generated handoff prompt):
+- In `handoff_prompt.md`:
   - `<!-- HANDOFF_NOTES_START --> ... <!-- HANDOFF_NOTES_END -->`
 
 If a file does not exist, create it and include the anchors.
@@ -135,7 +135,7 @@ If a file does not exist, create it and include the anchors.
 ### Minimal content to write at each update
 
 - devplan.md → Progress Log: bullet list of steps just completed with step numbers; Next Task Group: list the next {{ task_group_size | default(3) }} steps you will do.
-- phase.md → Phase Progress: 2–5 bullets summarizing outcomes, links to changed files, and blockers (if any).
-- handoff → succinct status summary (completed, in-progress, next {{ task_group_size | default(3) }} steps), and any decisions/tradeoffs.
+- phaseN.md → Phase Progress: 2–5 bullets summarizing outcomes, links to changed files, and blockers (if any).
+- handoff_prompt.md → succinct status summary (completed, in-progress, next {{ task_group_size | default(3) }} steps), and any decisions/tradeoffs.
 
 Do not skip this ritual. Stop after each group, perform the updates, then continue.

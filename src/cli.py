@@ -1936,7 +1936,7 @@ def interactive_design(
             typer.echo("This will generate:")
             typer.echo("  1. ✓ Project Design (complete)")
             typer.echo("  2. Development Plan (devplan.md)")
-            typer.echo("  3. Handoff Document (handoff.md)")
+            typer.echo("  3. Handoff Document (handoff_prompt.md)")
             typer.echo(f"\n📁 Output directory: {project_folder.resolve()}")
             typer.echo("\n⏳ Running full pipeline...\n")
             
