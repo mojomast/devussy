@@ -18,6 +18,7 @@ from ..state_manager import StateManager
 from .basic_devplan import BasicDevPlanGenerator
 from .detailed_devplan import DetailedDevPlanGenerator
 from .handoff_prompt import HandoffPromptGenerator
+from .design_review import DesignReviewRefiner
 from .project_design import ProjectDesignGenerator
 
 logger = get_logger(__name__)
@@ -143,6 +144,7 @@ class PipelineOrchestrator:
             self.devplan_client, self.concurrency_manager
         )
         self.handoff_gen = HandoffPromptGenerator()
+        self.design_review_refiner = DesignReviewRefiner(self.devplan_client)
 
     def _write_rerun_command_file(
         self,
@@ -260,6 +262,7 @@ class PipelineOrchestrator:
         save_artifacts: bool = True,
         provider_override: Optional[str] = None,
         feedback_manager: Optional[Any] = None,
+        pre_review: bool = False,
         **llm_kwargs: Any,
     ) -> Tuple[ProjectDesign, DevPlan, HandoffPrompt]:
         """Run the complete pipeline from inputs to handoff prompt.
@@ -374,6 +377,50 @@ class PipelineOrchestrator:
                     logger.info("Committed project design to Git")
                 except Exception as e:
                     logger.warning(f"Failed to commit project design: {e}")
+
+        # Optional: Pre-review design with devplan model to catch issues early
+        if pre_review:
+            with self.progress_reporter.create_spinner_context(
+                "Reviewing project design for compatibility/workflow/backend issues..."
+            ):
+                try:
+                    updated_design, review_md, changed = await self.design_review_refiner.refine(
+                        project_design, **llm_kwargs
+                    )
+                    if save_artifacts:
+                        self.file_manager.write_markdown(f"{output_dir}/design_review.md", review_md)
+                        self.progress_reporter.report_file_created(
+                            f"{output_dir}/design_review.md", "Design Review", len(review_md)
+                        )
+                    if changed:
+                        project_design = updated_design
+                        logger.info("Applied design improvements from pre-review")
+                        # Save checkpoint after review
+                        try:
+                            self.state_manager.save_checkpoint(
+                                checkpoint_key=f"{project_name}_pipeline",
+                                stage="design_review",
+                                data={
+                                    "project_design": project_design.model_dump(),
+                                    "project_name": project_name,
+                                    "languages": languages,
+                                    "requirements": requirements,
+                                    "frameworks": frameworks,
+                                    "apis": apis,
+                                },
+                                metadata={
+                                    "provider": self.get_current_provider(),
+                                    "output_dir": output_dir,
+                                    "llm_kwargs": llm_kwargs,
+                                },
+                            )
+                            self.progress_reporter.show_checkpoint_saved(
+                                f"{project_name}_pipeline", "design_review"
+                            )
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.warning(f"Design pre-review failed: {e}; continuing with original design")
 
         # Stage 2: Generate basic devplan
         self.progress_reporter.start_stage("Basic DevPlan", 2)
@@ -567,6 +614,7 @@ class PipelineOrchestrator:
         project_design: ProjectDesign,
         provider_override: Optional[str] = None,
         feedback_manager: Optional[Any] = None,
+        pre_review: bool = False,
         **llm_kwargs: Any,
     ) -> DevPlan:
         """Generate only the devplan from an existing project design.
@@ -589,6 +637,21 @@ class PipelineOrchestrator:
             except Exception as e:
                 logger.error(f"Failed to switch to provider {provider_override}: {e}")
                 raise
+
+        # Optional: Pre-review design with devplan model to catch issues early
+        if pre_review:
+            with self.progress_reporter.create_spinner_context(
+                "Reviewing project design for compatibility/workflow/backend issues..."
+            ):
+                try:
+                    updated_design, review_md, changed = await self.design_review_refiner.refine(
+                        project_design, **llm_kwargs
+                    )
+                    if changed:
+                        project_design = updated_design
+                        logger.info("Applied design improvements from pre-review")
+                except Exception as e:
+                    logger.warning(f"Design pre-review failed: {e}; continuing with original design")
 
         # Stage: Basic DevPlan
         self.progress_reporter.start_stage("Basic DevPlan", 2)

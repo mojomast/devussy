@@ -622,6 +622,9 @@ def generate_devplan(
         Optional[str],
         typer.Option("--output-path", help="Output file path for devplan"),
     ] = None,
+    pre_review: Annotated[
+        bool, typer.Option("--pre-review/--no-pre-review", help="Review & fix the design with the DevPlan model before planning")
+    ] = False,
     feedback_file: Annotated[
         Optional[str],
         typer.Option(
@@ -723,7 +726,11 @@ def generate_devplan(
         logger.info(f"Generating devplan from: {design_file}")
 
         devplan = asyncio.run(
-            orchestrator.run_devplan_only(design, feedback_manager=feedback_manager)
+            orchestrator.run_devplan_only(
+                design,
+                feedback_manager=feedback_manager,
+                pre_review=pre_review,
+            )
         )
 
         # Display intermediate results
@@ -988,6 +995,9 @@ def run_full_pipeline(
     streaming: Annotated[
         bool, typer.Option("--streaming", help="Enable token streaming")
     ] = False,
+    pre_review: Annotated[
+        bool, typer.Option("--pre-review/--no-pre-review", help="Review & fix the design with the DevPlan model before planning")
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", help="Enable verbose logging")
     ] = False,
@@ -1103,6 +1113,7 @@ def run_full_pipeline(
                     output_dir=str(config.output_dir),
                     save_artifacts=True,
                     feedback_manager=feedback_manager,
+                    pre_review=pre_review,
                 )
             )
 

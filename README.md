@@ -167,6 +167,16 @@ Initialize a new repo with a docs/ folder and templates:
 python -m src.cli init-repo ./my-project
 ```
 
+Optional pre‑review (fix design before planning):
+```bash
+python -m src.cli run-full-pipeline \
+  --name "My App" \
+  --languages "Python" \
+  --requirements "Build an API" \
+  --pre-review
+```
+This sends the freshly generated design to the DevPlan (phase 2) model to detect and fix compatibility/workflow/backend/efficiency issues before generating the devplan. A report is saved to docs/design_review.md and improvements are applied automatically if returned.
+
 Interactive design interview (recommended):
 ```bash
 python -m src.cli interactive-design
