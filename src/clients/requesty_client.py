@@ -25,7 +25,30 @@ class RequestyClient(LLMClient):
         super().__init__(config)
         llm = getattr(config, "llm", None)
         self._api_key = getattr(llm, "api_key", None)
-        self._base_url = getattr(llm, "base_url", None) or "https://router.requesty.ai/v1"
+
+        # Determine the effective base root for Requesty.
+        # Rules:
+        # - Default MUST include `/v1`:
+        #       https://router.requesty.ai/v1
+        # - If user provides REQUESTY_BASE_URL / llm.base_url:
+        #       * If it already ends with '/v1' (or '/v1/'), use as-is (normalized).
+        #       * If it is exactly 'https://router.requesty.ai', append '/v1'.
+        #       * If it already includes '/chat/completions', we will detect that in _endpoint.
+        raw_base = getattr(llm, "base_url", None)
+        if not raw_base:
+            # Strong default with /v1
+            raw_base = "https://router.requesty.ai/v1"
+        raw_base = raw_base.strip()
+        lower = raw_base.lower().rstrip("/")
+
+        if lower == "https://router.requesty.ai":
+            # If user only gave host, fix to /v1
+            effective = "https://router.requesty.ai/v1"
+        else:
+            effective = raw_base.rstrip("/")
+
+        self._base_url = effective
+
         self._model = getattr(llm, "model", "openai/gpt-4o-mini")
         self._temperature = getattr(llm, "temperature", 0.7)
         self._max_tokens = getattr(llm, "max_tokens", 4096)
@@ -43,8 +66,21 @@ class RequestyClient(LLMClient):
 
     @property
     def _endpoint(self) -> str:
-        """Return the OpenAI-compatible chat completions endpoint."""
-        base = self._base_url.rstrip("/")
+        """Return the Requesty chat completions endpoint.
+
+        Guarantees:
+        - Default: https://router.requesty.ai/v1/chat/completions
+        - If self._base_url already ends with '/chat/completions', use it as-is.
+        - Otherwise, append '/chat/completions' to the normalized base.
+        """
+        base = (self._base_url or "https://router.requesty.ai/v1").rstrip("/")
+        lower = base.lower()
+
+        # If caller configured full endpoint, don't double-append.
+        if lower.endswith("/chat/completions"):
+            return base
+
+        # Always append /chat/completions to the base root (which for default includes /v1).
         return f"{base}/chat/completions"
 
     async def _post_chat(self, prompt: str, **kwargs: Any) -> str:

@@ -1687,6 +1687,9 @@ def interactive_design(
         except Exception:
             pass
 
+        # LOG: Snapshot provider after applying persisted preferences (before runtime Settings)
+        logger.debug(f"[interactive_design] Provider after prefs: {getattr(config.llm, 'provider', None)}")
+
         # Ensure an API key is available before asking questions that may
         # require LLM access. If not present in config or env, prompt the
         # user to enter one interactively (runtime only; not persisted).
@@ -1729,11 +1732,15 @@ def interactive_design(
         try:
             while True:
                 action = run_main_menu(config)
+                # LOG: After each run_main_menu return, show the current provider
+                logger.debug(f"[interactive_design] Provider after run_main_menu: {getattr(config.llm, 'provider', None)}")
                 if action == "start":
                     break
                 if action == "select_model":
                     try:
                         _select_requesty_model_interactively(config)
+                        # LOG: After interactive model selection, provider may have changed
+                        logger.debug(f"[interactive_design] Provider after select_model: {getattr(config.llm, 'provider', None)}")
                     except Exception as exc:
                         typer.echo(f"⚠️  Model selection unavailable: {exc}")
                     continue
