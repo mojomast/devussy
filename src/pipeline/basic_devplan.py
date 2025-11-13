@@ -82,6 +82,9 @@ class BasicDevPlanGenerator:
         phases = []
         current_phase = None
         current_items = []
+        # Assign canonical phase numbers sequentially in order of appearance,
+        # regardless of what the model wrote in the heading.
+        next_phase_number = 1
 
         lines = response.split("\n")
 
@@ -101,14 +104,14 @@ class BasicDevPlanGenerator:
 
             # Try to match a phase header with any known pattern
             phase_match = None
-            match_num = None
+            model_phase_num = None
             match_title = None
             for pat in phase_patterns:
                 m = pat.match(stripped)
                 if m:
                     phase_match = m
                     try:
-                        match_num = int(m.group(1))
+                        model_phase_num = int(m.group(1))
                         match_title = m.group(2).strip()
                     except Exception:
                         phase_match = None
@@ -126,15 +129,25 @@ class BasicDevPlanGenerator:
                         )
                     )
 
-                # Start new phase using captured groups from the matched pattern
-                phase_num = match_num
-                phase_title = match_title
+                # Assign a canonical phase number based on order of appearance,
+                # ignoring whatever number the model wrote. This prevents
+                # duplicate phase numbers from leaking into the devplan.
+                phase_num = next_phase_number
+                next_phase_number += 1
+
+                phase_title = match_title or f"Phase {phase_num}"
                 # Remove trailing asterisks if present
                 phase_title = phase_title.rstrip("*").strip()
 
                 current_phase = {"number": phase_num, "title": phase_title}
                 current_items = []
-                logger.debug(f"Found phase {phase_num}: {phase_title}")
+                if model_phase_num is not None and model_phase_num != phase_num:
+                    logger.debug(
+                        f"Found phase heading '{phase_title}' with model number {model_phase_num}; "
+                        f"assigned canonical phase {phase_num}"
+                    )
+                else:
+                    logger.debug(f"Found phase {phase_num}: {phase_title}")
 
             elif stripped.startswith("-") and current_phase:
                 # This is a component/item for the current phase

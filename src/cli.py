@@ -355,8 +355,8 @@ def _create_orchestrator(config: AppConfig) -> PipelineOrchestrator:
     # Create LLM client
     llm_client = create_llm_client(config)
 
-    # Create concurrency manager
-    concurrency_manager = ConcurrencyManager(config.max_concurrent_requests)
+    # Create concurrency manager (controls how many phases/API calls run in parallel)
+    concurrency_manager = ConcurrencyManager(max_concurrent=config.max_concurrent_requests)
 
     # Create file manager
     file_manager = FileManager()

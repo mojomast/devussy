@@ -7,12 +7,12 @@
 
 {% macro context_budget_rules() -%}
 ### Context Budget (Read-Minimal Rules)
-- Read only:
-  - `devplan.md` sections inside: `<!-- PROGRESS_LOG_* -->`, `<!-- NEXT_TASK_GROUP_* -->`, `<!-- PHASE_*_STATUS_* -->`
-  - Active `phaseN.md` inside: `<!-- PHASE_PROGRESS_* -->`
-  - `HANDOFF.md` inside: `<!-- HANDOFF_NOTES_* -->`
+- Read only anchored sections, never whole files by default:
+  - `devplan.md`: `<!-- PROGRESS_LOG_START/END -->`, `<!-- NEXT_TASK_GROUP_START/END -->`, `<!-- PHASE_*_STATUS_START/END -->`
+  - Active `phaseN.md`: `<!-- PHASE_TASKS_START/END -->`, `<!-- PHASE_OUTCOMES_START/END -->` (or legacy `PHASE_PROGRESS`)
+  - `handoff_prompt.md`: `<!-- QUICK_STATUS_START/END -->` and `<!-- HANDOFF_NOTES_START/END -->`
 - Only open code files referenced by the next {{ task_group_size|default(3) }} steps.
-- If blocked (missing info), write a one-line blocker note to `HANDOFF.md`, then stop for handoff.
+- If blocked (missing info), add a one-line blocker note under the appropriate devplan/phase anchors, then stop for handoff.
 {%- endmacro %}
 
 {% macro update_anchors_help() -%}

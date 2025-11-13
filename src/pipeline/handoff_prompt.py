@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from ..logger import get_logger
 from ..models import DevPlan, DevPlanPhase, HandoffPrompt
 from ..templates import render_template
+from ..utils.anchor_utils import ensure_anchors_exist
 
 logger = get_logger(__name__)
 
@@ -49,21 +50,38 @@ class HandoffPromptGenerator:
         # Get next steps to work on (limited by task_group_size)
         next_steps = self._get_next_steps(devplan.phases, limit=task_group_size)
 
-        # Prepare template context
+        # Derive quick status fields for the clean template
+        if in_progress_phase:
+            current_phase_number = in_progress_phase["number"]
+            current_phase_name = in_progress_phase["title"]
+        else:
+            current_phase_number = "None"
+            current_phase_name = "No active phase"
+
+        if next_steps:
+            next_task_id = next_steps[0]["number"]
+            next_task_description = next_steps[0]["description"]
+        else:
+            next_task_id = "None"
+            next_task_description = "No remaining steps"
+
+        # Prepare template context for minimal handoff
         context: Dict[str, Any] = {
             "project_name": project_name,
-            "project_summary": project_summary or devplan.summary or "No summary",
-            "completed_phases": completed_phases,
-            "current_phase": in_progress_phase,
-            "next_steps": next_steps,
-            "architecture_notes": architecture_notes or "Not specified",
-            "dependencies_notes": dependencies_notes or "Not specified",
-            "config_notes": config_notes or "Not specified",
-            "task_group_size": task_group_size,
+            "current_phase_number": current_phase_number,
+            "current_phase_name": current_phase_name,
+            "next_task_id": next_task_id,
+            "next_task_description": next_task_description,
+            "blockers": kwargs.get("blockers", "None known"),
         }
 
         # Render the template
         content = render_template("handoff_prompt.jinja", context)
+        # Ensure critical anchors exist for downstream agents
+        content = ensure_anchors_exist(
+            content,
+            ["QUICK_STATUS", "DEV_INSTRUCTIONS", "TOKEN_RULES", "HANDOFF_NOTES"],
+        )
         logger.info("Successfully generated handoff prompt")
 
         # Extract next step summaries for the model

@@ -1,188 +1,52 @@
-{% import "_circular_macros.jinja" as circ with context %}
-{{ circ.quickstart_banner() }}
+﻿# Handoff Prompt: {{ project_name }}
+<!-- HANDOFF_VERSION: 2.0 -->
 
-# Handoff Prompt: {{ project_name }}
+> **QuickStart:** Read QUICK_STATUS → Read PHASE_TASKS → Execute → Update anchors → Handoff
 
-{% if interactive_session %}
-## 🎯 Interactive Session Context
+## Quick Status (Read This Always)
+<!-- QUICK_STATUS_START -->
+- Active Phase: {{ current_phase_number }} - {{ current_phase_name }}
+- Next Immediate Task: {{ next_task_id }} - {{ next_task_description }}
+- Blockers: {{ blockers | default('None known', true) }}
+<!-- QUICK_STATUS_END -->
 
-This project was created through an **interactive guided questionnaire** using the DevPlan Orchestrator's `interactive-design` command. The user was guided through a series of questions to define their project requirements, technology stack, and preferences.
+## How to Continue Development
+<!-- DEV_INSTRUCTIONS_START -->
+1. Read devplan.md between <!-- NEXT_TASK_GROUP_START --> and <!-- NEXT_TASK_GROUP_END --> only (~150 tokens).
+2. Open phase{{ current_phase_number }}.md and read only <!-- PHASE_TASKS_START --> to <!-- PHASE_TASKS_END --> (~100 tokens).
+3. Execute the next group of steps in order (do not skip ahead).
+4. After completing the group, update:
+   - devplan.md: add one line to PROGRESS_LOG and refresh NEXT_TASK_GROUP.
+   - phase{{ current_phase_number }}.md: add one line to PHASE_OUTCOMES (or legacy PHASE_PROGRESS).
+   - This file: update QUICK_STATUS only (3 lines, ~30 seconds).
+5. Stop after this group. Handoff if more work is needed.
+<!-- DEV_INSTRUCTIONS_END -->
 
-**Interactive Approach:**
-- User-friendly, conversational experience
-- Conditional questions based on project type
-- Built-in examples and help text
-- Session save/resume capability
+## Token Budget
+<!-- TOKEN_RULES_START -->
+**Stay under 500 tokens per turn by reading ONLY anchored sections:**
 
-This context is important: when implementing features, maintain the same philosophy of providing clear guidance, helpful examples, and graceful error handling.
+| File | Section | Read? | Tokens |
+|------|---------|-------|--------|
+| devplan.md | NEXT_TASK_GROUP_START to END | ✅ | ~150 |
+| devplan.md | PROGRESS_LOG_START to END | ✅ if needed | ~100 |
+| phase{{ current_phase_number }}.md | PHASE_TASKS_START to END | ✅ | ~100 |
+| phase{{ current_phase_number }}.md | PHASE_OUTCOMES_START to END | ✅ if needed | ~50 |
+| handoff_prompt.md | QUICK_STATUS_START to END | ✅ | ~50 |
+| Everything else | (full files, verbose sections) | ❌ NEVER | - |
 
-**Multi-LLM Pipeline:**
-This project utilized DevPlan Orchestrator's per-stage LLM configuration, allowing different models/providers for design, devplan, and handoff stages. This enables cost optimization and performance tuning. Consider implementing similar flexibility in your own features.
-
-{% if interactive_session.saved_session_path %}
-**Session File:** `{{ interactive_session.saved_session_path }}`
-{% endif %}
-
----
-{% endif %}
-
-## Project Summary
-
-{{ project_summary }}
-
----
-
-## Current Progress
-
-### Completed Phases
-
-{% for phase in completed_phases %}
-**Phase {{ phase.number }}: {{ phase.title }}** ✅
-{% if phase.steps %}
-Completed steps:
-{% for step in phase.steps %}
-- {{ step.number }}: {{ step.description }}
-{% endfor %}
-{% endif %}
-
-{% endfor %}
-
-### In Progress
-
-{% if current_phase %}
-**Phase {{ current_phase.number }}: {{ current_phase.title }}**
-
-Completed steps:
-{% for step in current_phase.completed_steps %}
-- ✅ {{ step.number }}: {{ step.description }}
-{% endfor %}
-
-Remaining steps:
-{% for step in current_phase.remaining_steps %}
-- ⏳ {{ step.number }}: {{ step.description }}
-{% endfor %}
-{% else %}
-No phase currently in progress.
-{% endif %}
-
----
-
-## Next Steps (Priority Order)
-
-{% for i, step in enumerate(next_steps, 1) %}
-{{ i }}. **{{ step.number }}: {{ step.title }}**
-   {{ step.description }}
-   {% if step.notes %}
-   *Note: {{ step.notes }}*
-   {% endif %}
-
-{% endfor %}
-
----
-
-## Development Workflow Rules
-
-### Code Development
-- Follow the numbered steps in the devplan sequentially—do not skip ahead
-- Each step is actionable and designed for implementation
-- After each major step or milestone, update the devplan to mark progress
-- Commit changes to Git after every significant milestone with descriptive messages
-
-### Git Workflow
-- Commit messages should match the style: `feat:`, `fix:`, `docs:`, `test:`, `chore:`
-- Commit after completing logical units of work, not necessarily each individual step
-- Example: `git commit -m "feat: implement Phase X core functionality"`
-
-### Code Quality
-- Run linting and formatting before committing:
-  - `black src/`
-  - `flake8 src/`
-  - `isort src/`
-- Ensure all tests pass: `pytest tests/`
-- Maintain >80% test coverage
-
-### Documentation
-- Update relevant documentation as features are implemented
-- Keep inline code comments clear and concise
-- Update this handoff prompt when completing major milestones
-
----
-
-## Key Technical Context
-
-### Architecture
-{{ architecture_notes }}
-
-### Dependencies
-{{ dependencies_notes }}
-
-### Configuration
-{{ config_notes }}
-
-{% if interactive_features %}
-
-### Interactive Features
-This project includes or should include interactive user experiences:
-- Clear progress indicators
-- Helpful error messages with suggestions
-- Examples and help text for complex operations
-- Input validation with friendly feedback
-- Session/state management where appropriate
-
-When implementing features, prioritize user experience and provide guidance similar to how this project was initially designed through interactive questions.
-{% endif %}
-
----
-
-## When to Generate a New Handoff Prompt
-
-Stop implementation and generate a new handoff prompt when:
-1. A complete phase is finished
-2. A major milestone is reached (e.g., first working prototype, all tests passing)
-3. A blocker is encountered that requires user input or architectural decision
-4. User explicitly requests "time for handoff"
-
----
+**If you're reading more than 500 tokens, you're reading the wrong sections.**
+<!-- TOKEN_RULES_END -->
 
 ## File References
 
-- **devplan.md** – Main development plan with all phases and steps
-- **Project Files** – See project structure in devplan.md
+**For static or rarely-changing information, read these once and reference thereafter:**
+- project_design.md — Architecture, tech stack, core decisions.
+- README.md — Setup instructions, development workflow, code quality standards.
+- devplan.md — Main dashboard with all phases.
 
 ---
 
-## Getting Started
-
-{% if next_steps %}
-Resume work by executing the next steps listed above. Start with step {{ next_steps[0].number }}.
-{% else %}
-All planned work is complete! Consider reviewing the devplan for next phases.
-{% endif %}
-
----
-
-## Task Group Size and Update Ritual (Non‑negotiable)
-
-- Task group size: {{ task_group_size | default(5) }} steps per group
-- After each group of {{ task_group_size | default(5) }} steps:
-  1. Update `devplan.md` between `<!-- PROGRESS_LOG_START -->` and `<!-- PROGRESS_LOG_END -->` with the steps completed.
-  2. Update `devplan.md` between `<!-- NEXT_TASK_GROUP_START -->` and `<!-- NEXT_TASK_GROUP_END -->` listing the next {{ task_group_size | default(5) }} steps.
-  3. Update per-phase completion in `devplan.md` via `<!-- PHASE_N_STATUS_START -->...<!-- PHASE_N_STATUS_END -->` for the active phase (set `completed: X/Y`).
-  4. Update the active phase file (`phaseN.md`) between `<!-- PHASE_PROGRESS_START -->` and `<!-- PHASE_PROGRESS_END -->` with outcomes, files changed, and blockers (if any).
-  5. Update the handoff notes in `handoff_prompt.md` between `<!-- HANDOFF_NOTES_START -->` and `<!-- HANDOFF_NOTES_END -->` with current status and next steps.
-  6. Only then proceed to the next group.
-
-If an artifact doesn’t exist, create it and include the anchors above so future models can reliably update it.
-
----
-
-**Good luck! 🚀**
-
-{{ circ.resume_contract() }}
-
-{{ circ.context_budget_rules() }}
-
-{{ circ.update_anchors_help() }}
-
-## Anchors
-{{ circ.handoff_anchors() }}
+## Active Anchors
+<!-- HANDOFF_NOTES_START -->
+<!-- HANDOFF_NOTES_END -->

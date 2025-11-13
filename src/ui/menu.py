@@ -39,6 +39,8 @@ class SessionSettings(BaseModel):
     design_api_timeout: Optional[int] = None
     devplan_api_timeout: Optional[int] = None
     handoff_api_timeout: Optional[int] = None
+    # Concurrency
+    max_concurrent_requests: Optional[int] = None
 
 
 def _is_tty() -> bool:
@@ -65,6 +67,7 @@ def _current_settings_snapshot(config: AppConfig, session: Optional[SessionSetti
         f"Design Timeout: {(session.design_api_timeout if session and session.design_api_timeout is not None else (config.design_llm.api_timeout if config.design_llm and getattr(config.design_llm, 'api_timeout', None) is not None else '-'))}s",
         f"DevPlan Timeout: {(session.devplan_api_timeout if session and session.devplan_api_timeout is not None else (config.devplan_llm.api_timeout if config.devplan_llm and getattr(config.devplan_llm, 'api_timeout', None) is not None else '-'))}s",
         f"Handoff Timeout: {(session.handoff_api_timeout if session and session.handoff_api_timeout is not None else (config.handoff_llm.api_timeout if config.handoff_llm and getattr(config.handoff_llm, 'api_timeout', None) is not None else '-'))}s",
+        f"Max Concurrent Requests: {session.max_concurrent_requests if session and session.max_concurrent_requests is not None else getattr(config, 'max_concurrent_requests', 5)}",
         f"API Key: {'set' if (session and session.api_key) or llm.api_key else 'not set'}",
         f"Base URL: {(session.base_url if session and session.base_url else llm.base_url) or 'default'}",
     ]
@@ -377,6 +380,58 @@ def _submenu_timeouts(config: AppConfig, session: SessionSettings) -> None:
                 pass
 
 
+def _submenu_concurrency(config: AppConfig, session: SessionSettings) -> None:
+    """Nested menu for concurrency limits (parallel requests/phases)."""
+    if _is_tty():
+        while True:
+            pick = (
+                radiolist_dialog(
+                    title="Concurrency",
+                    text=_current_settings_snapshot(config, session),
+                    values=[
+                        ("max_concurrent", "Max concurrent API requests / phases"),
+                        ("back", "Back"),
+                    ],
+                ).run()
+                or "back"
+            )
+            if pick == "max_concurrent":
+                val = input_dialog(
+                    title="Max Concurrent Requests",
+                    text=(
+                        "Set maximum concurrent API requests (also controls how many "
+                        "devplan phases are generated in parallel).\n"
+                        f"Current: {session.max_concurrent_requests if session and session.max_concurrent_requests is not None else getattr(config, 'max_concurrent_requests', 5)}"
+                    ),
+                ).run()
+                if val:
+                    try:
+                        # Allow at least 1; default config uses 5 for good phase parallelism.
+                        session.max_concurrent_requests = max(1, int(str(val).strip()))
+                    except Exception:
+                        pass
+                continue
+            if pick == "back":
+                return
+    else:
+        while True:
+            print("\n=== Concurrency ===")
+            current = session.max_concurrent_requests if session and session.max_concurrent_requests is not None else getattr(config, "max_concurrent_requests", 5)
+            print(f"Current max concurrent requests/phases: {current}")
+            print("  1) Set max concurrent requests")
+            print("  2) Back")
+            raw = (input("Enter 1-2 [2]: ").strip() or "2")
+            if raw == "1":
+                try:
+                    val = int(input("Max concurrent requests (>=1): ").strip())
+                    if val >= 1:
+                        session.max_concurrent_requests = val
+                except Exception:
+                    pass
+            else:
+                return
+
+
 def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force_show: bool = False) -> SessionSettings:
     """Run an interactive settings hub. Returns updated SessionSettings.
 
@@ -403,6 +458,7 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                         values=[
                             ("models", "Provider & Models"),
                             ("timeouts", "API Timeouts"),
+                            ("concurrency", "Concurrency / Parallel Phases"),
                             ("temperature", "Temperature"),
                             ("max_tokens", "Max Tokens"),
                             ("reasoning", "Reasoning Effort (gpt-5)"),
@@ -425,6 +481,10 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                 continue
             if choice == "timeouts":
                 _submenu_timeouts(config, session)
+                apply_settings_to_config(config, session)
+                continue
+            if choice == "concurrency":
+                _submenu_concurrency(config, session)
                 apply_settings_to_config(config, session)
                 continue
             if choice == "temperature":
@@ -515,15 +575,16 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
             print("\nSelect a section (or 6 to go back):")
             print("  1) Provider & Models")
             print("  2) API Timeouts")
-            print("  3) Temperature")
-            print("  4) Max Tokens")
-            print("  5) Streaming On/Off")
-            print("  6) API Key")
-            print("  7) Base URL (for Generic/Aether/AgentRouter providers)")
-            print("  8) Reasoning Effort (gpt-5)")
-            print("  9) Back")
+            print("  3) Concurrency / Parallel Phases")
+            print("  4) Temperature")
+            print("  5) Max Tokens")
+            print("  6) Streaming On/Off")
+            print("  7) API Key")
+            print("  8) Base URL (for Generic/Aether/AgentRouter providers)")
+            print("  9) Reasoning Effort (gpt-5)")
+            print(" 10) Back")
             try:
-                raw = input("Enter 1-9 [9]: ").strip() or "9"
+                raw = input("Enter 1-10 [10]: ").strip() or "10"
             except Exception:
                 raw = "8"
 
@@ -532,6 +593,8 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
             elif raw == "2":
                 _submenu_timeouts(config, session)
             elif raw == "3":
+                _submenu_concurrency(config, session)
+            elif raw == "4":
                 try:
                     t = float(input("Temperature 0.0-2.0: ").strip())
                     if 0.0 <= t <= 2.0:
@@ -540,35 +603,42 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                     pass
             elif raw == "4":
                 try:
+                    t = float(input("Temperature 0.0-2.0: ").strip())
+                    if 0.0 <= t <= 2.0:
+                        session.temperature = t
+                except Exception:
+                    pass
+            elif raw == "5":
+                try:
                     mt = int(input("Max tokens: ").strip())
                     if mt > 0:
                         session.max_tokens = mt
                 except Exception:
                     pass
-            elif raw == "5":
+            elif raw == "6":
                 s = input(f"Enable streaming? y/n (current: {getattr(config, 'streaming_enabled', False)}): ").strip().lower()
                 if s in {"y", "yes"}:
                     session.streaming = True
                 elif s in {"n", "no"}:
                     session.streaming = False
-            elif raw == "6":
+            elif raw == "7":
                 k = input("Enter API key (leave blank to keep current): ")
                 if k and k.strip():
                     session.api_key = k.strip()
                     active_provider = (session.provider or config.llm.provider or "openai").lower()
                     session.provider_keys[active_provider] = session.api_key
-            elif raw == "7":
+            elif raw == "8":
                 active_provider = (session.provider or config.llm.provider or "openai").lower()
                 url = input(f"Enter base URL for current provider '{active_provider}' (leave blank to keep current): ")
                 if url and url.strip():
                     session.provider_base_urls[active_provider] = url.strip()
-            elif raw == "8":
+            elif raw == "9":
                 val = input("Reasoning effort (low/medium/high, blank to unset): ").strip().lower()
                 if val in {"low", "medium", "high"}:
                     session.reasoning_effort = val
                 elif val == "":
                     session.reasoning_effort = None
-            elif raw == "9":
+            elif raw == "10":
                 _save_prefs(session)
                 return session
         except (KeyboardInterrupt, EOFError):
@@ -820,7 +890,17 @@ def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> App
     if session.streaming is not None:
         env_updates["STREAMING_ENABLED"] = "true" if session.streaming else "false"
 
-    # Concurrency and timeouts are left to config.yaml or manual env config.
+    # Concurrency: allow overriding via settings (persists as MAX_CONCURRENT_REQUESTS).
+    if session.max_concurrent_requests is not None:
+        try:
+            # Enforce minimum of 1; recommended default is 5 for good phase parallelism.
+            safe_val = max(1, int(session.max_concurrent_requests))
+            config.max_concurrent_requests = safe_val
+            env_updates["MAX_CONCURRENT_REQUESTS"] = str(safe_val)
+        except Exception:
+            pass
+
+    # Timeouts are left primarily to config.yaml or manual env config.
 
     # Write updates into project-root .env (create if missing).
     _update_dotenv(os.path.join(root, ".env"), env_updates)

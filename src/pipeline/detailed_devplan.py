@@ -58,7 +58,25 @@ class DetailedDevPlanGenerator:
             f"Generating detailed devplan for {len(basic_devplan.phases)} phases"
         )
 
-        # Generate detailed steps for each phase concurrently with progress callbacks
+        # Deduplicate phases by canonical number to avoid generating the
+        # same phase multiple times when the basic devplan contains
+        # duplicate phase numbers (which can happen if the model repeats
+        # headings). Preserve first occurrence order.
+        unique_phases = []
+        seen_numbers: Dict[int, DevPlanPhase] = {}
+        for phase in basic_devplan.phases:
+            if phase.number in seen_numbers:
+                logger.warning(
+                    "Duplicate phase number %s ('%s') in basic devplan; "
+                    "will reuse details from the first occurrence.",
+                    phase.number,
+                    phase.title,
+                )
+                continue
+            seen_numbers[phase.number] = phase
+            unique_phases.append(phase)
+
+        # Generate detailed steps for each unique phase concurrently with progress callbacks
         tasks = [
             asyncio.create_task(
                 self.concurrency_manager.run_with_limit(
@@ -72,7 +90,7 @@ class DetailedDevPlanGenerator:
                     )
                 )
             )
-            for phase in basic_devplan.phases
+            for phase in unique_phases
         ]
 
         detailed_by_number: Dict[int, DevPlanPhase] = {}
@@ -88,8 +106,8 @@ class DetailedDevPlanGenerator:
                 except Exception:
                     pass
 
-        # Reassemble phases in original order
-        detailed_phases = [detailed_by_number[p.number] for p in basic_devplan.phases]
+        # Reassemble phases in canonical order (one entry per phase number)
+        detailed_phases = [detailed_by_number[p.number] for p in unique_phases]
 
         logger.info(f"Successfully generated details for {len(detailed_phases)} phases")
 

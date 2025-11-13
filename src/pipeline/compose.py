@@ -463,7 +463,8 @@ class PipelineOrchestrator:
         # Stage 3: Generate detailed devplan
         self.progress_reporter.start_stage("Detailed DevPlan", 3)
         logger.info("Stage 3/4: Generating detailed devplan")
-        total_phases = len(basic_devplan.phases)
+        # Use unique phase numbers to avoid double-counting duplicates from the model.
+        total_phases = len({p.number for p in basic_devplan.phases})
         self.progress_reporter.show_concurrent_phases(total_phases)
         # Start a progress bar for phases
         self.progress_reporter.start_phase_progress(total_phases, description="Generating detailed phases")
@@ -671,7 +672,8 @@ class PipelineOrchestrator:
         self.progress_reporter.end_stage("Basic DevPlan")
 
         # Stage: Detailed DevPlan with per-phase progress
-        total_phases = len(basic_devplan.phases)
+        # Use unique phase numbers to avoid double-counting duplicates from the model.
+        total_phases = len({p.number for p in basic_devplan.phases})
         if total_phases > 0:
             self.progress_reporter.show_concurrent_phases(total_phases)
             self.progress_reporter.start_phase_progress(total_phases, description="Generating detailed phases")
@@ -1098,7 +1100,19 @@ class PipelineOrchestrator:
             f"**Total Phases**: {len(devplan.phases)}\n",
             f"**Total Steps**: {sum(len(phase.steps) for phase in devplan.phases)}\n",
             f"**Completed Steps**: {sum(sum(1 for step in phase.steps if step.done) for phase in devplan.phases)}\n\n",
-            "*Last updated: " + self._get_timestamp() + "*\n"
+            "*Last updated: " + self._get_timestamp() + "*\n",
+            "\n---\n\n",
+            "## 🎯 Anchor Reference Guide (Read-Minimal)",
+            "\n\n",
+            "**devplan.md**\n",
+            "- `PROGRESS_LOG`: recent completions (~100 tokens)\n",
+            "- `NEXT_TASK_GROUP`: next 3–5 tasks (~150 tokens)\n\n",
+            "**phaseN.md**\n",
+            "- `PHASE_TASKS`: all tasks for the phase (~100 tokens)\n",
+            "- `PHASE_OUTCOMES`: outcomes / blockers (~50 tokens)\n\n",
+            "**handoff_prompt.md**\n",
+            "- `QUICK_STATUS`: current state snapshot (~50 tokens)\n\n",
+            "**Token Budget:** aim for <500 tokens per agent turn by reading only these anchored sections.\n",
         ])
 
         # Expose per-phase status anchors so agents can update completion deterministically
@@ -1148,54 +1162,73 @@ class PipelineOrchestrator:
         return generated_files
 
     def _phase_to_markdown(self, phase: DevPlanPhase, devplan: DevPlan) -> str:
-        """Convert a single phase to detailed markdown format.
+        """Convert a single phase to a token-efficient markdown format.
 
-        Args:
-            phase: The phase to convert
-            devplan: The overall devplan for context
+        The goal is to keep phase files small and task-oriented so that
+        agents can read only what they need:
 
-        Returns:
-            Markdown string for the phase file
+        - A compact checkbox list of tasks (PHASE_TASKS)
+        - Optional short context for when they are blocked (PHASE_CONTEXT)
+        - A growing outcomes log (PHASE_OUTCOMES)
+        - A legacy PHASE_PROGRESS anchor for backward compatibility
         """
-        lines = [
+        project_label = (
+            devplan.summary.split("for")[1].strip()
+            if devplan.summary and "for" in devplan.summary
+            else "Unknown Project"
+        )
+
+        lines: list[str] = [
             f"# Phase {phase.number}: {phase.title}\n\n",
-            f"**Project**: {devplan.summary.split('for')[1].strip() if 'for' in devplan.summary else 'Unknown Project'}\n",
+            f"**Project**: {project_label}\n",
             f"**Total Steps**: {len(phase.steps)}\n\n",
-            "---\n\n",
-            "## 📋 Phase Overview\n\n",
-            "This phase contains detailed actionable steps for implementation agents. ",
-            "Each step should be completed in order as they build upon each other.\n\n",
-            "## 🚀 Implementation Steps\n\n"
+            "## Tasks\n\n",
+            "<!-- PHASE_TASKS_START -->\n",
         ]
 
         for step in phase.steps:
-            status = "✅" if step.done else "⏳"
-            lines.append(f"{status} **{step.number}**: {step.description}\n")
-            # Render sub-bullets if present
+            checkbox = "[x]" if step.done else "[ ]"
+            lines.append(f"- {checkbox} {step.number}: {step.description}\n")
+            # Render sub-bullets if present (kept compact)
             if getattr(step, "details", None):
                 for d in step.details:
-                    lines.append(f"- {d}\n")
+                    lines.append(f"  - {d}\n")
 
-        # Add agent-specific instructions
-        lines.extend([
-            "\n---\n\n",
-            "## 🤖 For Implementation Agents\n\n",
-            "### Instructions:\n",
-            "1. **Complete steps in order** - Each step builds upon previous work\n",
-            "2. **Mark complete** - Change ⏳ to ✅ when each step is finished\n",
-            "3. **Add notes** - Document any important decisions or issues\n",
-            "4. **Test thoroughly** - Ensure each step works before proceeding\n",
-            "5. **Update main devplan** - Return to main devplan.md to update overall progress\n\n",
-            "### Automation Hooks (Do Not Remove)\n\n",
-            "<!-- PHASE_PROGRESS_START -->\n<!-- PHASE_PROGRESS_END -->\n\n",
-            "### Dependencies:\n",
-            "- Ensure previous phases are complete before starting this phase\n",
-            "- Follow the project's established patterns and conventions\n",
-            "- Coordinate with other agents working on related phases\n\n",
-            "---\n\n",
-            f"*Generated: {self._get_timestamp()}*\n",
-            f"*Back to: [Main DevPlan](devplan.md)*\n"
-        ])
+        lines.append("<!-- PHASE_TASKS_END -->\n\n")
+
+        # Optional context that agents should only read when blocked
+        lines.extend(
+            [
+                "## Context (Read Only When Blocked)\n\n",
+                "<!-- PHASE_CONTEXT_START -->\n",
+                (
+                    (phase.description or "Add 1–3 sentences of context here if future agents get blocked.")
+                    + "\n"
+                ),
+                "<!-- PHASE_CONTEXT_END -->\n\n",
+            ]
+        )
+
+        # Outcomes log for completed work
+        lines.extend(
+            [
+                "## Outcomes\n\n",
+                "<!-- PHASE_OUTCOMES_START -->\n",
+                "<!-- Updates added as tasks complete -->\n",
+                "<!-- PHASE_OUTCOMES_END -->\n\n",
+            ]
+        )
+
+        # Legacy progress anchor retained for compatibility with older agents/docs
+        lines.extend(
+            [
+                "## Progress (Legacy Anchor)\n\n",
+                "<!-- PHASE_PROGRESS_START -->\n",
+                "<!-- PHASE_PROGRESS_END -->\n\n",
+                f"*Generated: {self._get_timestamp()}*\n",
+                f"*Back to: [Main DevPlan](devplan.md)*\n",
+            ]
+        )
 
         return "\n".join(lines)
 
