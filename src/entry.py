@@ -3,8 +3,9 @@
 Usage:
     python -m src.entry
 
-This ensures a Requesty key is present (prompts if missing in 0.1),
-then invokes the interactive interview with provider=requesty by default.
+This entrypoint:
+- Respects provider/model configuration from config.yaml and environment (e.g. .env).
+- Only applies Requesty-specific behavior when Requesty is actually selected.
 """
 from __future__ import annotations
 
@@ -35,17 +36,19 @@ def main(
         # Never fail due to splash
         pass
 
-    provider = provider or "requesty"
+    # Let _load_app_config resolve provider/model from config/.env unless explicitly overridden.
     cfg = _load_app_config(config_path, provider, model, output_dir, verbose)
 
-    # Ensure Requesty key for 0.1
-    if (cfg.llm.provider or "").lower() == "requesty":
+    # If the resolved provider is Requesty, ensure its API key is available.
+    resolved_provider = (cfg.llm.provider or "").lower()
+    if resolved_provider == "requesty":
         _resolve_requesty_api_key(cfg)
 
-    # Run LLM interview flow
+    # Run LLM interview flow using the resolved provider.
+    # Passing cfg.llm.provider ensures python -m src.entry behaves like the CLI launch command.
     interactive_design(
         config_path=config_path,
-        provider=provider,
+        provider=cfg.llm.provider,
         model=model,
         output_dir=output_dir,
         temperature=None,

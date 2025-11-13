@@ -2106,29 +2106,30 @@ def interactive_design(
 @app.command()
 def launch(
     config_path: Annotated[Optional[str], typer.Option("--config", help="Path to config file")] = None,
-    provider: Annotated[Optional[str], typer.Option("--provider", help="LLM provider override (default: requesty)")] = None,
+    provider: Annotated[Optional[str], typer.Option("--provider", help="LLM provider override")] = None,
     model: Annotated[Optional[str], typer.Option("--model", help="Model override")] = None,
     output_dir: Annotated[Optional[str], typer.Option("--output-dir", help="Output directory")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", help="Verbose logs")] = False,
 ) -> None:
-    """Launch Devussy: resolve Requesty key (0.1), then run the interview."""
+    """Launch Devussy using the configured/default provider, then run the interview."""
     try:
-        # Load config; default provider to requesty for 0.1
-        effective_provider = provider or "requesty"
-        cfg = _load_app_config(config_path, effective_provider, model, output_dir, verbose)
+        # Let _load_app_config resolve provider from config/.env unless overridden via --provider
+        cfg = _load_app_config(config_path, provider, model, output_dir, verbose)
 
-        # Ensure Requesty API key is available
-        if (cfg.llm.provider or "").lower() == "requesty":
+        # If the resolved provider is Requesty, ensure its API key is available
+        resolved_provider = (cfg.llm.provider or "").lower()
+        if resolved_provider == "requesty":
             try:
                 _resolve_requesty_api_key(cfg)
             except Exception as e:
                 typer.echo(f"\n❌ Could not resolve Requesty API key: {e}", err=True, color=True)
                 raise typer.Exit(code=1)
 
-        # Run the LLM interview flow (same as interactive_design with defaults)
+        # Run the LLM interview flow (same as interactive_design with defaults),
+        # passing through the resolved provider so behavior matches configuration.
         interactive_design(
             config_path=config_path,
-            provider=effective_provider,
+            provider=cfg.llm.provider,
             model=model,
             output_dir=output_dir,
             temperature=None,
