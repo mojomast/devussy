@@ -281,33 +281,54 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
 
     # Helper function to load LLM config for a specific stage or global
     def _load_llm_config(prefix: str = "") -> dict:
-        """Load LLM configuration with optional prefix for stage-specific configs."""
-        llm_config = {}
-        
+        """Load LLM configuration with optional prefix for stage-specific configs.
+
+        Env design:
+        - Global (no prefix):
+            - Provider: llm_provider (YAML) -> LLM_PROVIDER.
+            - Model: model (YAML) -> MODEL (canonical).
+            - FINAL_MODEL is not applied here; final-phase code may read it separately.
+        - Stage-specific (design_, devplan_, handoff_):
+            - Provider: {prefix}llm_provider -> {PREFIX}LLM_PROVIDER.
+            - Model: {prefix}model -> {PREFIX}MODEL.
+            - API key: {PREFIX}API_KEY.
+            - Base URL: {PREFIX}BASE_URL.
+        """
+        llm_config: dict = {}
+
         # Provider
         provider_key = f"{prefix}llm_provider" if prefix else "llm_provider"
         env_provider_key = f"{prefix.upper()}LLM_PROVIDER" if prefix else "LLM_PROVIDER"
-        
+
         if provider_key in config_data:
             llm_config["provider"] = config_data[provider_key]
-        if os.getenv(env_provider_key):
-            llm_config["provider"] = os.getenv(env_provider_key)
-        
+        env_provider_val = os.getenv(env_provider_key)
+        if env_provider_val:
+            llm_config["provider"] = env_provider_val
+
         # Model
         model_key = f"{prefix}model" if prefix else "model"
-        env_model_key = f"{prefix.upper()}MODEL" if prefix else None
-        
-        if model_key in config_data:
-            llm_config["model"] = config_data[model_key]
-        if env_model_key and os.getenv(env_model_key):
-            llm_config["model"] = os.getenv(env_model_key)
-        
-        # API Key (check provider-specific env vars for global config)
+
+        if prefix:
+            # Stage-specific: YAML {prefix}model, then {PREFIX}MODEL
+            env_model_key = f"{prefix.upper()}MODEL"
+            if model_key in config_data:
+                llm_config["model"] = config_data[model_key]
+            env_model_val = os.getenv(env_model_key)
+            if env_model_val:
+                llm_config["model"] = env_model_val
+        else:
+            # Global: YAML model, then MODEL as canonical override
+            if "model" in config_data:
+                llm_config["model"] = config_data["model"]
+            model_env = os.getenv("MODEL")
+            if model_env:
+                llm_config["model"] = model_env
+
+        # API Key (global, provider-based)
         if not prefix:
-            # Determine which provider we're using
             provider = llm_config.get("provider") or config_data.get("llm_provider", "openai")
-            
-            # Use provider-specific API key based on configured provider
+
             if provider == "requesty" and os.getenv("REQUESTY_API_KEY"):
                 llm_config["api_key"] = os.getenv("REQUESTY_API_KEY")
             elif provider == "aether" and os.getenv("AETHER_API_KEY"):
@@ -318,7 +339,7 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
                 llm_config["api_key"] = os.getenv("OPENAI_API_KEY")
             elif provider == "generic" and os.getenv("GENERIC_API_KEY"):
                 llm_config["api_key"] = os.getenv("GENERIC_API_KEY")
-            # Fallback: check any available key (legacy behavior)
+            # Legacy fallback: accept any known key
             elif os.getenv("OPENAI_API_KEY"):
                 llm_config["api_key"] = os.getenv("OPENAI_API_KEY")
             elif os.getenv("REQUESTY_API_KEY"):
@@ -329,62 +350,88 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
                 llm_config["api_key"] = os.getenv("AGENTROUTER_API_KEY")
             elif os.getenv("GENERIC_API_KEY"):
                 llm_config["api_key"] = os.getenv("GENERIC_API_KEY")
-        
-        # Stage-specific API key
-        api_key_env = f"{prefix.upper()}API_KEY" if prefix else None
-        if api_key_env and os.getenv(api_key_env):
-            llm_config["api_key"] = os.getenv(api_key_env)
-        
+
+        # Stage-specific API key override
+        if prefix:
+            api_key_env = f"{prefix.upper()}API_KEY"
+            api_key_val = os.getenv(api_key_env)
+            if api_key_val:
+                llm_config["api_key"] = api_key_val
+
         # Organization ID
-        if not prefix and os.getenv("OPENAI_ORG_ID"):
-            llm_config["org_id"] = os.getenv("OPENAI_ORG_ID")
-        org_id_env = f"{prefix.upper()}ORG_ID" if prefix else None
-        if org_id_env and os.getenv(org_id_env):
-            llm_config["org_id"] = os.getenv(org_id_env)
-        
+        if not prefix:
+            org = os.getenv("OPENAI_ORG_ID")
+            if org:
+                llm_config["org_id"] = org
+        else:
+            org_id_env = f"{prefix.upper()}ORG_ID"
+            org_val = os.getenv(org_id_env)
+            if org_val:
+                llm_config["org_id"] = org_val
+
         # Base URL
         if not prefix:
-            if os.getenv("GENERIC_BASE_URL"):
-                llm_config["base_url"] = os.getenv("GENERIC_BASE_URL")
-            elif os.getenv("AETHER_BASE_URL"):
-                llm_config["base_url"] = os.getenv("AETHER_BASE_URL")
-            elif os.getenv("AGENTROUTER_BASE_URL"):
-                llm_config["base_url"] = os.getenv("AGENTROUTER_BASE_URL")
-            elif os.getenv("REQUESTY_BASE_URL"):
-                llm_config["base_url"] = os.getenv("REQUESTY_BASE_URL")
+            provider_for_base = (llm_config.get("provider") or config_data.get("llm_provider") or "").lower()
 
-        # AgentRouter spoofing extras
-        if not prefix and (llm_config.get("provider") == "agentrouter" or os.getenv("LLM_PROVIDER", "").lower() == "agentrouter"):
-            if os.getenv("AGENTROUTER_SPOOF_AS"):
-                llm_config["spoof_as"] = os.getenv("AGENTROUTER_SPOOF_AS")
-            if os.getenv("AGENTROUTER_EXTRA_HEADERS"):
+            if provider_for_base == "generic":
+                gen_base = os.getenv("GENERIC_BASE_URL")
+                if gen_base:
+                    llm_config["base_url"] = gen_base
+                elif "base_url" in config_data:
+                    llm_config["base_url"] = config_data["base_url"]
+            elif provider_for_base == "aether":
+                abase = os.getenv("AETHER_BASE_URL")
+                if abase:
+                    llm_config["base_url"] = abase
+            elif provider_for_base == "agentrouter":
+                rbase = os.getenv("AGENTROUTER_BASE_URL")
+                if rbase:
+                    llm_config["base_url"] = rbase
+            elif provider_for_base == "requesty":
+                rbase = os.getenv("REQUESTY_BASE_URL")
+                if rbase:
+                    llm_config["base_url"] = rbase
+            elif provider_for_base == "openai":
+                obase = os.getenv("OPENAI_BASE_URL")
+                if obase:
+                    llm_config["base_url"] = obase
+
+        base_url_env = f"{prefix.upper()}BASE_URL" if prefix else None
+        if base_url_env:
+            bval = os.getenv(base_url_env)
+            if bval:
+                llm_config["base_url"] = bval
+
+        # AgentRouter extras (global only)
+        if not prefix and ((llm_config.get("provider") or "").lower() == "agentrouter" or os.getenv("LLM_PROVIDER", "").lower() == "agentrouter"):
+            spoof = os.getenv("AGENTROUTER_SPOOF_AS")
+            if spoof:
+                llm_config["spoof_as"] = spoof
+            extra_headers_raw = os.getenv("AGENTROUTER_EXTRA_HEADERS")
+            if extra_headers_raw:
                 try:
-                    llm_config["extra_headers"] = json.loads(os.getenv("AGENTROUTER_EXTRA_HEADERS"))
+                    llm_config["extra_headers"] = json.loads(extra_headers_raw)
                 except Exception:
                     pass
-        
-        base_url_env = f"{prefix.upper()}BASE_URL" if prefix else None
-        if base_url_env and os.getenv(base_url_env):
-            llm_config["base_url"] = os.getenv(base_url_env)
-        
+
         # Temperature, max_tokens, api_timeout, reasoning_effort
         temp_key = f"{prefix}temperature" if prefix else "temperature"
         if temp_key in config_data:
             llm_config["temperature"] = config_data[temp_key]
-        
+
         tokens_key = f"{prefix}max_tokens" if prefix else "max_tokens"
         if tokens_key in config_data:
             llm_config["max_tokens"] = config_data[tokens_key]
-        
+
         timeout_key = f"{prefix}api_timeout" if prefix else "api_timeout"
         if timeout_key in config_data:
             llm_config["api_timeout"] = config_data[timeout_key]
-        
+
         reasoning_key = f"{prefix}reasoning_effort" if prefix else "reasoning_effort"
         if reasoning_key in config_data:
             llm_config["reasoning_effort"] = config_data[reasoning_key]
-        
-        return llm_config if llm_config else None
+
+        return llm_config
     
     # Load global LLM configuration
     global_llm = _load_llm_config()

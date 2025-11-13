@@ -27,9 +27,10 @@ class SessionSettings(BaseModel):
     max_tokens: Optional[int] = None
     streaming: Optional[bool] = None
     api_key: Optional[str] = None
-    base_url: Optional[str] = None  # Added for generic provider endpoint
-    provider_keys: Optional[Dict[str, str]] = Field(default_factory=dict)
-    provider_base_urls: Optional[Dict[str, str]] = Field(default_factory=dict)
+    base_url: Optional[str] = None  # Primarily used for generic provider endpoint
+    # Always treat these as dicts at runtime to avoid Optional/None typing issues in callers.
+    provider_keys: Dict[str, str] = Field(default_factory=dict)
+    provider_base_urls: Dict[str, str] = Field(default_factory=dict)
     # GPT-5 reasoning level: low | medium | high
     reasoning_effort: Optional[str] = None
     last_token_usage: Optional[Dict[str, int]] = Field(default=None)
@@ -48,9 +49,12 @@ def _is_tty() -> bool:
 
 
 def _current_settings_snapshot(config: AppConfig, session: Optional[SessionSettings]) -> str:
+    # Prefer session-scoped provider if set; this is what interactive settings modifies first.
+    # This ensures the Settings UI and in-memory config both reflect the live provider choice.
+    active_provider = (session.provider if session and session.provider else config.llm.provider)
     llm = config.llm
     lines = [
-        f"Provider: {llm.provider}",
+        f"Provider: {active_provider}",
         f"Interview Model: {(session.interview_model if session and session.interview_model else llm.model)}",
         f"Final Stage Model: {(session.final_stage_model if session and session.final_stage_model else (config.devplan_llm.model if config.devplan_llm else llm.model))}",
         f"Temperature: {session.temperature if session and session.temperature is not None else llm.temperature}",
@@ -108,7 +112,7 @@ def _submenu_models(config: AppConfig, session: SessionSettings) -> None:
                         ("base_url_current", "Base URL (active provider)"),
                         ("interview_model", "Interview Model"),
                         ("final_stage_model", "Final Stage Model"),
-                        ("back", "Back"),
+                        ("back", "Save and Return"),
                     ],
                 ).run()
                 or "back"
@@ -395,7 +399,7 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                 choice = (
                     radiolist_dialog(
                         title="Settings",
-                        text=_current_settings_snapshot(config, session) + "\n\nSelect a section (or Back)",
+                        text=_current_settings_snapshot(config, session) + "\n\nSelect a section)",
                         values=[
                             ("models", "Provider & Models"),
                             ("timeouts", "API Timeouts"),
@@ -403,7 +407,7 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                             ("max_tokens", "Max Tokens"),
                             ("reasoning", "Reasoning Effort (gpt-5)"),
                             ("streaming", "Streaming On/Off"),
-                            ("back", "Back"),
+                            ("back", "Exit Options & Save"),
                         ],
                     ).run()
                     or "back"
@@ -415,10 +419,13 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                 break
 
             if choice == "models":
+                # Persist after each settings submenu so .env stays in sync immediately
                 _submenu_models(config, session)
+                apply_settings_to_config(config, session)
                 continue
             if choice == "timeouts":
                 _submenu_timeouts(config, session)
+                apply_settings_to_config(config, session)
                 continue
             if choice == "temperature":
                 provider_default = (session.provider or config.llm.provider or "openai").lower()
@@ -443,6 +450,8 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                         session.temperature = float(provider)
                     except Exception:
                         pass
+                # Persist updated temperature immediately
+                apply_settings_to_config(config, session)
                 continue
             if choice == "max_tokens":
                 max_toks_str = input_dialog(
@@ -456,6 +465,8 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                             session.max_tokens = mt
                     except ValueError:
                         pass
+                # Persist updated max_tokens immediately
+                apply_settings_to_config(config, session)
                 continue
             if choice == "reasoning":
                 pick = (
@@ -472,6 +483,8 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                     or ""
                 )
                 session.reasoning_effort = (pick or None) or None
+                # Persist updated reasoning_effort immediately
+                apply_settings_to_config(config, session)
                 continue
             if choice == "streaming":
                 streaming_choice = yes_no_dialog(
@@ -481,10 +494,13 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                     no_text="Disable",
                 ).run()
                 session.streaming = bool(streaming_choice)
+                # Persist updated streaming flag immediately
+                apply_settings_to_config(config, session)
                 continue
             # API creds editing moved into Provider & Models submenu
             if choice == "back":
-                # Final summary before returning
+                # Persist last state and return immediately
+                apply_settings_to_config(config, session)
                 _save_prefs(session)
                 return session
 
@@ -560,8 +576,71 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
 action = Tuple[AppConfig, SessionSettings]
 
 
+def _update_dotenv(path: str, updates: Dict[str, Optional[str]]) -> None:
+    """Create or merge a .env file with the given key/value updates.
+
+    - Ensures the file exists.
+    - Rewrites only the specified keys; preserves others verbatim.
+    - If a value is None or empty, the key is removed.
+    """
+    try:
+        env_path = os.path.abspath(path)
+        existing: Dict[str, str] = {}
+
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#") or "=" not in stripped:
+                        continue
+                    key, val = stripped.split("=", 1)
+                    existing[key.strip()] = val.strip()
+
+        # Apply updates
+        for key, value in updates.items():
+            if value is None or value == "":
+                existing.pop(key, None)
+            else:
+                existing[key] = str(value)
+
+        # Write back
+        lines = []
+        for key, val in existing.items():
+            lines.append(f"{key}={val}")
+        content = "\n".join(lines) + ("\n" if lines else "")
+
+        # Ensure directory exists (project root usually already does)
+        os.makedirs(os.path.dirname(env_path) or ".", exist_ok=True)
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.write(content)
+    except Exception:
+        # Never break UX due to .env persistence issues
+        return
+
+
 def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> AppConfig:
-    """Apply session settings to AppConfig in-memory without persisting to disk."""
+    """Apply session settings to AppConfig in-memory and persist to .env."""
+    # Determine project root (where .env should live)
+    # We infer by walking up from this file until we find pyproject.toml or config/config.yaml.
+    root = os.getcwd()
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        cur = here
+        for _ in range(6):
+            if (
+                os.path.exists(os.path.join(cur, "pyproject.toml"))
+                or os.path.exists(os.path.join(cur, "config", "config.yaml"))
+            ):
+                root = cur
+                break
+            parent = os.path.dirname(cur)
+            if parent == cur:
+                break
+            cur = parent
+    except Exception:
+        pass
+
+    # Apply in-memory overrides (source of truth for running process)
     if session.provider:
         config.llm.provider = session.provider
 
@@ -657,6 +736,94 @@ def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> App
             config.handoff_llm = LLMConfig(model=config.llm.model, provider=config.llm.provider, api_timeout=session.handoff_api_timeout)
         else:
             config.handoff_llm.api_timeout = session.handoff_api_timeout
+
+    # Persist key settings into .env so they survive new processes.
+    # Only write keys that are meaningful across sessions.
+    env_updates: Dict[str, Optional[str]] = {}
+
+    active_provider = (session.provider or config.llm.provider or "openai").lower()
+ 
+    # Provider
+    env_updates["LLM_PROVIDER"] = active_provider
+ 
+    # Base URL persistence
+    #
+    # Intent:
+    # - Only Generic should round-trip a base URL into .env (GENERIC_BASE_URL).
+    # - All other providers use internal defaults; we do NOT write their BASE_URLs to .env,
+    #   to avoid polluting config and accidentally breaking endpoints on provider switches.
+    if active_provider == "generic" and config.llm.base_url:
+        env_updates["GENERIC_BASE_URL"] = config.llm.base_url
+    else:
+        # Ensure we don't leave stale provider-specific BASE_URLs lying around.
+        # This is defensive cleanup; if present, they can cause subtle bugs.
+        env_updates["REQUESTY_BASE_URL"] = None
+        env_updates["AETHER_BASE_URL"] = None
+        env_updates["AGENTROUTER_BASE_URL"] = None
+        env_updates["OPENAI_BASE_URL"] = None
+
+    # Model persistence:
+    # Unified semantics:
+    # - Always persist the effective primary (interview) model as MODEL.
+    # - Persist the final-stage model as FINAL_MODEL when explicitly set.
+    # - Loaders can then:
+    #     use FINAL_MODEL for final-phase work when present/valid,
+    #     otherwise fall back to MODEL.
+    if config.llm.model:
+        env_updates["MODEL"] = config.llm.model
+        # Backward-compatibility: ensure any legacy GENERIC_MODEL is not left stale.
+        env_updates["GENERIC_MODEL"] = None
+
+    # Persist FINAL_MODEL when we have an explicit final_stage_model configured.
+    # Use getattr defensively to satisfy static analysis and avoid None-attribute issues.
+    final_model: Optional[str] = None
+
+    devplan_llm = getattr(config, "devplan_llm", None)
+    if devplan_llm is not None:
+        fm = getattr(devplan_llm, "model", None)
+        if isinstance(fm, str) and fm.strip():
+            final_model = fm.strip()
+
+    if final_model is None:
+        handoff_llm = getattr(config, "handoff_llm", None)
+        if handoff_llm is not None:
+            fm = getattr(handoff_llm, "model", None)
+            if isinstance(fm, str) and fm.strip():
+                final_model = fm.strip()
+
+    if final_model:
+        env_updates["FINAL_MODEL"] = final_model
+    else:
+        # No explicit final model configured -> remove stale FINAL_MODEL so loaders can fall back to MODEL
+        env_updates["FINAL_MODEL"] = None
+
+    # API keys (only persist if explicitly set in session to avoid leaking from process env)
+    resolved_api_key = None
+    if (session.provider_keys or {}).get(active_provider):
+        resolved_api_key = session.provider_keys[active_provider]
+    elif session.api_key:
+        resolved_api_key = session.api_key
+
+    if resolved_api_key:
+        if active_provider == "openai":
+            env_updates["OPENAI_API_KEY"] = resolved_api_key
+        elif active_provider == "generic":
+            env_updates["GENERIC_API_KEY"] = resolved_api_key
+        elif active_provider == "requesty":
+            env_updates["REQUESTY_API_KEY"] = resolved_api_key
+        elif active_provider == "aether":
+            env_updates["AETHER_API_KEY"] = resolved_api_key
+        elif active_provider == "agentrouter":
+            env_updates["AGENTROUTER_API_KEY"] = resolved_api_key
+
+    # Streaming flag
+    if session.streaming is not None:
+        env_updates["STREAMING_ENABLED"] = "true" if session.streaming else "false"
+
+    # Concurrency and timeouts are left to config.yaml or manual env config.
+
+    # Write updates into project-root .env (create if missing).
+    _update_dotenv(os.path.join(root, ".env"), env_updates)
 
     return config
 
@@ -926,7 +1093,12 @@ def _combined_model_picker(
 
 
 def _submenu_api_credentials(config: AppConfig, session: SessionSettings) -> None:
-    """Manage per-provider API keys and base URLs to avoid overlap."""
+    """Manage per-provider API keys and base URLs.
+
+    Rules:
+    - Generic: requires a custom base URL (user must provide).
+    - Requesty/Aether/AgentRouter/OpenAI: use known defaults; URL override is optional/advanced.
+    """
     providers = [
         ("openai", "OpenAI"),
         ("generic", "Generic (OpenAI-compatible)"),
@@ -945,7 +1117,6 @@ def _submenu_api_credentials(config: AppConfig, session: SessionSettings) -> Non
         )
         if pick == "back":
             return
-        # Edit credentials for selected provider
         try:
             # API Key
             try:
@@ -955,7 +1126,10 @@ def _submenu_api_credentials(config: AppConfig, session: SessionSettings) -> Non
                     password=True,
                 ).run()
             except TypeError:
-                key_in = prompt("Enter API key (leave blank to keep current, '-' to clear): ", is_password=True)
+                key_in = prompt(
+                    "Enter API key (leave blank to keep current, '-' to clear): ",
+                    is_password=True,
+                )
             if key_in is not None:
                 key_in = key_in.strip()
                 if key_in == "-":
@@ -963,25 +1137,48 @@ def _submenu_api_credentials(config: AppConfig, session: SessionSettings) -> Non
                 elif key_in:
                     session.provider_keys[pick] = key_in
 
-            # Base URL
-            base_default = (
-                session.provider_base_urls.get(pick)
-                or ("https://api.openai.com/v1" if pick == "openai" else None)
-                or ("https://api.aetherapi.dev" if pick == "aether" else None)
-                or ("https://agentrouter.org" if pick == "agentrouter" else None)
-                or ("https://router.requesty.ai/v1" if pick == "requesty" else None)
-                or ""
-            )
-            base_in = input_dialog(
-                title=f"{dict(providers).get(pick, pick)} Base URL",
-                text=f"Enter Base URL (leave blank to keep current, input '-' to clear). Default: {base_default}",
-            ).run()
-            if base_in is not None:
-                base_in = base_in.strip()
-                if base_in == "-":
-                    session.provider_base_urls.pop(pick, None)
-                elif base_in:
-                    session.provider_base_urls[pick] = base_in
+            # Base URL behavior depends on provider
+            label = dict(providers).get(pick, pick)
+            # Generic MUST point somewhere explicit
+            if pick == "generic":
+                base_default = session.provider_base_urls.get(pick, "")
+                base_in = input_dialog(
+                    title=f"{label} Base URL (required)",
+                    text=(
+                        "Enter Base URL for your OpenAI-compatible endpoint "
+                        "(e.g., https://api.example.com/v1). "
+                        f"Leave blank to keep current ({base_default or 'none'}), '-' to clear."
+                    ),
+                ).run()
+                if base_in is not None:
+                    base_in = base_in.strip()
+                    if base_in == "-":
+                        session.provider_base_urls.pop(pick, None)
+                    elif base_in:
+                        session.provider_base_urls[pick] = base_in
+            else:
+                # Known providers: allow override but never require it
+                base_default = (
+                    session.provider_base_urls.get(pick)
+                    or ("https://api.openai.com/v1" if pick == "openai" else None)
+                    or ("https://api.aetherapi.dev" if pick == "aether" else None)
+                    or ("https://agentrouter.org" if pick == "agentrouter" else None)
+                    or ("https://router.requesty.ai/v1" if pick == "requesty" else None)
+                    or ""
+                )
+                base_in = input_dialog(
+                    title=f"{label} Base URL (advanced override)",
+                    text=(
+                        "Optional: Enter a custom Base URL to override the default "
+                        f"(leave blank to keep current, '-' to clear). Default: {base_default}"
+                    ),
+                ).run()
+                if base_in is not None:
+                    base_in = base_in.strip()
+                    if base_in == "-":
+                        session.provider_base_urls.pop(pick, None)
+                    elif base_in:
+                        session.provider_base_urls[pick] = base_in
         except Exception:
             # Ignore UI errors, return to list
             pass
