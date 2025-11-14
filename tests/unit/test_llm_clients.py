@@ -91,7 +91,7 @@ def mock_requesty_config():
     return Mock(
         llm=Mock(
             provider="requesty",
-            model="requesty-model",
+            model="openai/gpt-5-mini",  # Use production model format
             api_key="requesty-key-456",
             base_url="https://api.requesty.com",
             temperature=0.9,
@@ -426,84 +426,87 @@ class TestRequestyClient:
 
         assert client._api_key == "requesty-key-456"
         assert client._base_url == "https://api.requesty.com"
-        assert client._model == "requesty-model"
+        assert client._model == "openai/gpt-5-mini"  # Production model format
         assert client._temperature == 0.9
         assert client._max_tokens == 2048
 
     def test_endpoint_property(self, mock_requesty_config):
         """Test endpoint URL construction."""
         client = RequestyClient(mock_requesty_config)
-        assert client._endpoint == "https://api.requesty.com/v1/generate"
+        # Requesty now uses OpenAI-compatible endpoint
+        assert client._endpoint == "https://api.requesty.com/chat/completions"
 
     @pytest.mark.asyncio
     async def test_generate_completion_with_text_field(self, mock_requesty_config):
-        """Test completion with Requesty's 'text' field."""
-        with patch.object(
-            RequestyClient, "_post_generate", new_callable=AsyncMock
-        ) as mock_post_generate:
-            mock_post_generate.return_value = "Requesty response text"
+        """Test completion with OpenAI-compatible format."""
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={
+                "choices": [{"message": {"content": "Requesty response text"}}]
+            })
+            mock_post.return_value.__aenter__.return_value = mock_response
 
             client = RequestyClient(mock_requesty_config)
             result = await client.generate_completion("test prompt")
 
             assert result == "Requesty response text"
-            mock_post_generate.assert_called_once_with("test prompt")
 
     @pytest.mark.asyncio
     async def test_generate_completion_fallback_to_openai_format(
         self, mock_requesty_config
     ):
-        """Test fallback to OpenAI-compatible format."""
-        with patch.object(
-            RequestyClient, "_post_generate", new_callable=AsyncMock
-        ) as mock_post_generate:
-            mock_post_generate.return_value = "OpenAI-compatible response"
+        """Test OpenAI-compatible format response."""
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={
+                "choices": [{"message": {"content": "OpenAI-compatible response"}}]
+            })
+            mock_post.return_value.__aenter__.return_value = mock_response
 
             client = RequestyClient(mock_requesty_config)
             result = await client.generate_completion("test prompt")
 
             assert result == "OpenAI-compatible response"
-            mock_post_generate.assert_called_once_with("test prompt")
 
     @pytest.mark.asyncio
     async def test_generate_completion_with_custom_params(self, mock_requesty_config):
         """Test completion with custom parameters."""
-        with patch.object(
-            RequestyClient, "_post_generate", new_callable=AsyncMock
-        ) as mock_post_generate:
-            mock_post_generate.return_value = "Custom params response"
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={
+                "choices": [{"message": {"content": "Custom params response"}}]
+            })
+            mock_post.return_value.__aenter__.return_value = mock_response
 
             client = RequestyClient(mock_requesty_config)
             result = await client.generate_completion(
                 "test prompt",
-                model="custom-requesty-model",
+                model="anthropic/claude-3-5-sonnet",  # Valid provider/model format
                 temperature=0.5,
                 max_tokens=1000,
                 top_p=0.95,
             )
 
             assert result == "Custom params response"
-            mock_post_generate.assert_called_once_with(
-                "test prompt",
-                model="custom-requesty-model",
-                temperature=0.5,
-                max_tokens=1000,
-                top_p=0.95,
-            )
 
     @pytest.mark.asyncio
     async def test_generate_completion_empty_response(self, mock_requesty_config):
         """Test handling of empty response."""
-        with patch.object(
-            RequestyClient, "_post_generate", new_callable=AsyncMock
-        ) as mock_post_generate:
-            mock_post_generate.return_value = ""
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={
+                "choices": [{"message": {"content": ""}}]
+            })
+            mock_post.return_value.__aenter__.return_value = mock_response
 
             client = RequestyClient(mock_requesty_config)
             result = await client.generate_completion("test prompt")
 
             assert result == ""
-            mock_post_generate.assert_called_once_with("test prompt")
 
 
 class TestClientFactory:

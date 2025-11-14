@@ -220,6 +220,16 @@ class AppConfig(BaseModel):
         description="Log format string",
     )
 
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, v: str) -> str:
+        """Validate and normalize log level."""
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        v_upper = v.upper()
+        if v_upper not in allowed:
+            raise ValueError(f"Log level must be one of {sorted(allowed)}, got: {v}")
+        return v_upper
+
     def get_llm_config_for_stage(self, stage: str) -> LLMConfig:
         """Return the effective LLM config for a pipeline stage.
 
