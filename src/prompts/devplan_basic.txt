@@ -1,0 +1,64 @@
+# Basic Development Plan Prompt
+
+You are creating a high-level development plan based on an approved project design.
+
+## Approved Project Design
+{project_design}
+
+## Your Task
+Create a **Basic Development Plan** that outlines the major phases and milestones for implementing this project.
+
+### Structure Your Plan With:
+
+1. **Development Phases** (typically 4-8 major phases)
+   - Phase name and purpose
+   - Key deliverables for each phase
+   - Dependencies and prerequisites
+   - Estimated complexity/duration
+
+2. **Major Milestones**
+   - Critical decision points
+   - Integration checkpoints
+   - Testing milestones
+   - Deployment gates
+
+3. **Risk Assessment**
+   - Technical risks and mitigation strategies
+   - Dependencies on external services
+   - Potential blockers
+
+4. **Success Criteria**
+   - What "done" looks like for each phase
+   - Acceptance criteria
+   - Testing requirements
+
+### Example Phase Structure:
+```
+## Phase 1: Foundation & Setup
+**Purpose:** Establish development environment and core infrastructure
+
+**Deliverables:**
+- Project repository with CI/CD
+- Database schema implementation
+- Authentication system
+- Basic API structure
+
+**Prerequisites:** 
+- Design approval
+- Infrastructure access
+
+**Duration:** 1-2 weeks
+**Complexity:** Medium
+```
+
+## Guidelines
+- Think in terms of 4-8 major phases
+- Each phase should be 1-3 weeks of work
+- Focus on logical groupings of functionality
+- Consider dependencies between phases
+- Include testing and deployment as explicit phases
+
+## Output Format
+Generate a well-structured Markdown document with clear phase breakdowns, milestones, and success criteria.
+
+This is the **high-level overview** that will be broken down into detailed steps in the next stage.

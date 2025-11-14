@@ -1,0 +1,367 @@
+# Handoff Prompt Generation
+
+You are creating a comprehensive handoff document for a **Roo Code Orchestrator** agent.
+
+## Project Information
+**Project Name:** {project_name}
+**Development Plan:** {devplan_path}
+
+## Refined Development Plan
+{refined_devplan}
+
+## Your Task
+Generate a complete HANDOFF.md document that will guide the next coding agent through autonomous execution.
+
+### Handoff Structure:
+
+```markdown
+# 🚀 Project Handoff: {project_name}
+
+**Handoff Version:** 1.0  
+**Generated:** {timestamp}  
+**Status:** Ready for Execution  
+**Estimated Completion:** {estimate}
+
+---
+
+## 🎯 Mission
+
+{brief_mission_statement}
+
+---
+
+## 📋 Current Status
+
+### Completed Work
+- ✅ Project design approved
+- ✅ Development plan created and refined
+- ✅ Handoff document prepared
+
+### What You're Starting
+You are beginning from scratch. The foundation is planned, now you build it.
+
+### Progress Tracking
+- **Current Step:** 1 of {total_steps}
+- **Completion:** 0%
+- **Active Phase:** Initial Setup
+
+---
+
+## 🤖 Your Instructions (Roo Code Orchestrator)
+
+### Step 1: Read Everything First
+1. **Read this entire HANDOFF.md** - Understand the mission and protocols
+2. **Read `devplan.md`** - This is your detailed step-by-step guide
+3. **Read `project_design.md`** - Understand the architecture and technical decisions
+4. **Set up your environment** - Follow devplan steps 1-10 for setup
+
+### Step 2: Begin Execution
+- Start with devplan.md Step 1
+- Follow steps in numerical order
+- Mark each step as ✅ or ❌ in the devplan
+- Write meaningful commit messages
+
+### Step 3: Self-Updating Protocol
+
+**After EVERY 10 steps completed:**
+1. Update `devplan.md`:
+   - Mark completed steps with ✅
+   - Add any learnings to "Agent Notes"
+   - Update any steps that need refinement
+   
+2. Git commit:
+   ```bash
+   git add .
+   git commit -m "feat: completed steps X-Y - [brief description]"
+   git push origin main
+   ```
+
+3. Check for issues:
+   - Run tests: `pytest -v`
+   - Check linting: `flake8 . --max-line-length=100`
+   - Verify no errors
+
+**After EVERY milestone (approx every 20-30 steps):**
+1. Run full test suite
+2. Update relevant documentation
+3. Git commit with milestone message:
+   ```bash
+   git commit -m "milestone: [Feature/Phase] complete - [description]"
+   ```
+4. Update progress tracking in this file or create `PROGRESS.md`
+
+**When to Create Next Handoff:**
+Create a new handoff when ANY of these are true:
+- You've completed 50% or more of the devplan
+- A major feature/phase is complete
+- You encounter a blocker that needs human decision
+- User explicitly says "ok its time for handoff"
+
+### Step 4: Creating Next Handoff
+
+When it's time to hand off to the next agent:
+
+1. **Update devplan.md with ALL progress:**
+   - Mark all completed steps with ✅
+   - Mark any skipped steps with [SKIP] and reason
+   - Mark any blocked steps with ❌ and blocker description
+   - Update estimates if they changed
+   
+2. **Create/Update HANDOFF.md:**
+   ```markdown
+   # 🚀 Project Handoff: {project_name}
+   
+   **Handoff Version:** {increment_version}  
+   **Generated:** {new_timestamp}  
+   **Previous Agent:** Roo Agent #{N}  
+   **Status:** {status}
+   
+   ## 🎯 Mission
+   {updated_mission}
+   
+   ## 📊 Current Status
+   
+   ### Completed
+   - ✅ All of Phase X
+   - ✅ Features A, B, C implemented
+   - ✅ Tests passing (X% coverage)
+   
+   ### In Progress
+   - ⏳ Feature D (Step {X} of devplan)
+   
+   ### Blocked
+   - ❌ Feature E blocked by: [reason]
+   
+   ### What's Next
+   The next agent should:
+   1. Continue from devplan.md Step {X}
+   2. Resolve blocker for Feature E (see notes)
+   3. Complete remaining X% of project
+   
+   ### Progress
+   - **Current Step:** {X} of {total}
+   - **Completion:** {X}%
+   - **Active Phase:** {phase_name}
+   
+   ## 🤖 Instructions for Next Agent
+   [Same protocol as above]
+   
+   ## 📚 Context Files
+   - `devplan.md` - Detailed plan with ✅ progress markers
+   - `project_design.md` - Architecture and design
+   - `PROGRESS.md` - Detailed progress log
+   - `CHANGELOG.md` - All changes made
+   
+   ## ⚠️ Known Issues & Notes
+   {any_issues_blockers_or_important_notes}
+   
+   ## ✅ Handoff Checklist
+   Before creating next handoff, verify:
+   - [ ] All completed steps marked ✅ in devplan
+   - [ ] All code committed and pushed
+   - [ ] All tests passing
+   - [ ] Documentation updated
+   - [ ] HANDOFF.md reflects current state
+   - [ ] Next agent has clear instructions
+   ```
+
+3. **Save the handoff:**
+   - Save as `HANDOFF_v{version}.md`
+   - Update main `HANDOFF.md` to point to latest
+   - Commit all changes
+
+4. **Inform the user:**
+   - "Handoff v{version} created and ready for next agent"
+   - Provide summary of what was completed
+   - List any blockers or decisions needed
+
+---
+
+## 📚 Context Files
+
+You have access to:
+- **`devplan.md`** - Your step-by-step guide (100-300 steps)
+- **`project_design.md`** - Complete architecture and design
+- **`HANDOFF.md`** - This file (update as you progress)
+- **`README.md`** - Will be updated as features are added
+
+Create these as you work:
+- **`PROGRESS.md`** - Detailed progress log
+- **`CHANGELOG.md`** - Document all changes
+- **`.env.example`** - Environment variables template
+
+---
+
+## 🎯 Development Plan Summary
+
+{provide_phase_summary_from_devplan}
+
+**Total Steps:** {total_steps}  
+**Estimated Time:** {total_estimate}  
+**Current Progress:** Step 1 of {total_steps} (0%)
+
+---
+
+## ✅ Definition of Done
+
+Project is complete when:
+- ✅ All {total_steps} steps in devplan.md marked complete
+- ✅ All tests passing (>80% coverage)
+- ✅ All documentation complete
+- ✅ README.md has full setup instructions
+- ✅ Clean git history with meaningful commits
+- ✅ No linting errors or warnings
+- ✅ Production deployment successful (if applicable)
+- ✅ All acceptance criteria from design met
+
+---
+
+## 💡 Success Tips for Autonomous Execution
+
+1. **Read before doing** - Understand each step fully before executing
+2. **Test frequently** - Run tests after every few steps
+3. **Commit often** - Better to have many small commits than few large ones
+4. **Document as you go** - Don't save documentation for the end
+5. **Ask for help** - If truly blocked, update HANDOFF.md and notify user
+6. **Stay organized** - Keep files structured, code clean, commits meaningful
+7. **Validate everything** - Don't assume a step worked, verify it
+
+---
+
+## 🚨 Emergency Protocols
+
+**If you encounter a critical blocker:**
+1. Document in devplan.md step notes
+2. Mark step as ❌ with blocker description
+3. Try to continue with non-dependent steps
+4. Update HANDOFF.md with blocker details
+5. Create handoff for human review
+
+**If tests start failing:**
+1. Stop and investigate immediately
+2. Don't continue to next steps
+3. Fix the issue or document why tests are failing
+4. Only proceed when tests are green
+
+**If unsure about implementation:**
+1. Check project_design.md for guidance
+2. Look at similar examples in codebase
+3. Follow best practices for the technology
+4. Document your decision in code comments
+5. Note in PROGRESS.md for review
+
+---
+
+## 📞 Need Help?
+
+Update HANDOFF.md and notify the user if:
+- Blocked for >30 minutes
+- Architectural decision needed
+- External dependency issue
+- Tests failing and can't determine cause
+- 50%+ complete and ready for next agent
+
+---
+
+**Generated by DevUssY v{version}**  
+**Ready for autonomous execution by Roo Code Orchestrator**
+
+---
+
+## 🎉 Let's Build Something Amazing!
+
+You have everything you need:
+- ✅ Comprehensive design
+- ✅ Detailed 100-300 step plan
+- ✅ Clear protocols and instructions
+- ✅ Self-updating mechanism
+- ✅ Handoff creation guide
+
+**Your mission:** Follow the devplan, build the project, update docs as you go, and create a handoff for the next agent when ready.
+
+**Go forth and code! 🚀**
+```
+
+---
+
+## Special Instructions
+
+1. **Fill in all {placeholders}** with actual values from the project
+2. **Include the complete devplan summary** - list all major phases
+3. **Make it motivating** - this agent is about to do a lot of work!
+4. **Be specific** - exact file names, exact commands, exact steps
+5. **Include examples** - show what good commits look like, good progress notes, etc.
+
+## ⚠️ CRITICAL: Check Phase 20 First!
+
+Before starting any work, the next agent MUST:
+
+1. **Read `devplan.md` Phase 20** - UI/UX Critical Fixes
+2. **Verify if Phase 20 is complete** - Check all ✅ checkboxes
+3. **If Phase 20 is NOT complete:**
+   - **STOP and complete Phase 20 FIRST**
+   - This is CRITICAL PATH - the web UI doesn't work without it
+   - All tasks are documented with file names, locations, and fixes
+   - Estimated time: 2-4 hours
+   - Definition of Done is clearly specified
+
+4. **If Phase 20 IS complete:**
+   - Proceed with remaining devplan steps
+   - Continue normal iterative workflow
+
+### Why Phase 20 is Critical
+
+The web interface has **missing functionality that blocks user workflow:**
+- ❌ Iteration UI doesn't display (users can't provide feedback)
+- ❌ LLM Config validation errors prevent project creation
+- ❌ Credential selection not working
+- ❌ Per-stage model selection not integrated
+
+**Without Phase 20, the web UI is broken.** Users cannot:
+- Create projects with custom models
+- Iterate on stages with feedback
+- Use the approved workflow designed in Phase 18
+
+### Phase 20 Checklist (Copy to HANDOFF.md)
+
+```markdown
+## 🚨 CRITICAL: Phase 20 Status
+
+**Check this FIRST before any other work:**
+
+### Backend Fixes (Must Complete)
+- [ ] Task 1: LLMConfig schema fix (add per-stage model fields)
+- [ ] Task 2: Iteration state management (pause after each stage)
+- [ ] Task 3: Credential selection in API request
+- [ ] Task 4: Per-stage model integration in pipeline
+- [ ] Task 5: Prompt template integration
+
+### Frontend Verification (Must Test)
+- [ ] Task 6: Iteration UI renders correctly
+- [ ] Task 7: Credential selector passes data to backend
+- [ ] Task 8: Error handling uses extractErrorMessage utility
+- [ ] Task 9: Form styling and dark mode working
+
+### Testing (Must Pass)
+- [ ] Task 10: End-to-end workflow test (full pipeline)
+- [ ] Task 11: Error scenario testing
+- [ ] Task 12: UI polish and accessibility
+
+### Definition of Done
+- [ ] User can create project with selected credential
+- [ ] User can select different models per stage
+- [ ] Project pauses after each stage for approval
+- [ ] Yellow "User Review Required" card displays
+- [ ] Iteration textarea visible and functional
+- [ ] "Approve & Continue" works
+- [ ] "Regenerate with Feedback" works
+- [ ] No React errors or console warnings
+
+**Status:** ❌ NOT COMPLETE (update when done: ✅ COMPLETE)
+```
+
+## Output Format
+
+Generate the COMPLETE handoff document following the structure above. This should be a production-ready document that clearly guides an autonomous coding agent through the entire project execution with self-updating and handoff creation capabilities.
+
+**IMPORTANT:** The handoff MUST include the Phase 20 checklist prominently at the top, making it impossible for the next agent to miss.

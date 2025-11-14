@@ -1,0 +1,199 @@
+{% import "_circular_macros.jinja" as circ with context %}
+
+You are an expert project manager and software architect. You have been given a project design document and need to create a high-level development plan that breaks the project into logical phases.
+
+{% if repo_context %}
+## 📁 Existing Repository Context
+
+This devplan is being generated for an **existing codebase**. Use this context to tailor your plan to fit the current project structure and patterns:
+
+**Project Type:** {{ repo_context.project_type }}
+
+**Structure:**
+- Source directories: {{ repo_context.structure.source_dirs | join(", ") if repo_context.structure.source_dirs else "None detected" }}
+- Test directories: {{ repo_context.structure.test_dirs | join(", ") if repo_context.structure.test_dirs else "None detected" }}
+- Config directories: {{ repo_context.structure.config_dirs | join(", ") if repo_context.structure.config_dirs else "None detected" }}
+- CI/CD: {{ "Yes" if repo_context.structure.has_ci else "No" }}
+
+**Dependencies:**
+{% if repo_context.dependencies %}
+{% for ecosystem, deps in repo_context.dependencies.items() %}
+- {{ ecosystem }}: {{ deps | join(", ") }}
+{% endfor %}
+{% else %}
+- No dependencies detected
+{% endif %}
+
+**Code Metrics:**
+- Total files: {{ repo_context.metrics.total_files }}
+- Total lines: {{ repo_context.metrics.total_lines }}
+
+**Detected Patterns:**
+- Test frameworks: {{ repo_context.patterns.test_frameworks | join(", ") if repo_context.patterns.test_frameworks else "None detected" }}
+- Build tools: {{ repo_context.patterns.build_tools | join(", ") if repo_context.patterns.build_tools else "None detected" }}
+
+**Important:** Your devplan should respect the existing project structure, follow detected patterns, and integrate smoothly with the current codebase.
+
+{% if code_samples %}
+
+### 📝 Code Samples from Repository
+
+The following code samples illustrate the existing architecture, patterns, and conventions:
+
+{{ code_samples }}
+
+**Use these samples to:**
+- Understand the current code style and conventions
+- Identify existing patterns to follow
+- See how similar features are implemented
+- Ensure consistency with the existing codebase
+
+{% endif %}
+
+{% endif %}
+
+{% if interactive_session %}
+## 🎯 Interactive Session Context
+
+This project was defined through an interactive guided questionnaire. The user provided responses to targeted questions about their requirements, technology preferences, and project goals. This context should inform your development plan to ensure it aligns with their stated needs and experience level.
+
+**Session Details:**
+- Questions asked: {{ interactive_session.question_count if interactive_session.question_count else "Multiple" }}
+- Project approach: Interactive, user-guided design
+{% endif %}
+
+## Project Design
+
+**Project Name:** {{ project_design.project_name }}
+
+### Objectives
+{% for obj in project_design.objectives %}
+- {{ obj }}
+{% endfor %}
+
+### Technology Stack
+{% for tech in project_design.tech_stack %}
+- {{ tech }}
+{% endfor %}
+
+### Architecture Overview
+{{ project_design.architecture_overview }}
+
+### Key Dependencies
+{% for dep in project_design.dependencies %}
+- {{ dep }}
+{% endfor %}
+
+### Challenges
+{% for challenge in project_design.challenges %}
+- {{ challenge }}
+{% endfor %}
+
+## Your Task
+
+Create a high-level development plan that organizes the project implementation into **5-10 logical phases**. Each phase should represent a major milestone or functional area of the project.
+
+### Requirements
+
+1. **Phase Structure**: Each phase should have:
+   - A clear, descriptive title
+   - A brief summary of what will be accomplished
+   - 3-7 major components or work items
+
+2. **Logical Ordering**: Phases should be ordered such that:
+   - Dependencies are respected (foundational work comes first)
+   - Each phase builds on previous phases
+   - The project can be developed incrementally
+
+3. **Comprehensive Coverage**: The phases should cover:
+   - Project initialization and setup
+   - Interactive features (if building an interactive application)
+   - Core functionality implementation
+   - Testing and quality assurance
+   - Documentation
+   - Deployment and distribution (if applicable)
+
+4. **Scope**: Phases may vary in scope as needed—do not artificially balance their sizes. Prefer completeness and clarity over uniformity.
+
+5. **User Experience**: If the project involves user interaction (CLI, web, mobile), ensure phases include:
+   - Interactive UI/UX design and implementation
+   - User input validation and error handling
+   - Help text, examples, and guidance for users
+   - Session management (if applicable)
+
+### Example Structure (DO NOT COPY - adapt to the specific project)
+
+```
+Phase 1: Project Initialization
+- Set up version control repository
+- Configure development environment
+- Install dependencies and tools
+- Create basic project structure
+
+Phase 2: Core Data Models
+- Define data schemas
+- Implement data validation
+- Create database migrations
+- Build data access layer
+
+Phase 3: Business Logic
+- Implement core algorithms
+- Build service layer
+- Add error handling
+- Create utility functions
+
+... (continue with additional phases as needed)
+```
+
+## Output Format
+
+Please structure your response as a numbered list of phases. For each phase:
+
+1. Start with "**Phase N: [Phase Title]**"
+2. Add a brief description (1-2 sentences)
+3. List the major components as bullet points
+4. Keep descriptions clear and actionable
+
+Focus on creating a roadmap that a development team can follow to build the project systematically.
+
+---
+
+## Execution Workflow and Update Ritual (Non‑negotiable)
+
+To ensure consistent, traceable progress across models, follow this ritual strictly during implementation. The user may set a group size for how many tasks to do before pausing to update artifacts.
+
+- Task group size: {{ task_group_size | default(3) }} tasks per group
+- After completing each group of {{ task_group_size | default(3) }} tasks, you MUST:
+  1. Update `devplan.md` progress and mark completed steps.
+  2. Update the active phase file (`phaseN.md`, where N is the current phase) with a concise progress summary.
+  3. Refresh/update the handoff notes in `handoff_prompt.md` with current status and next steps.
+  4. Only then proceed to the next group of tasks.
+
+### How to update the artifacts reliably
+
+Use these stable anchor markers so any model can locate and update the right sections:
+
+- In `devplan.md`:
+  - `<!-- PROGRESS_LOG_START --> ... <!-- PROGRESS_LOG_END -->`
+  - `<!-- NEXT_TASK_GROUP_START --> ... <!-- NEXT_TASK_GROUP_END -->`
+  - `<!-- PHASE_N_STATUS_START --> ... <!-- PHASE_N_STATUS_END -->` for each phase N (update `completed: X/Y`)
+- In the active phase file (`phaseN.md`):
+  - `<!-- PHASE_PROGRESS_START --> ... <!-- PHASE_PROGRESS_END -->`
+- In `handoff_prompt.md`:
+  - `<!-- HANDOFF_NOTES_START --> ... <!-- HANDOFF_NOTES_END -->`
+
+If a file does not exist, create it and include the anchors.
+
+### Minimal content to write at each update
+
+- devplan.md → Progress Log: bullet list of steps just completed with step numbers; Next Task Group: list the next {{ task_group_size | default(3) }} steps you will do.
+- phaseN.md → Phase Progress: 2–5 bullets summarizing outcomes, links to changed files, and blockers (if any).
+- handoff_prompt.md → succinct status summary (completed, in-progress, next {{ task_group_size | default(3) }} steps), and any decisions/tradeoffs.
+
+Do not skip this ritual. Stop after each group, perform the updates, then continue.
+
+{{ circ.context_budget_rules() }}
+
+{{ circ.update_anchors_help() }}
+
+{{ circ.devplan_anchors(num_phases=8) }}

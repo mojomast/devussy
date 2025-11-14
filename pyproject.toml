@@ -1,0 +1,143 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devussy"
+version = "0.1.1"
+description = "A Python-based LLM orchestration tool that automatically generates and maintains development plans"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "DevPlan Orchestrator Team"}
+]
+keywords = [
+    "llm",
+    "orchestration",
+    "devplan",
+    "development-planning",
+    "ai-automation",
+    "openai",
+    "pipeline",
+    "async"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Code Generators",
+    "Framework :: AsyncIO",
+]
+
+dependencies = [
+    "aiohttp>=3.11.0",
+    "openai>=1.58.0",
+    "pydantic>=2.10.0",
+    "jinja2>=3.1.0",
+    "python-dotenv>=1.0.0",
+    "gitpython>=3.1.0",
+    "tenacity>=8.2.0",
+    "pyyaml>=6.0.0",
+    "typer>=0.12.0",
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.12.0",
+    "flake8>=6.1.0",
+    "isort>=5.13.0",
+    "pdoc>=14.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mojomast/devussy-fresh"
+Repository = "https://github.com/mojomast/devussy-fresh"
+Documentation = "https://github.com/mojomast/devussy-fresh#readme"
+Issues = "https://github.com/mojomast/devussy-fresh/issues"
+
+[project.scripts]
+devussy = "src.cli:main"
+
+[tool.setuptools]
+packages = ["src", "src.clients", "src.pipeline", "src.ui"]
+
+[tool.setuptools.package-data]
+src = ["../templates/*.jinja", "../templates/docs/*.jinja", "../config/*.yaml"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\\.pyi?$'
+extend-exclude = '''
+/( 
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

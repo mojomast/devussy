@@ -1,0 +1,71 @@
+﻿# Handoff Prompt: {{ project_name }}
+<!-- HANDOFF_VERSION: 2.0 -->
+
+> **QuickStart:** Read QUICK_STATUS → Read PHASE_TASKS → Execute → Update anchors → Handoff
+
+{% if repo_context %}
+## 📁 Repository Context
+
+**Project Type:** {{ repo_context.project_type }} | **Files:** {{ repo_context.metrics.total_files }} | **Lines:** {{ repo_context.metrics.total_lines }}
+
+**Structure:** {{ repo_context.structure.source_dirs | join(", ") if repo_context.structure.source_dirs else "src/" }} (source), {{ repo_context.structure.test_dirs | join(", ") if repo_context.structure.test_dirs else "tests/" }} (tests)
+
+**Testing:** {{ repo_context.patterns.test_frameworks | join(", ") if repo_context.patterns.test_frameworks else "Standard" }} | **Build:** {{ repo_context.patterns.build_tools | join(", ") if repo_context.patterns.build_tools else "Standard" }}
+
+{% if code_samples %}
+
+### 📝 Code Samples Available
+
+Code samples from the repository are available in the full devplan for reference. These illustrate existing patterns and conventions.
+
+{% endif %}
+
+{% endif %}
+
+## Quick Status (Read This Always)
+<!-- QUICK_STATUS_START -->
+- Active Phase: {{ current_phase_number }} - {{ current_phase_name }}
+- Next Immediate Task: {{ next_task_id }} - {{ next_task_description }}
+- Blockers: {{ blockers | default('None known', true) }}
+<!-- QUICK_STATUS_END -->
+
+## How to Continue Development
+<!-- DEV_INSTRUCTIONS_START -->
+1. Read devplan.md between <!-- NEXT_TASK_GROUP_START --> and <!-- NEXT_TASK_GROUP_END --> only (~150 tokens).
+2. Open phase{{ current_phase_number }}.md and read only <!-- PHASE_TASKS_START --> to <!-- PHASE_TASKS_END --> (~100 tokens).
+3. Execute the next group of steps in order (do not skip ahead).
+4. After completing the group, update:
+   - devplan.md: add one line to PROGRESS_LOG and refresh NEXT_TASK_GROUP.
+   - phase{{ current_phase_number }}.md: add one line to PHASE_OUTCOMES (or legacy PHASE_PROGRESS).
+   - This file: update QUICK_STATUS only (3 lines, ~30 seconds).
+5. Stop after this group. Handoff if more work is needed.
+<!-- DEV_INSTRUCTIONS_END -->
+
+## Token Budget
+<!-- TOKEN_RULES_START -->
+**Stay under 500 tokens per turn by reading ONLY anchored sections:**
+
+| File | Section | Read? | Tokens |
+|------|---------|-------|--------|
+| devplan.md | NEXT_TASK_GROUP_START to END | ✅ | ~150 |
+| devplan.md | PROGRESS_LOG_START to END | ✅ if needed | ~100 |
+| phase{{ current_phase_number }}.md | PHASE_TASKS_START to END | ✅ | ~100 |
+| phase{{ current_phase_number }}.md | PHASE_OUTCOMES_START to END | ✅ if needed | ~50 |
+| handoff_prompt.md | QUICK_STATUS_START to END | ✅ | ~50 |
+| Everything else | (full files, verbose sections) | ❌ NEVER | - |
+
+**If you're reading more than 500 tokens, you're reading the wrong sections.**
+<!-- TOKEN_RULES_END -->
+
+## File References
+
+**For static or rarely-changing information, read these once and reference thereafter:**
+- project_design.md — Architecture, tech stack, core decisions.
+- README.md — Setup instructions, development workflow, code quality standards.
+- devplan.md — Main dashboard with all phases.
+
+---
+
+## Active Anchors
+<!-- HANDOFF_NOTES_START -->
+<!-- HANDOFF_NOTES_END -->

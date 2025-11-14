@@ -1,0 +1,115 @@
+# Git backup
+.git.backup/
+
+# Virtual environments (common names)
+venv/
+.venv/
+env/
+ENV/
+venv/*
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables
+.env
+.env.local
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Executable build artifacts
+*.spec
+*.exe
+*.bin
+*.app
+# PyInstaller
+build/
+dist/
+*.manifest
+# cx_Freeze
+build/exe.*/
+# py2exe
+lib/
+# Nuitka
+*.build/
+*.dist/
+*.onefile-build/
+
+# Distribution packages
+*.zip
+DevUssY_Interview_v*/
+*_v[0-9].[0-9].[0-9]/
+create_distribution.bat
+run_interview.bat
+*.bat
+
+# Standalone/distribution documentation
+DISTRIBUTION_GUIDE.md
+EXECUTABLE_SUMMARY.md
+FINAL_EXECUTABLE_SUMMARY.md
+INTERVIEW_STANDALONE_README.md
+QUICK_SETUP.md
+START_HERE.txt
+
+# Generated project outputs (in root)
+/devplan.md
+/handoff_prompt.md
+/project_design.md
+/phase*.md
+/rerun_commands.txt
+
+# Standalone script and config
+interview_standalone.py
+standalone_config/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# State
+.devussy_state/
+
+# Generated project folders (timestamped)
+# Pattern: docs/project-name_YYYYMMDD_HHMMSS/
+# To commit a specific project, use: git add -f docs/project-name_timestamp/
+docs/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9]/
+
+# Logs
+logs/
+*.log
+logs/interviews/
+
+# Web configuration (sensitive)
+web_projects/.config/credentials/
+web_projects/.config/projects/
+web_projects/.config/global_config.json
+*.lock
+
+# Test directories
+test_config_storage/
+test_dir_creation/
+
+# Node.js / npm
+node_modules/
+package-lock.json
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/
+dist/
+.vite/
