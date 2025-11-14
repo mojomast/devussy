@@ -1,0 +1,6 @@
+This is a test file to verify git and PR workflow.
+
+Created on: November 14, 2025
+Repository: github.com/mojomast/devussy-testing
+
+This file can be safely deleted after the PR is merged.
