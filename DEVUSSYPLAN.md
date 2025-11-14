@@ -1,5 +1,10 @@
 # DEVUSSYPLAN
 
+**Repository**: https://github.com/mojomast/devussy-testing  
+**Version**: 0.2.0 (Release 01)  
+**Status**: Phases 1-5 Complete (45% of roadmap)  
+**Tests**: 63 passing (56 unit + 7 integration)
+
 ## High-Level Goals
 
 - **Interview existing projects** and generate context-aware devplans.
@@ -483,6 +488,38 @@
   - [ ] `devussy generate-terminal` works with interview output.
   - [ ] Help + keyboard shortcuts documented.
   - [ ] Errors are surfaced clearly.
+
+---
+
+## Repository Status (Session 5)
+
+**Repository Created**: ✅ https://github.com/mojomast/devussy-testing
+
+**Release 01 Details**:
+- **Commit**: 809b6ed (initial commit with clean history)
+- **Files**: 146 files, 34,793 lines
+- **Status**: Live and accessible
+- **Tests**: All 63 tests passing
+- **Documentation**: Complete (README, session summaries, handoff docs)
+
+**What's Included**:
+- ✅ Phase 1-3: Interview Mode (repository analysis, LLM interview, code extraction)
+- ✅ Phase 4: Terminal UI Foundation (Textual-based TUI, phase state management)
+- ✅ Phase 5: Token Streaming (real-time LLM streaming, cancellation, concurrent generation)
+- ✅ Comprehensive test suite (56 unit + 7 integration)
+- ✅ Complete documentation and setup scripts
+
+**Git History**:
+- Clean repository created from fresh export
+- Bypassed corruption in original repository
+- Single initial commit with all Release 01 code
+- Ready for continued development
+
+**Next Steps**:
+1. Clone: `git clone https://github.com/mojomast/devussy-testing.git`
+2. Install: `pip install -e .`
+3. Test: `pytest -q`
+4. Continue with Phase 6 (Fullscreen Viewer)
 
 ---
 
