@@ -463,6 +463,14 @@ def generate_design(
     streaming: Annotated[
         bool, typer.Option("--streaming", help="Enable token streaming")
     ] = False,
+    auto_commit: Annotated[
+        bool,
+        typer.Option(
+            "--auto-commit",
+            help="Enable automatic git commits after each stage (disabled by default in interactive mode)",
+            is_flag=True,
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", help="Enable verbose logging")
     ] = False,
@@ -1676,6 +1684,13 @@ def interactive_design(
 
         if streaming:
             config.streaming_enabled = True
+
+        # Interactive interview defaults to no automatic git commits to avoid noisy graphs.
+        if not auto_commit and getattr(config, "git", None):
+            config.git.commit_after_design = False
+            config.git.commit_after_devplan = False
+            config.git.commit_after_handoff = False
+            config.git.auto_push = False
 
         # Determine interview mode
         use_llm_interview = llm_interview and not scripted

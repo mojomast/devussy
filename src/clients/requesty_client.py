@@ -24,6 +24,7 @@ class RequestyClient(LLMClient):
     def __init__(self, config: Any) -> None:
         super().__init__(config)
         llm = getattr(config, "llm", None)
+        self._llm_config = llm
         self._api_key = getattr(llm, "api_key", None)
 
         # Determine the effective base root for Requesty.
@@ -82,6 +83,28 @@ class RequestyClient(LLMClient):
 
         # Always append /chat/completions to the base root (which for default includes /v1).
         return f"{base}/chat/completions"
+
+    def _resolve_timeout_seconds(self, kwargs: dict[str, Any]) -> int:
+        """Determine the timeout for the current request."""
+
+        candidates = [
+            kwargs.get("api_timeout"),
+            getattr(self._llm_config, "api_timeout", None),
+            getattr(getattr(self._config, "llm", None), "api_timeout", None),
+            getattr(self._config, "api_timeout", None),
+        ]
+
+        for candidate in candidates:
+            if candidate in (None, ""):
+                continue
+            try:
+                value = int(candidate)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+
+        return 60
 
     async def _post_chat(self, prompt: str, **kwargs: Any) -> str:
         """Post to OpenAI-compatible chat completions endpoint."""
@@ -153,11 +176,7 @@ class RequestyClient(LLMClient):
         logger.info(f"[REQUESTY] Calling {self._endpoint} with model {model}")
         
         # Determine timeout settings. Allow per-call override via kwargs["api_timeout"].
-        timeout_seconds = kwargs.get("api_timeout", getattr(self._config, "api_timeout", 60))
-        try:
-            timeout_seconds = int(timeout_seconds) if timeout_seconds is not None else 60
-        except Exception:
-            timeout_seconds = 60
+        timeout_seconds = self._resolve_timeout_seconds(kwargs)
         
         # Important: Many frontier models can take >60s to return a response.
         # Use a generous total timeout and explicit sock_read/connect timeouts.
