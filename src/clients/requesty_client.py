@@ -256,6 +256,176 @@ class RequestyClient(LLMClient):
             logger.error(f"[REQUESTY CLIENT ERROR] {type(ce).__name__}: {ce}")
             raise
 
+    async def _post_chat_streaming(self, prompt: str, callback: callable, **kwargs: Any) -> str:
+        """Post to OpenAI-compatible chat completions endpoint with streaming."""
+        import json
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        model = kwargs.get("model", self._model)
+        
+        # VALIDATE MODEL FORMAT - Requesty requires provider/model format
+        if "/" not in model:
+            error_msg = (
+                f"Invalid model format for Requesty: '{model}'. "
+                f"Must use provider/model format (e.g., 'openai/gpt-4o', 'anthropic/claude-3-5-sonnet'). "
+                f"See https://docs.requesty.ai/models for available models."
+            )
+            logger.error(f"[REQUESTY ERROR] {error_msg}")
+            raise ValueError(error_msg)
+        
+        temperature = kwargs.get("temperature", self._temperature)
+        max_tokens = kwargs.get("max_tokens", self._max_tokens)
+        # For reasoning models (e.g., gpt-5), OpenAI-style APIs prefer max_output_tokens
+        max_output_tokens = kwargs.get("max_output_tokens", max_tokens)
+        reasoning_effort = kwargs.get("reasoning_effort", None)
+        top_p = kwargs.get("top_p", None)
+
+        # Add recommended headers for better analytics
+        headers = {
+            "Authorization": f"Bearer {self._api_key}" if self._api_key else "",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://devussy.app",  # Optional but improves analytics
+            "X-Title": "DevUssY",  # Optional but improves analytics
+        }
+        
+        # Use OpenAI chat format with streaming enabled
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,  # Enable streaming per Requesty documentation
+        }
+        # Supply max_output_tokens for models that support reasoning-style limits
+        payload["max_output_tokens"] = max_output_tokens
+        # Resolve reasoning effort from kwargs or config and include for GPT-5 family only
+        resolved_reasoning = kwargs.get(
+            "reasoning_effort",
+            getattr(getattr(self._config, "llm", None), "reasoning_effort", None),
+        )
+        if ("gpt-5" in model) and resolved_reasoning:
+            payload["reasoning"] = {"effort": str(resolved_reasoning)}
+        if top_p is not None:
+            payload["top_p"] = top_p
+
+        # VERBOSE DEBUG LOGGING - Only show if debug mode enabled
+        if self._debug:
+            print("\n" + "="*80)
+            print("[REQUESTY DEBUG] Making STREAMING API call")
+            print(f"Endpoint: {self._endpoint}")
+            print(f"Model: {model}")
+            print(f"Headers: {json.dumps(headers, indent=2)}")
+            dbg_payload = dict(payload)
+            dbg_payload["messages"] = [{"role": "user", "content": f"{prompt[:100]}..."}]
+            print(f"Payload: {json.dumps(dbg_payload, indent=2)}")
+            print("="*80 + "\n")
+        logger.info(f"[REQUESTY] Calling {self._endpoint} with model {model} (STREAMING)")
+        
+        # Determine timeout settings. Allow per-call override via kwargs["api_timeout"].
+        timeout_seconds = self._resolve_timeout_seconds(kwargs)
+        
+        # Important: Many frontier models can take >60s to return a response.
+        # Use a generous total timeout and explicit sock_read/connect timeouts.
+        # We keep 'total' so the whole request can take up to timeout_seconds.
+        timeout = aiohttp.ClientTimeout(
+            total=timeout_seconds,
+            connect=30,
+            sock_connect=30,
+            sock_read=timeout_seconds,
+        )
+        
+        collected_content = []
+        
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(
+                    self._endpoint, json=payload, headers=headers
+                ) as resp:
+                    # IMPROVED ERROR HANDLING - Capture Requesty's error details
+                    if resp.status >= 400:
+                        error_body = await resp.text()
+                        if self._debug:
+                            print("\n" + "="*80)
+                            print(f"[REQUESTY ERROR] Streaming response status: {resp.status}")
+                            print(f"[REQUESTY ERROR] Streaming response body: {error_body}")
+                            print("="*80 + "\n")
+                        logger.error(f"[REQUESTY ERROR] {resp.status}: {error_body}")
+                        raise Exception(
+                            f"Requesty API error {resp.status}: {error_body}\n"
+                            f"Request model: {model}\n"
+                            f"Endpoint: {self._endpoint}"
+                        )
+                    
+                    # Process streaming response (Server-Sent Events format)
+                    async for line in resp.content:
+                        line = line.decode('utf-8').strip()
+                        if line.startswith('data: '):
+                            data_str = line[6:]  # Remove 'data: ' prefix
+                            
+                            # Skip heartbeat and empty messages
+                            if data_str == '[DONE]' or not data_str:
+                                continue
+                            
+                            try:
+                                data = json.loads(data_str)
+                                
+                                # Extract content from streaming response
+                                # OpenAI streaming format: choices[0].delta.content
+                                delta = data.get("choices", [{}])[0].get("delta", {})
+                                content = delta.get("content", "")
+                                
+                                if content:
+                                    # Call the callback with each token/chunk
+                                    if callback:
+                                        try:
+                                            callback(content)
+                                        except Exception as callback_error:
+                                            logger.warning(f"[REQUESTY] Callback error: {callback_error}")
+                                    
+                                    # Collect the full response
+                                    collected_content.append(content)
+                                    
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"[REQUESTY] Failed to parse streaming data: {data_str}, error: {e}")
+                                continue
+                    
+                    # Record usage metadata if present in final chunk
+                    try:
+                        # Usage might be in the last non-[DONE] chunk
+                        if collected_content:
+                            # OpenAI doesn't typically send usage in streaming mode,
+                            # but some providers do. We'll try to capture it if available.
+                            pass
+                    except Exception:
+                        self.last_usage_metadata = None
+                    
+                    # VERBOSE DEBUG LOGGING - Success response
+                    if self._debug:
+                        full_response = "".join(collected_content)
+                        print("\n" + "="*80)
+                        print(f"[REQUESTY DEBUG] Streaming response completed")
+                        print(f"[REQUESTY DEBUG] Total chunks received: {len(collected_content)}")
+                        print(f"[REQUESTY DEBUG] Full response length: {len(full_response)} chars")
+                        print(f"[REQUESTY DEBUG] Full response preview: {full_response[:200]}...")
+                        print("="*80 + "\n")
+                    logger.info(f"[REQUESTY] Streaming success: {len(collected_content)} chunks")
+                    
+                    # Return the complete response
+                    return "".join(collected_content)
+                    
+        except asyncio.TimeoutError as te:
+            # Surface a clearer message for retries/UX
+            logger.error(
+                f"[REQUESTY TIMEOUT] Streaming request exceeded timeout of {timeout_seconds}s for model {model} at {self._endpoint}"
+            )
+            raise te
+        except aiohttp.ClientError as ce:
+            # Network-level issues
+            logger.error(f"[REQUESTY CLIENT ERROR] {type(ce).__name__}: {ce}")
+            raise
+
     async def generate_completion(self, prompt: str, **kwargs: Any) -> str:
         async for attempt in AsyncRetrying(
             reraise=True,
@@ -268,6 +438,34 @@ class RequestyClient(LLMClient):
         ):
             with attempt:
                 return await self._post_chat(prompt, **kwargs)
+
+    async def generate_completion_streaming(
+        self, prompt: str, callback: callable, **kwargs: Any
+    ) -> str:
+        """Generate completion with streaming token callback.
+        
+        Implements true streaming support for Requesty AI following their documentation:
+        https://docs.requesty.ai/features/streaming
+        
+        Args:
+            prompt: The input prompt to send to the model.
+            callback: Function called with each token/chunk as it arrives.
+            **kwargs: Provider-specific generation parameters.
+            
+        Returns:
+            The complete generated response as a string.
+        """
+        async for attempt in AsyncRetrying(
+            reraise=True,
+            stop=stop_after_attempt(self._max_attempts),
+            wait=wait_exponential(
+                multiplier=self._initial_delay,
+                max=self._max_delay,
+                exp_base=self._exp_base,
+            ),
+        ):
+            with attempt:
+                return await self._post_chat_streaming(prompt, callback, **kwargs)
 
     async def generate_multiple(self, prompts: Iterable[str]) -> List[str]:
         concurrency = getattr(self._config, "max_concurrent_requests", 5) or 5

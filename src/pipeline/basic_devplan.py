@@ -72,8 +72,48 @@ class BasicDevPlanGenerator:
 
         logger.debug(f"Rendered prompt: {prompt[:200]}...")
 
+        # Optional streaming handler for console output
+        streaming_handler = llm_kwargs.pop("streaming_handler", None)
+
         # Call the LLM
-        response = await self.llm_client.generate_completion(prompt, **llm_kwargs)
+        streaming_enabled = hasattr(self.llm_client, "streaming_enabled") and getattr(
+            self.llm_client, "streaming_enabled", False
+        )
+
+        if streaming_enabled and streaming_handler is not None:
+            # Use streaming with console/token handler
+            async with streaming_handler:
+                response_chunks: list[str] = []
+
+                async def token_callback(token: str) -> None:
+                    response_chunks.append(token)
+                    await streaming_handler.on_token_async(token)
+
+                full_response = await self.llm_client.generate_completion_streaming(
+                    prompt,
+                    callback=token_callback,
+                    **llm_kwargs,
+                )
+
+                await streaming_handler.on_completion_async(full_response)
+
+            response = full_response
+
+        elif streaming_enabled:
+            # Use streaming without external handler
+            response = ""
+
+            async def token_callback(token: str) -> None:
+                nonlocal response
+                response += token
+
+            response = await self.llm_client.generate_completion_streaming(
+                prompt, callback=token_callback, **llm_kwargs
+            )
+        else:
+            # Use non-streaming for backwards compatibility
+            response = await self.llm_client.generate_completion(prompt, **llm_kwargs)
+            
         logger.info(f"Received LLM response ({len(response)} chars)")
         logger.debug(f"Devplan response preview: {response[:800]}...")
 

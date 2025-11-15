@@ -241,7 +241,10 @@ When interview is complete, output a JSON block with extracted data:
         initial_response = self._send_to_llm(
             "Hi! I'm excited to help you plan your project. Let's start with the basics - what would you like to name your project?"
         )
-        self._display_llm_response(initial_response)
+        # Only display if streaming wasn't already showing it
+        streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+        if not streaming_enabled:
+            self._display_llm_response(initial_response)
         
         # Main conversation loop
         while True:
@@ -280,7 +283,10 @@ When interview is complete, output a JSON block with extracted data:
             
             # Send user input to LLM
             response = self._send_to_llm(user_input)
-            self._display_llm_response(response)
+            # Only display if streaming wasn't already showing it
+            streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+            if not streaming_enabled:
+                self._display_llm_response(response)
             # Update token usage snapshot for menu display
             self._refresh_token_usage()
             
@@ -628,18 +634,52 @@ When interview is complete, output a JSON block with extracted data:
         
         # Get LLM response
         try:
-            # Single-line, non-wrapping status text while spinner is active
-            status_line = Text(self._spinner_status_line(), style="black on white")
-            with console.status(status_line, spinner="dots"):
-                response = self.llm_client.generate_completion_sync(conversation_text)
+            # Check if streaming is enabled
+            streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+            
+            if streaming_enabled:
+                # Use streaming for real-time token display
+                console.print("\n[blue]🎵 Devussy[/blue]:")
+                
+                # Collect streaming response
+                response_chunks = []
+                
+                def token_callback(token: str) -> None:
+                    """Callback for each streaming token."""
+                    response_chunks.append(token)
+                    # Display token in real-time (without newlines for smooth streaming)
+                    console.print(token, end="", style="blue")
+                
+                # Make streaming request
+                import asyncio
+                response = asyncio.run(self.llm_client.generate_completion_streaming(
+                    conversation_text, token_callback
+                ))
+                
+                console.print()  # Add newline after streaming
+                console.print()  # Add spacing
+                
+            else:
+                # Use non-streaming fallback
+                # Single-line, non-wrapping status text while spinner is active
+                status_line = Text(self._spinner_status_line(), style="black on white")
+                with console.status(status_line, spinner="dots"):
+                    response = self.llm_client.generate_completion_sync(conversation_text)
+                
+                # Display response normally
+                self._display_llm_response(response)
+            
             if self.verbose:
                 console.print(f"[dim]Response length: {len(response)} chars[/dim]")
                 console.print("[dim]--- End API Request ---[/dim]\n")
             logger.debug(f"LLM response: {response[:200]}...")
+            
         except Exception as e:
             console.print(f"[red]❌ Error communicating with LLM: {e}[/red]")
             logger.error(f"LLM API error: {e}", exc_info=True)
             response = "I'm having trouble connecting right now. Could you try again?"
+            # Display error response
+            self._display_llm_response(response)
         
         # Add LLM response to conversation history
         self.conversation_history.append({
@@ -650,6 +690,72 @@ When interview is complete, output a JSON block with extracted data:
         # Log full conversation exchange
         logger.info(f"USER: {user_input}")
         logger.info(f"ASSISTANT: {response[:500]}...")  # Log first 500 chars
+        
+        return response
+
+    async def _send_to_llm_streaming(self, user_input: str, callback=None) -> str:
+        """Send user input to LLM and get streaming response.
+        
+        Args:
+            user_input: User input message
+            callback: Optional callback function for each token
+            
+        Returns:
+            Complete LLM response
+        """
+        # Add user message to conversation history
+        self.conversation_history.append({
+            "role": "user",
+            "content": user_input
+        })
+        
+        # Format conversation for LLM
+        conversation_text = self._format_conversation_for_llm()
+        
+        if self.verbose:
+            console.print("\n[dim]--- Streaming API Request ---[/dim]")
+            console.print(f"[dim]Provider: {self.config.llm.provider}[/dim]")
+            console.print(f"[dim]Model: {self.config.llm.model}[/dim]")
+            console.print(f"[dim]Conversation length: {len(conversation_text)} chars[/dim]")
+        
+        logger.debug(f"Sending to LLM (streaming): {conversation_text[:200]}...")
+        
+        # Get LLM streaming response
+        try:
+            # Use streaming for real-time token display
+            response_chunks = []
+            
+            def token_callback(token: str) -> None:
+                """Callback for each streaming token."""
+                response_chunks.append(token)
+                # Call custom callback if provided
+                if callback:
+                    callback(token)
+            
+            # Make streaming request
+            response = await self.llm_client.generate_completion_streaming(
+                conversation_text, token_callback
+            )
+            
+            if self.verbose:
+                console.print(f"[dim]Streaming response length: {len(response)} chars[/dim]")
+                console.print("[dim]--- End Streaming API Request ---[/dim]\n")
+            logger.debug(f"LLM streaming response: {response[:200]}...")
+            
+        except Exception as e:
+            console.print(f"[red]❌ Error communicating with LLM: {e}[/red]")
+            logger.error(f"LLM API streaming error: {e}", exc_info=True)
+            response = "I'm having trouble connecting right now. Could you try again?"
+        
+        # Add LLM response to conversation history
+        self.conversation_history.append({
+            "role": "assistant", 
+            "content": response
+        })
+        
+        # Log full conversation exchange
+        logger.info(f"USER: {user_input}")
+        logger.info(f"ASSISTANT (streaming): {response[:500]}...")  # Log first 500 chars
         
         return response
 

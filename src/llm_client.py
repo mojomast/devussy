@@ -24,6 +24,8 @@ class LLMClient(abc.ABC):
 
     def __init__(self, config: Any) -> None:
         self._config = config
+        # Support streaming enabled flag if present in config
+        self.streaming_enabled = getattr(config, "streaming_enabled", False)
 
     @abc.abstractmethod
     async def generate_completion(self, prompt: str, **kwargs: Any) -> str:

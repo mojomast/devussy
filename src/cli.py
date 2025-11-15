@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import traceback
 from pathlib import Path
-from typing import Optional
-import sys
-import time
-import logging
+from typing import Annotated, Optional
 
 import typer
+from dotenv import load_dotenv
 from typing_extensions import Annotated
 
 from .__version__ import __version__
@@ -28,6 +27,8 @@ from .pipeline.compose import PipelineOrchestrator
 from .progress_reporter import PipelineProgressReporter
 from .state_manager import StateManager
 from .ui.menu import run_main_menu, run_menu, SessionSettings, apply_settings_to_config, load_last_used_preferences
+from .terminal.terminal_ui import run_terminal_ui
+from .terminal.phase_generator import TerminalPhaseGenerator
 
 from rich.console import Console
 from rich.panel import Panel
@@ -2477,6 +2478,377 @@ def launch(
         typer.echo(f"\n❌ Error in launch: {str(e)}", err=True, color=True)
         logger.error(f"Error in launch: {e}", exc_info=True)
         raise typer.Exit(code=1)
+
+
+@app.command()
+def generate_terminal(
+    devplan_file: Annotated[
+        str, 
+        typer.Argument(help="Path to devplan JSON file from interview or generation")
+    ],
+    config_path: Annotated[
+        Optional[str], 
+        typer.Option("--config", help="Path to config file")
+    ] = None,
+    provider: Annotated[
+        Optional[str], 
+        typer.Option("--provider", help="LLM provider override")
+    ] = None,
+    model: Annotated[
+        Optional[str], 
+        typer.Option("--model", help="Model override")
+    ] = None,
+    select_model: Annotated[
+        bool,
+        typer.Option("--select-model", help="Interactively choose a Requesty model for this run")
+    ] = False,
+    temperature: Annotated[
+        Optional[float],
+        typer.Option(
+            "--temperature",
+            help="Sampling temperature override for the active model",
+            min=0.0,
+            max=2.0,
+        ),
+    ] = None,
+    max_tokens: Annotated[
+        Optional[int],
+        typer.Option(
+            "--max-tokens",
+            help="Maximum tokens to request from the model",
+            min=1,
+        ),
+    ] = None,
+    max_concurrent: Annotated[
+        Optional[int],
+        typer.Option("--max-concurrent", help="Maximum concurrent API requests")
+    ] = None,
+    output_dir: Annotated[
+        Optional[str], 
+        typer.Option("--output-dir", help="Output directory")
+    ] = None,
+    verbose: Annotated[
+        bool, 
+        typer.Option("--verbose", help="Enable verbose logging")
+    ] = False,
+    debug: Annotated[
+        bool, 
+        typer.Option("--debug", help="Enable debug mode with full tracebacks")
+    ] = False,
+) -> None:
+    """Launch the terminal streaming UI for phase generation from a devplan."""
+    try:
+        # Load config
+        config = _load_app_config(
+            config_path,
+            provider,
+            model,
+            output_dir,
+            verbose,
+            temperature,
+            max_tokens,
+        )
+
+        if select_model:
+            _select_requesty_model_interactively(config)
+
+        if max_concurrent:
+            config.max_concurrent_requests = max_concurrent
+
+        # Validate devplan file
+        if not devplan_file or not devplan_file.strip():
+            typer.echo("Error: DevPlan file path is required", err=True, color=True)
+            raise typer.Exit(code=1)
+
+        devplan_path = Path(devplan_file)
+        if not devplan_path.exists():
+            typer.echo(
+                f"Error: DevPlan file not found: {devplan_path.absolute()}",
+                err=True,
+                color=True,
+            )
+            raise typer.Exit(code=1)
+
+        if not devplan_path.is_file():
+            typer.echo(
+                f"Error: Path is not a file: {devplan_path.absolute()}",
+                err=True,
+                color=True,
+            )
+            raise typer.Exit(code=1)
+
+        # Load devplan
+        with open(devplan_path, "r", encoding="utf-8") as f:
+            devplan_data = json.load(f)
+            devplan = DevPlan.model_validate(devplan_data)
+
+        # Apply last-used preferences
+        try:
+            prefs = load_last_used_preferences()
+            apply_settings_to_config(config, prefs)
+        except Exception:
+            pass
+
+        # Create phase generator
+        llm_client = create_llm_client(config)
+        from .terminal.phase_state import PhaseStateManager
+        state_manager = PhaseStateManager(["plan", "design", "implement", "test", "review"])
+        phase_generator = TerminalPhaseGenerator(llm_client, state_manager)
+
+        # Display startup info
+        typer.echo("\n" + "=" * 60)
+        typer.echo(f"🎼 Launching Devussy Terminal UI")
+        typer.echo("=" * 60 + "\n")
+        typer.echo(f"DevPlan: {devplan.project_name}")
+        typer.echo(f"Phases: {len(devplan.phases)} configured")
+        typer.echo(f"Provider: {config.llm.provider}")
+        typer.echo(f"Model: {config.llm.model}")
+        typer.echo("\n🚀 Starting terminal UI...\n")
+
+        # Launch terminal UI
+        run_terminal_ui(
+            phase_names=["plan", "design", "implement", "test", "review"],
+            phase_generator=phase_generator,
+            devplan=devplan,
+        )
+
+    except json.JSONDecodeError as e:
+        typer.echo(
+            f"\n❌ Error: Invalid JSON in devplan file: {str(e)}",
+            err=True,
+            color=True,
+        )
+        logger.error(f"JSON decode error: {e}", exc_info=True)
+        if debug:
+            typer.echo("\nDebug traceback:", err=True)
+            typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        logger.error(f"Error in generate_terminal: {e}", exc_info=True)
+        if debug:
+            typer.echo("\nDebug traceback:", err=True)
+            typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def interactive(
+    config_path: Annotated[
+        Optional[str], 
+        typer.Option("--config", help="Path to config file")
+    ] = None,
+    provider: Annotated[
+        Optional[str], 
+        typer.Option("--provider", help="LLM provider override")
+    ] = None,
+    model: Annotated[
+        Optional[str], 
+        typer.Option("--model", help="Model override")
+    ] = None,
+    select_model: Annotated[
+        bool,
+        typer.Option("--select-model", help="Interactively choose a Requesty model for this run")
+    ] = False,
+    temperature: Annotated[
+        Optional[float],
+        typer.Option(
+            "--temperature",
+            help="Sampling temperature override for the active model",
+            min=0.0,
+            max=2.0,
+        ),
+    ] = None,
+    max_tokens: Annotated[
+        Optional[int],
+        typer.Option(
+            "--max-tokens",
+            help="Maximum tokens to request from the model",
+            min=1,
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Optional[str], 
+        typer.Option("--output-dir", help="Output directory")
+    ] = None,
+    verbose: Annotated[
+        bool, 
+        typer.Option("--verbose", help="Enable verbose logging")
+    ] = False,
+    debug: Annotated[
+        bool, 
+        typer.Option("--debug", help="Enable debug mode with full tracebacks")
+    ] = False,
+) -> None:
+    """Launch interactive mode with real-time streaming in a single window.
+    
+    This command runs the complete interactive workflow in your current terminal:
+    1. Interactive LLM-driven requirements gathering with streaming
+    2. Real-time project design generation with streaming
+    3. Real-time devplan generation with streaming  
+    4. Real-time phase generation (plan, design, implement, test, review) with streaming in terminal UI
+    Everything runs in terminal UI with full real-time token streaming.
+    """
+    async def run_interactive():
+        try:
+            # Load config
+            config = _load_app_config(
+                config_path,
+                provider,
+                model,
+                output_dir,
+                verbose,
+                temperature,
+                max_tokens,
+            )
+
+            if select_model:
+                _select_requesty_model_interactively(config)
+
+            # Apply last-used preferences
+            try:
+                prefs = load_last_used_preferences()
+                apply_settings_to_config(config, prefs)
+            except Exception:
+                pass
+
+            # Enable streaming for real-time feedback
+            config.streaming_enabled = True
+            
+            print("🎼 DevUssY Interactive Mode - Single Window")
+            print("=" * 50)
+            print("Running everything in this terminal with real-time streaming...")
+            print()
+            
+            # Step 1: Run interview with terminal UI
+            print("📋 Step 1: Interactive Requirements Gathering")
+            print("-" * 40)
+            
+            # Analyze current repository if in one
+            repo_analysis = None
+            try:
+                from .interview import RepositoryAnalyzer
+                analyzer = RepositoryAnalyzer(Path.cwd())
+                repo_analysis = analyzer.analyze()
+                if repo_analysis:
+                    print(f"📁 Analyzed repository: {repo_analysis.project_type}")
+            except Exception as e:
+                logging.warning(f"Repository analysis failed: {e}")
+            
+            print("🚀 Launching console-based interactive interview (fallback)...")
+            print("You'll stay in this terminal while we gather project requirements.\n")
+
+            # Run interview using the existing console-based LLMInterviewManager
+            from .llm_interview import LLMInterviewManager
+
+            interview_manager = LLMInterviewManager(
+                config=config,
+                verbose=verbose,
+                repo_analysis=repo_analysis,
+            )
+
+            # Run the (blocking) console interview in a background thread so
+            # its internal asyncio.run() calls are not nested inside the
+            # interactive command's event loop.
+            answers = await asyncio.to_thread(interview_manager.run)
+            if not answers:
+                print("❌ Interview was cancelled or failed.")
+                return
+
+            # Convert collected data to generate_design inputs
+            interview_data = interview_manager.to_generate_design_inputs()
+
+            print("✅ Interview completed successfully!")
+            
+            # Step 2: Generate design with streaming
+            print("\n📐 Step 2: Project Design Generation")
+            print("-" * 40)
+            
+            # Convert to design inputs
+            design_inputs = interview_data
+            
+            # Create orchestrator
+            orchestrator = _create_orchestrator(config)
+            
+            print("📝 Generating project design with real-time streaming...")
+            design = await orchestrator.project_design_gen.generate(
+                project_name=design_inputs["name"],
+                languages=design_inputs["languages"].split(","),
+                requirements=design_inputs["requirements"],
+                frameworks=design_inputs.get("frameworks", "").split(",") if design_inputs.get("frameworks") else None,
+                apis=design_inputs.get("apis", "").split(",") if design_inputs.get("apis") else None,
+            )
+            print("✅ Project design generated!")
+            
+            # Step 3: Generate devplan with streaming
+            print("\n📋 Step 3: Development Plan Generation")
+            print("-" * 40)
+            
+            print("📋 Creating basic development plan structure with real-time streaming...")
+            devplan = await orchestrator.basic_devplan_gen.generate(design)
+            print("✅ Development plan structure created!")
+            
+            # Step 4: Generate all phases with streaming in terminal UI
+            print("\n🚀 Step 4: Phase Generation with Real-time Streaming")
+            print("-" * 40)
+            print("Launching terminal UI for parallel phase generation...")
+            print("Watch as all 5 phases are generated simultaneously with live streaming!\n")
+            
+            # Create phase generator with proper dependencies for terminal UI
+            from .clients.factory import create_llm_client
+            from .terminal.phase_state import PhaseStateManager
+            from .terminal.phase_generator import TerminalPhaseGenerator
+            from .terminal.terminal_ui import run_terminal_ui
+            
+            llm_client = create_llm_client(config)
+            state_manager = PhaseStateManager(["plan", "design", "implement", "test", "review"])
+            phase_generator = TerminalPhaseGenerator(llm_client, state_manager)
+            
+            # Launch terminal UI with streaming phase generation
+            run_terminal_ui(
+                phase_names=["plan", "design", "implement", "test", "review"],
+                phase_generator=phase_generator,
+                devplan=devplan,
+            )
+            
+            print("\n🎉 All phases generated successfully in terminal UI!")
+            print(f"✅ Generated phases for project: {devplan.project_name}")
+            
+            # Save results
+            output_path = Path(output_dir) if output_dir else Path.cwd()
+            devplan_file = output_path / "devplan.json"
+            
+            with open(devplan_file, 'w', encoding='utf-8') as f:
+                json.dump(devplan.model_dump(), f, indent=2)
+            
+            # Save generated phases from state manager
+            phases = {}
+            for phase_name in ["plan", "design", "implement", "test", "review"]:
+                phase_state = state_manager.get_state(phase_name)
+                phases[phase_name] = phase_state.content
+            
+            phases_file = output_path / "phases.json"
+            with open(phases_file, 'w', encoding='utf-8') as f:
+                json.dump(phases, f, indent=2)
+            
+            print(f"\n📁 Results saved to:")
+            print(f"   Development plan: {devplan_file}")
+            print(f"   Generated phases: {phases_file}")
+            
+            print("\n✅ Interactive mode completed successfully!")
+            
+        except typer.Exit:
+            raise
+        except Exception as e:
+            logger.error(f"Error in interactive mode: {e}", exc_info=True)
+            if debug:
+                typer.echo("\nDebug traceback:", err=True)
+                typer.echo(traceback.format_exc(), err=True)
+            typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+            raise typer.Exit(code=1)
+    
+    # Run the async function
+    asyncio.run(run_interactive())
 
 
 @app.command()
