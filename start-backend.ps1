@@ -52,4 +52,8 @@ Write-Host "  DETOUR_METADATA_LOGGING_ENABLED: $metaEnabled" -ForegroundColor $(
 
 # Start the backend
 Write-Host "`nStarting backend server..." -ForegroundColor Green
+$env:PYTHONUTF8 = '1'
+$env:PYTHONIOENCODING = 'utf-8'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::InputEncoding  = [System.Text.UTF8Encoding]::new()
 python -m src.web.app

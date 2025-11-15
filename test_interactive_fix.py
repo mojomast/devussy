@@ -65,7 +65,7 @@ def test_script_creation():
 if __name__ == "__main__":
     try:
         test_script_creation()
-        print("\n🎉 All tests passed! The interactive mode fix should work correctly.")
+        print("\n[CELEBRATE] All tests passed! The interactive mode fix should work correctly.")
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         sys.exit(1)

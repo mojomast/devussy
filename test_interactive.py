@@ -14,7 +14,7 @@ from src.window_manager import WindowManager
 
 def test_window_manager():
     """Test the window manager functionality."""
-    print("🧪 Testing Window Manager...")
+    print("[TEST] Testing Window Manager...")
     
     # Load config
     config = load_config()
@@ -68,7 +68,7 @@ def test_window_manager():
     wm.cleanup()
     print("✓ Cleanup completed")
     
-    print("\n🎉 All tests passed! The interactive mode system is working correctly.")
+    print("\n[CELEBRATE] All tests passed! The interactive mode system is working correctly.")
     return True
 
 if __name__ == "__main__":

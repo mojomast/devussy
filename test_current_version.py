@@ -25,13 +25,13 @@ def test_current_version():
     
     # Check if it mentions single window
     if "single window" in docstring.lower():
-        print("✅ Single-window version detected")
+        print("[OK] Single-window version detected")
         return True
     elif "two terminal windows" in docstring.lower():
-        print("❌ Multi-window version detected")
+        print("[ERROR] Multi-window version detected")
         return False
     else:
-        print("⚠️  Unknown version")
+        print("[WARN] Unknown version")
         print(f"Full docstring: {docstring}")
         return False
 
@@ -53,13 +53,13 @@ def check_file_contents():
     print(f"Has 'launch_interactive_mode': {has_launch_interactive}")
     
     if has_single_window and not has_multi_window and not has_launch_interactive:
-        print("✅ File contains single-window version")
+        print("[OK] File contains single-window version")
         return True
     elif has_multi_window or has_launch_interactive:
-        print("❌ File contains multi-window version")
+        print("[ERROR] File contains multi-window version")
         return False
     else:
-        print("⚠️  File state unclear")
+        print("[WARN] File state unclear")
         return False
 
 def find_all_interactive_functions():
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     find_all_interactive_functions()
     
     if version_ok and file_ok:
-        print("\n✅ Everything looks correct - should be single-window mode")
+        print("\n[OK] Everything looks correct - should be single-window mode")
     else:
-        print("\n❌ There are still issues with the version")
+        print("\n[ERROR] There are still issues with the version")
         print("Try restarting your terminal and clearing Python cache")

@@ -18,7 +18,7 @@ def test_fixes():
         analyzer = RepositoryAnalyzer(Path.cwd())
         print("✓ RepositoryAnalyzer can be initialized with root_path")
     except Exception as e:
-        print(f"❌ RepositoryAnalyzer error: {e}")
+        print(f"[ERROR] RepositoryAnalyzer error: {e}")
         return False
     
     # Test 2: LLMInterviewManager method
@@ -39,7 +39,7 @@ def test_fixes():
         assert hasattr(manager, 'to_generate_design_inputs'), "Missing to_generate_design_inputs() method"
         print("✓ LLMInterviewManager has correct methods")
     except Exception as e:
-        print(f"❌ LLMInterviewManager error: {e}")
+        print(f"[ERROR] LLMInterviewManager error: {e}")
         return False
     
     # Test 3: CLI interactive function
@@ -51,7 +51,7 @@ def test_fixes():
         assert "real-time streaming" in docstring.lower(), "Streaming not mentioned"
         print("✓ CLI interactive function is updated for single-window mode")
     except Exception as e:
-        print(f"❌ CLI interactive error: {e}")
+        print(f"[ERROR] CLI interactive error: {e}")
         return False
     
     # Test 4: Check that old multi-window code is removed
@@ -79,7 +79,7 @@ def test_expected_behavior():
     print("EXPECTED BEHAVIOR AFTER FIXES")
     print("="*60)
     
-    print("\n🎯 Single-Window Mode:")
+    print("\n[TARGET] Single-Window Mode:")
     print("• Everything runs in the same terminal window")
     print("• No new windows are spawned")
     print("• Sequential execution with clear steps")
@@ -96,7 +96,7 @@ def test_expected_behavior():
     print("• Proper async/await handling for streaming")
     print("• No more synchronization issues between windows")
     
-    print("\n📁 Output:")
+    print("\n[FOLDER] Output:")
     print("• devplan.json - Structured development plan")
     print("• phases.json - All 5 generated phases")
     print("• Everything saved to current directory")
@@ -105,13 +105,13 @@ if __name__ == "__main__":
     try:
         if test_fixes():
             test_expected_behavior()
-            print("\n🎉 All fixes verified! Single-window mode is ready!")
+            print("\n[CELEBRATE] All fixes verified! Single-window mode is ready!")
             print("\nTo run: python -m src.cli interactive")
         else:
-            print("\n❌ Some tests failed")
+            print("\n[ERROR] Some tests failed")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

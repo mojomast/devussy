@@ -35,7 +35,7 @@ def test_complete_streaming_fix():
         print("✓ RequestyClient implements true streaming per Requesty docs")
         
     except Exception as e:
-        print(f"❌ RequestyClient error: {e}")
+        print(f"[ERROR] RequestyClient error: {e}")
         return False
     
     # Test 2: LLMInterviewManager streaming integration
@@ -58,7 +58,7 @@ def test_complete_streaming_fix():
         print("✓ LLMInterviewManager integrates streaming for real-time display")
         
     except Exception as e:
-        print(f"❌ LLMInterviewManager error: {e}")
+        print(f"[ERROR] LLMInterviewManager error: {e}")
         return False
     
     # Test 3: Client factory creates RequestyClient correctly
@@ -86,7 +86,7 @@ def test_complete_streaming_fix():
         print("✓ Client factory creates RequestyClient with streaming support")
         
     except Exception as e:
-        print(f"❌ Client factory error: {e}")
+        print(f"[ERROR] Client factory error: {e}")
         return False
     
     # Test 4: Single-window interactive mode enables streaming
@@ -104,7 +104,7 @@ def test_complete_streaming_fix():
         print("✓ Single-window interactive mode enables streaming")
         
     except Exception as e:
-        print(f"❌ Single-window mode error: {e}")
+        print(f"[ERROR] Single-window mode error: {e}")
         return False
     
     return True
@@ -121,7 +121,7 @@ def describe_streaming_fix():
     print("• LLMInterviewManager used only sync methods")
     print("• No real-time token display during conversations")
     
-    print("\n✅ SOLUTION IMPLEMENTED:")
+    print("\n[OK] SOLUTION IMPLEMENTED:")
     print("\n1. RequestyClient True Streaming:")
     print("   • Added generate_completion_streaming() method")
     print("   • Implements Server-Sent Events (SSE) parsing")
@@ -162,7 +162,7 @@ def show_technical_details():
     print("• Data Format: 'data: {json}' lines")
     print("• Content Location: choices[0].delta.content")
     
-    print("\n⚡ Streaming Implementation:")
+    print("\n[FAST] Streaming Implementation:")
     print("• aiohttp async HTTP client for streaming")
     print("• Line-by-line response processing")
     print("• JSON parsing for each data chunk")
@@ -187,7 +187,7 @@ def show_usage_instructions():
     print("USAGE INSTRUCTIONS")
     print("="*70)
     
-    print("\n🚀 ENABLE STREAMING:")
+    print("\n[ROCKET] ENABLE STREAMING:")
     print("1. Configure Requesty as your LLM provider:")
     print("   • Set provider: requesty")
     print("   • Set model: openai/gpt-4 (or other provider/model)")
@@ -222,16 +222,16 @@ if __name__ == "__main__":
             describe_streaming_fix()
             show_technical_details()
             show_usage_instructions()
-            print("\n🎉 REQUESTY AI STREAMING IMPLEMENTATION COMPLETE!")
-            print("\n✅ Real-time streaming is now fully functional")
-            print("✅ Follows Requesty AI documentation exactly")
-            print("✅ Integrated with single-window interactive mode")
-            print("✅ Ready for production use")
+            print("\n[CELEBRATE] REQUESTY AI STREAMING IMPLEMENTATION COMPLETE!")
+            print("\n[OK] Real-time streaming is now fully functional")
+            print("[OK] Follows Requesty AI documentation exactly")
+            print("[OK] Integrated with single-window interactive mode")
+            print("[OK] Ready for production use")
         else:
-            print("\n❌ Streaming implementation has issues")
+            print("\n[ERROR] Streaming implementation has issues")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -347,8 +347,8 @@ class TestDocumentationIndexer:
             index_content = indexer.generate_index()
 
             assert "# Documentation Index" in index_content
-            assert "📋 Project Design Documents" in index_content
-            assert "🗓️ Development Plans" in index_content
+            assert "[LIST] Project Design Documents" in index_content
+            assert "[CALENDAR] Development Plans" in index_content
             assert "[project_design.md]" in index_content
             assert "[devplan.md]" in index_content
             assert "**Total Documents:** 2" in index_content

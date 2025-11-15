@@ -53,8 +53,8 @@ def test_all_fixes():
         assert client.streaming_enabled == True, "LLMClient not respecting streaming_enabled flag"
         print("✓ LLMClient supports streaming_enabled flag")
     except Exception as e:
-        print(f"⚠️  Could not test concrete client (missing API keys): {e}")
-        print("✓ LLMClient base class has streaming_enabled attribute")
+        print(f"[WARN] Could not test concrete client (missing API keys): {e}")
+        print("[OK] LLMClient base class has streaming_enabled attribute")
     
     # Test 3: Generator streaming support
     print("\n3. Testing generator streaming support...")
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     try:
         test_all_fixes()
         test_streaming_simulation()
-        print("\n🎉 All comprehensive tests passed!")
+        print("\n[CELEBRATE] All comprehensive tests passed!")
         print("\nExpected behavior after fixes:")
         print("1. ✓ Terminal scripts launch without 'file not found' errors")
         print("2. ✓ Enhanced debugging shows file sync status")
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         print("5. ✓ All 5 phases stream in real-time in terminal UI")
         
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

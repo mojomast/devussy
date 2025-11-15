@@ -37,7 +37,7 @@ def test_documentation_updates():
         print("✓ devussyhandoff.md updated with all new features")
         
     except Exception as e:
-        print(f"❌ devussyhandoff.md error: {e}")
+        print(f"[ERROR] devussyhandoff.md error: {e}")
         return False
     
     # Test 2: DEVUSSYPLAN.md updates
@@ -61,7 +61,7 @@ def test_documentation_updates():
         assert "SSE parsing" in plan_content, "Missing SSE parsing in architecture"
         
         # Check for Phase 9 completion
-        assert "Phase 9 – Single-Window Interactive Mode + Requesty Streaming ✅ COMPLETE" in plan_content, "Missing Phase 9 title"
+        assert "Phase 9 – Single-Window Interactive Mode + Requesty Streaming [OK] COMPLETE" in plan_content, "Missing Phase 9 title"
         assert "Complete interactive workflow running in single terminal window" in plan_content, "Missing Phase 9 outcome"
         
         # Check for completed tasks
@@ -72,7 +72,7 @@ def test_documentation_updates():
         print("✓ DEVUSSYPLAN.md updated with all new features")
         
     except Exception as e:
-        print(f"❌ DEVUSSYPLAN.md error: {e}")
+        print(f"[ERROR] DEVUSSYPLAN.md error: {e}")
         return False
     
     # Test 3: Consistency between files
@@ -93,7 +93,7 @@ def test_documentation_updates():
         print("✓ Both files consistent with new features")
         
     except Exception as e:
-        print(f"❌ Consistency error: {e}")
+        print(f"[ERROR] Consistency error: {e}")
         return False
     
     return True
@@ -118,7 +118,7 @@ def describe_documentation_changes():
     print("• Updated recommended next tasks to focus on final testing and polish")
     print("• Added notes about new CLI command and streaming capabilities")
     
-    print("\n📋 DEVUSSYPLAN.md Updates:")
+    print("\n[LIST] DEVUSSYPLAN.md Updates:")
     print("• Updated status to Phases 1-9 Complete (55% of roadmap)")
     print("• Added new high-level goals for single-window mode and Requesty streaming")
     print("• Updated architecture snapshot to include:")
@@ -129,7 +129,7 @@ def describe_documentation_changes():
     print("• Renumbered remaining phases (10-11) for final polish")
     print("• Documented all technical implementation details")
     
-    print("\n🎯 Key Features Documented:")
+    print("\n[TARGET] Key Features Documented:")
     print("• Single-Window Interactive Mode")
     print("• True Requesty AI Streaming Support")
     print("• Server-Sent Events (SSE) Processing")
@@ -144,7 +144,7 @@ def show_next_steps():
     print("NEXT STEPS ENABLED BY DOCUMENTATION")
     print("="*70)
     
-    print("\n🚀 For Future Development:")
+    print("\n[ROCKET] For Future Development:")
     print("• Clear baseline of completed single-window mode implementation")
     print("• Documented Requesty streaming integration for reference")
     print("• Updated architecture for understanding new streaming layer")
@@ -168,16 +168,14 @@ if __name__ == "__main__":
         if test_documentation_updates():
             describe_documentation_changes()
             show_next_steps()
-            print("\n🎉 DOCUMENTATION UPDATES COMPLETE!")
-            print("\n✅ devussyhandoff.md updated with Session 9 achievements")
-            print("✅ DEVUSSYPLAN.md updated with Phase 9 completion")
-            print("✅ Both files consistent and comprehensive")
-            print("✅ Ready for final testing, polish, and release phases")
-        else:
-            print("\n❌ Documentation updates have issues")
+            print("\n[CELEBRATE] DOCUMENTATION UPDATES COMPLETE!")
+            print("\n[OK] devussyhandoff.md updated with Session 9 achievements")
+            print("[OK] DEVUSSYPLAN.md updated with Phase 9 completion")
+            print("[OK] Both files consistent and comprehensive")
+            print("[OK] Ready for final testing, polish, and release phases")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

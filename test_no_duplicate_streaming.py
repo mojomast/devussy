@@ -28,7 +28,7 @@ def test_no_duplicate_streaming():
     
     for pattern in conditional_display_patterns:
         if pattern not in source:
-            print(f"❌ Missing pattern: {pattern}")
+            print(f"[ERROR] Missing pattern: {pattern}")
             return False
     
     print("✓ Streaming display is conditional")
@@ -41,7 +41,7 @@ def test_no_duplicate_streaming():
     expected_count = 2  # Initial greeting + main loop
     
     if conditional_display_count != expected_count:
-        print(f"❌ Expected {expected_count} conditional displays, found {conditional_display_count}")
+        print(f"[ERROR] Expected {expected_count} conditional displays, found {conditional_display_count}")
         return False
     
     print("✓ Fix applied in all conversation locations")
@@ -60,7 +60,7 @@ def test_no_duplicate_streaming():
     streaming_section = send_to_llm_section[streaming_start:streaming_end]
     
     if "_display_llm_response" in streaming_section:
-        print("❌ Streaming section still calls _display_llm_response")
+        print("[ERROR] Streaming section still calls _display_llm_response")
         return False
     
     print("✓ Streaming path doesn't call _display_llm_response")
@@ -74,7 +74,7 @@ def test_no_duplicate_streaming():
     non_streaming_section = send_to_llm_section[non_streaming_start:non_streaming_end]
     
     if "_display_llm_response" not in non_streaming_section:
-        print("❌ Non-streaming section doesn't call _display_llm_response")
+        print("[ERROR] Non-streaming section doesn't call _display_llm_response")
         return False
     
     print("✓ Non-streaming path still displays response")
@@ -93,7 +93,7 @@ def describe_fix():
     print("• White text displayed after completion")
     print("• Confusing user experience with duplicate content")
     
-    print("\n✅ SOLUTION IMPLEMENTED:")
+    print("\n[OK] SOLUTION IMPLEMENTED:")
     print("\n1. Conditional Display Logic:")
     print("   • Check streaming_enabled flag before displaying")
     print("   • Only call _display_llm_response when streaming is OFF")
@@ -121,7 +121,7 @@ def show_expected_behavior():
     print("EXPECTED BEHAVIOR AFTER FIX")
     print("="*60)
     
-    print("\n🎯 Streaming Mode (config.streaming_enabled = True):")
+    print("\n[TARGET] Streaming Mode (config.streaming_enabled = True):")
     print("""
 [yellow]You[/yellow]: Tell me about your project
 
@@ -132,9 +132,9 @@ about what you're building.
 What type of project are you planning to create?
     """)
     
-    print("✅ Tokens appear once in blue, no duplication")
+    print("[OK] Tokens appear once in blue, no duplication")
     
-    print("\n🎯 Non-Streaming Mode (config.streaming_enabled = False):")
+    print("\n[TARGET] Non-Streaming Mode (config.streaming_enabled = False):")
     print("""
 [yellow]You[/yellow]: Tell me about your project
 
@@ -146,22 +146,22 @@ about what you're building.
 What type of project are you planning to create?
     """)
     
-    print("✅ Complete response appears once in white")
+    print("[OK] Complete response appears once in white")
 
 if __name__ == "__main__":
     try:
         if test_no_duplicate_streaming():
             describe_fix()
             show_expected_behavior()
-            print("\n🎉 DUPLICATE STREAMING FIX COMPLETE!")
-            print("\n✅ Streaming responses now display only once")
-            print("✅ No more blue + white duplication")
-            print("✅ Clean user experience restored")
+            print("\n[CELEBRATE] DUPLICATE STREAMING FIX COMPLETE!")
+            print("\n[OK] Streaming responses now display only once")
+            print("[OK] No more blue + white duplication")
+            print("[OK] Clean user experience restored")
         else:
-            print("\n❌ Duplicate streaming fix has issues")
+            print("\n[ERROR] Duplicate streaming fix has issues")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

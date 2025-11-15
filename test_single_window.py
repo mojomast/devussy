@@ -57,11 +57,11 @@ if __name__ == "__main__":
     try:
         test_single_window_mode()
         test_expected_behavior()
-        print("\n🎉 Single-window mode is ready!")
+        print("\n[CELEBRATE] Single-window mode is ready!")
         print("\nTo use it, run:")
         print("python -m src.cli interactive")
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

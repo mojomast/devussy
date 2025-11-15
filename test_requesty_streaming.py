@@ -31,7 +31,7 @@ def test_requesty_streaming_implementation():
         print("✓ Streaming method has correct signature")
         
     except Exception as e:
-        print(f"❌ RequestyClient error: {e}")
+        print(f"[ERROR] RequestyClient error: {e}")
         return False
     
     # Test 2: Check streaming implementation follows Requesty docs
@@ -50,7 +50,7 @@ def test_requesty_streaming_implementation():
         print("✓ Streaming implementation follows Requesty documentation")
         
     except Exception as e:
-        print(f"❌ Implementation check error: {e}")
+        print(f"[ERROR] Implementation check error: {e}")
         return False
     
     # Test 3: Check LLMInterviewManager uses streaming when enabled
@@ -68,7 +68,7 @@ def test_requesty_streaming_implementation():
         print("✓ LLMInterviewManager integrates streaming properly")
         
     except Exception as e:
-        print(f"❌ Interview manager check error: {e}")
+        print(f"[ERROR] Interview manager check error: {e}")
         return False
     
     return True
@@ -79,7 +79,7 @@ def test_expected_streaming_behavior():
     print("EXPECTED STREAMING BEHAVIOR")
     print("="*60)
     
-    print("\n🎯 Requesty AI Streaming Implementation:")
+    print("\n[TARGET] Requesty AI Streaming Implementation:")
     print("• Sends 'stream': true in API request payload")
     print("• Processes Server-Sent Events (SSE) format")
     print("• Parses 'data: ' lines from response stream")
@@ -124,7 +124,7 @@ tailored to your specific needs.
 [blue]🎵 Devussy[/blue]: (tokens appear in real-time as they're generated)
     """)
     
-    print("\n⚡ Behind the scenes:")
+    print("\n[FAST] Behind the scenes:")
     print("• API request: POST https://router.requesty.ai/v1/chat/completions")
     print("• Payload includes: 'stream': true")
     print("• Response processed line-by-line as SSE stream")
@@ -136,16 +136,16 @@ if __name__ == "__main__":
         if test_requesty_streaming_implementation():
             test_expected_streaming_behavior()
             show_usage_example()
-            print("\n🎉 Requesty AI streaming implementation is ready!")
+            print("\n[CELEBRATE] Requesty AI streaming implementation is ready!")
             print("\nTo test streaming:")
             print("1. Configure Requesty as your provider")
             print("2. Run: python -m src.cli interactive")
             print("3. Watch real-time tokens during interview!")
         else:
-            print("\n❌ Streaming implementation has issues")
+            print("\n[ERROR] Streaming implementation has issues")
             sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Test failed: {e}")
+        print(f"\n[ERROR] Test failed: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
