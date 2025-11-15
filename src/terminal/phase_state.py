@@ -24,6 +24,7 @@ class PhaseStreamState:
     name: str
     status: PhaseStatus = PhaseStatus.IDLE
     content: str = ""
+    token_count: int = 0
     partial_content: str = ""  # Content before cancellation
     error_message: Optional[str] = None
     
@@ -72,6 +73,12 @@ class PhaseStateManager:
             raise ValueError(f"Unknown phase: {name}")
         
         phase = self.phases[name]
+        phase.content = ""
+        phase.token_count = 0
+        phase.partial_content = ""
+        phase.error_message = None
+        phase.completed_at = None
+        phase.cancelled_at = None
         phase.status = PhaseStatus.STREAMING
         phase.started_at = datetime.now()
         phase.original_prompt = prompt
@@ -116,7 +123,9 @@ class PhaseStateManager:
         if name not in self.phases:
             raise ValueError(f"Unknown phase: {name}")
         
-        self.phases[name].content += token
+        phase = self.phases[name]
+        phase.content += token
+        phase.token_count += 1
     
     def capture_generation_context(
         self,
@@ -180,6 +189,7 @@ class PhaseStateManager:
         phase = self.phases[name]
         phase.status = PhaseStatus.REGENERATING
         phase.content = ""
+        phase.token_count = 0
         phase.error_message = None
         phase.started_at = datetime.now()
         phase.completed_at = None

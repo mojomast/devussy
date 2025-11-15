@@ -31,7 +31,7 @@ async def simulate_phase_generation(app: DevussyTerminalUI, phase_name: str, del
         prompt=f"Generate {phase_name} phase...",
         api_context={"model": "gpt-4o-mini"}
     )
-    app.call_from_thread(app.update_phase, phase_name)
+    app.update_phase(phase_name)
     
     # Simulate streaming tokens
     sample_content = [
@@ -54,11 +54,11 @@ async def simulate_phase_generation(app: DevussyTerminalUI, phase_name: str, del
     for token in sample_content:
         await asyncio.sleep(delay)
         app.state_manager.append_content(phase_name, token)
-        app.call_from_thread(app.update_phase, phase_name)
+        app.update_phase(phase_name)
     
     # Mark complete
     app.state_manager.update_status(phase_name, PhaseStatus.COMPLETE)
-    app.call_from_thread(app.update_phase, phase_name)
+    app.update_phase(phase_name)
 
 
 async def run_demo(app: DevussyTerminalUI):

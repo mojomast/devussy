@@ -235,18 +235,17 @@
   - [x] Simulates streaming generation with fake tokens.
   - [x] Tests responsive layout at different terminal widths.
   - [x] Demo works and displays all phase states correctly.
+  - [x] Added per-phase token count badges and grid truncation (last 40 lines) for readability.
 
 **Pending Tasks (Phase 4 Enhancements)**
 
 - **Rendering enhancements**
-  - [ ] Implement content truncation (show last N lines in grid view).
-  - [ ] Add token count display per phase.
   - [ ] Improve status badge styling and animations.
 
 - **Keyboard / mouse**
-  - [ ] Implement focus movement between phases (arrow keys, tab).
-  - [ ] Add mouse click to focus/select phases.
-  - [ ] Implement help screen (? key) with full keybinding list.
+  - [x] Implement focus movement between phases (arrow keys, tab).
+  - [x] Add mouse click to focus/select phases.
+  - [ ] Implement dedicated help overlay/screen (? key) with full keybinding list.
 
 **Definition of Done** ✅
 

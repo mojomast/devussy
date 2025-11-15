@@ -1686,7 +1686,8 @@ def interactive_design(
             config.streaming_enabled = True
 
         # Interactive interview defaults to no automatic git commits to avoid noisy graphs.
-        if not auto_commit and getattr(config, "git", None):
+        # Always disable auto-commit for this command to keep git history clean.
+        if getattr(config, "git", None):
             config.git.commit_after_design = False
             config.git.commit_after_devplan = False
             config.git.commit_after_handoff = False

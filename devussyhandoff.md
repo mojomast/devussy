@@ -2,18 +2,18 @@
 
 Use this file as a reusable prompt to hand off work between Devussy/Cascade sessions while keeping development circular and grounded in `DEVUSSYPLAN.md`.
 
-## Current Status (Updated: 2025-11-14 - Session 5 - Repository Created)
+## Current Status (Updated: 2025-11-14 - Session 7 - Terminal UI Focus & CLI Polish)
 
 **Phases Complete:** 1 (Repository Analysis), 2 (Interview Engine), 3 (Context-Aware DevPlan Generation), 4 (Terminal UI Core - Foundation), 5 (Token Streaming)  
 **Phases In Progress:** 4 (Terminal UI Enhancements)  
 **Phases Pending:** 6-11 (Fullscreen, Steering, CLI Integration, Testing, Docs)
 
-**Test Status:** ✅ All 63 tests passing (56 unit + 7 integration), no diagnostics  
+**Test Status:** ✅ All 63 tests passing (56 unit + 7 integration); latest session did not rerun tests (pytest unavailable in environment)  
 **LLM Integration:** ✅ GPT-5 mini via Requesty validated and working  
 **Streaming:** ✅ Real-time token streaming to terminal UI working  
 **Repository:** ✅ devussy-testing created and pushed (https://github.com/mojomast/devussy-testing)  
 **Release:** ✅ Release 01 complete - 146 files, 34,793 lines pushed  
-**Next Priority:** Phase 4 rendering enhancements (content truncation, token counts), then Phase 6 fullscreen viewer
+**Next Priority:** Phase 4 rendering/help overlay polish, then Phase 6 fullscreen viewer and Phase 7 steering
 
 ---
 
@@ -111,7 +111,27 @@ Work step-by-step, narrate your high-level reasoning briefly, and keep individua
 ## Current NEXT HANDOFF SUMMARY
 
 ```text
-NEXT HANDOFF SUMMARY (Updated: 2025-11-14 - Session 5 - Repository Created)
+NEXT HANDOFF SUMMARY (Updated: 2025-11-14 - Session 7 - Terminal UI Focus & CLI Polish)
+
+ - Completed (Session 7):
+   - ✅ **Terminal UI focus & navigation:**
+     - Made `PhaseBox` focusable with clear focus styling (accent border + reversed title).
+     - Implemented keyboard focus movement between phases (Tab / Shift+Tab / arrow keys).
+     - Enabled mouse click to focus/select phases.
+     - Updated help text (`?`) to document new keybindings and mouse behaviour.
+     - Fixed Textual lifecycle bug by guarding reactive watchers when child widgets are not yet composed.
+     - Updated demo script to use in-loop `update_phase` calls (no `call_from_thread` misuse) and verified the demo works end-to-end.
+   - ✅ **Interactive CLI auto-commit cleanup:**
+     - Removed use of undefined `auto_commit` flag from `interactive_design`.
+     - `interactive_design` now always disables git auto-commit/auto-push to keep history clean.
+     - Error `name 'auto_commit' is not defined` is resolved.
+
+ - Completed (Session 6):
+   - ✅ **Phase 4 Rendering Enhancements (partial):**
+     - Added per-phase token counting in state manager and UI badges.
+     - Truncated grid view content to latest 40 lines for readability.
+     - Extended unit tests to cover new token-count behaviour.
+     - Attempted to run pytest; command unavailable in current shell (tests previously green).
 
  - Completed (Session 5):
    - ✅ **Repository Creation (devussy-testing)**:
@@ -202,38 +222,34 @@ NEXT HANDOFF SUMMARY (Updated: 2025-11-14 - Session 5 - Repository Created)
      - Phase 4 – Terminal UI Core Foundation (COMPLETE)
 
  - In progress:
-   - Phase 5 – Token Streaming Integration (next priority).
-   
+   - Phase 4 – Rendering/help polish (status styling, dedicated help overlay/screen).
+
  - Technical debt:
    - Metrics remain coarse (total counts only; no per-language breakdown).
    - Error handling for malformed repos is best-effort (errors not richly surfaced).
-   - Phase 4 rendering enhancements (content truncation, token counts, focus movement).
+   - Phase 4 rendering enhancements (status styling, dedicated help overlay, finer-grained animations).
    - GPT-5 mini requires higher token limits (2000+) due to reasoning token usage.
 
  - Blockers / open questions:
    - None currently - all major architectural decisions made, bugs fixed, and LLM integration validated.
    
    - Architecture decisions resolved:
-     - ✅ Python-first implementation confirmed (no Node/TS mirror needed).
-     - ✅ Terminal UI library selected: Textual (async-first, grid layouts, Rich integration).
-     - ✅ Real-world validation completed successfully.
-     - ✅ LLM client config access pattern fixed across all providers.
+     - Python-first implementation confirmed (no Node/TS mirror needed).
+     - Terminal UI library selected: Textual (async-first, grid layouts, Rich integration).
+     - Real-world validation completed successfully.
+     - LLM client config access pattern fixed across all providers.
 
  - Recommended next tasks (highest impact first):
-   - [ ] **Phase 4 completion: Rendering enhancements (TOP PRIORITY)**
-         - Implement content truncation (show last N lines in grid view).
-         - Add token count display per phase.
+   - [ ] **Phase 4 completion: Rendering/help overlay (TOP PRIORITY)**
          - Improve status badge styling and animations.
-         - Implement focus movement between phases (arrow keys, tab).
-         - Add mouse click to focus/select phases.
-         - Implement help screen (? key) with full keybinding list.
-   
+         - Implement dedicated help overlay/screen for `?` (richer content than the current toast).
+
    - [ ] **Phase 6: Fullscreen Viewer**
          - Create modal overlay for fullscreen phase view.
          - Implement scrolling with vim/arrow keys.
          - Add character count footer.
          - ESC to return to grid.
-   
+
    - [ ] **Phase 7: Steering Workflow**
          - Implement cancel handler (C key).
          - Create steering interview modal.

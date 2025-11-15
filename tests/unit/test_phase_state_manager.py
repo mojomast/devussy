@@ -32,6 +32,7 @@ def test_initialization(state_manager, phase_names):
         assert state.name == name
         assert state.status == PhaseStatus.IDLE
         assert state.content == ""
+        assert state.token_count == 0
 
 
 def test_initialize_phase(state_manager):
@@ -47,6 +48,7 @@ def test_initialize_phase(state_manager):
     assert state.api_request_context == api_context
     assert state.started_at is not None
     assert isinstance(state.started_at, datetime)
+    assert state.token_count == 0
 
 
 def test_update_status(state_manager):
@@ -68,6 +70,7 @@ def test_append_content(state_manager):
     
     state = state_manager.get_state("plan")
     assert state.content == "Hello world!"
+    assert state.token_count == 3
 
 
 def test_record_cancellation(state_manager):
@@ -114,6 +117,7 @@ def test_reset_for_regeneration(state_manager):
     assert state.error_message is None
     assert state.regeneration_count == 1
     assert state.original_prompt == "Original prompt"  # Preserved
+    assert state.token_count == 0
 
 
 def test_record_error(state_manager):
