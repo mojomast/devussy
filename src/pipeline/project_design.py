@@ -103,7 +103,7 @@ class ProjectDesignGenerator:
             # Use streaming without external handler
             response = ""
 
-            async def token_callback(token: str) -> None:
+            def token_callback(token: str) -> None:
                 nonlocal response
                 response += token
 

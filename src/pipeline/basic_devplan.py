@@ -85,9 +85,11 @@ class BasicDevPlanGenerator:
             async with streaming_handler:
                 response_chunks: list[str] = []
 
-                async def token_callback(token: str) -> None:
+                def token_callback(token: str) -> None:
+                    """Sync callback invoked by LLM client for each streamed chunk."""
                     response_chunks.append(token)
-                    await streaming_handler.on_token_async(token)
+                    # Use the handler's sync API for console output
+                    streaming_handler.on_token(token)
 
                 full_response = await self.llm_client.generate_completion_streaming(
                     prompt,
@@ -103,7 +105,7 @@ class BasicDevPlanGenerator:
             # Use streaming without external handler
             response = ""
 
-            async def token_callback(token: str) -> None:
+            def token_callback(token: str) -> None:
                 nonlocal response
                 response += token
 

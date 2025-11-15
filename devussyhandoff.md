@@ -2,7 +2,7 @@
 
 Use this file as a reusable prompt to hand off work between Devussy/Cascade sessions while keeping development circular and grounded in `DEVUSSYPLAN.md`.
 
-## Current Status (Updated: 2025-11-14 - Session 10 - Terminal-Based Interview UI)
+## Current Status (Updated: 2025-11-15 - Session 11 - Interactive Streaming Stabilization)
 
 **Phases Complete:** 1 (Repository Analysis), 2 (Interview Engine), 3 (Context-Aware DevPlan Generation), 4 (Terminal UI Core + Rendering), 5 (Token Streaming), 6 (Fullscreen Viewer), 7 (Steering Workflow), 8 (CLI Integration), 9 (Single-Window Interactive Mode + Requesty Streaming), 10 (Terminal-Based Interview UI)  
 **Phases In Progress:** None  
@@ -10,9 +10,9 @@ Use this file as a reusable prompt to hand off work between Devussy/Cascade sess
 
 **Test Status:** ✅ All 63+ tests passing (56 unit + 7 integration); all existing tests validated after new features  
 **LLM Integration:** ✅ GPT-5 mini via Requesty with true streaming support validated and working  
-**Streaming:** ✅ Real-time token streaming implemented for interview and all phases  
-**Interactive Mode:** ✅ Complete terminal UI workflow - interview, design, devplan, and phase generation all in terminal UI  
-**Interview UI:** ✅ Rich terminal-based interview interface with conversation history and streaming  
+**Streaming:** ✅ Real-time token streaming implemented for interview and all phases (see notes below for current CLI defaults)  
+**Interactive Mode:** ✅ Single-window workflow where the default `devussy interactive` command runs a console-based LLM interview, then streams project design and devplan in the console before launching the terminal UI for multi-phase generation  
+**Interview UI:** ✅ Rich terminal-based interview interface with conversation history and streaming remains available, but is not the default path for `devussy interactive` in Session 11  
 **Repository:** ✅ devussy-testing created and pushed (https://github.com/mojomast/devussy-testing)  
 **Release:** ✅ Release 01 complete - 150+ files, 35,000+ lines pushed  
 **Next Priority:** Phase 11 documentation, help system, and final integration for release

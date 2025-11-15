@@ -107,14 +107,22 @@ You can also set per-stage keys in config or via env if desired.
 
 ## Quick start
 
-Interactive interview (LLM-driven):
+Interactive single-window workflow (recommended):
+```bash
+python -m src.cli interactive
+```
+- Runs fully in your current terminal.
+- Step 1: console-based LLM interview (type /done when finished).
+- Step 2: project design streams live to the console (prefix "[design] ").
+- Step 3: basic devplan streams live to the console (prefix "[devplan] ").
+- Step 4: a Textual terminal UI opens and streams all five phases (plan, design, implement, test, review) in parallel.
+
+Interview-only launcher (legacy LLM-driven interview):
 ```bash
 python -m src.entry
 ```
-- Type answers or use slash-commands like /done, /help, /settings.
-- The bottom status line shows model and token usage and remains active through generation.
-- After design is generated, confirm the prompt to continue and you'll see streaming progress
-  for DevPlan (including a per-phase progress bar with ✓ as phases complete) and Handoff.
+- Runs the original interactive design interview and pipeline in a more traditional flow.
+- Streaming for design/devplan is controlled by config.streaming_enabled; for the full streaming UX, prefer the interactive command above.
 
 Full pipeline (non-interactive):
 ```bash
@@ -124,174 +132,6 @@ python -m src.cli run-full-pipeline \
   --requirements "Build a REST API with auth" \
   --frameworks "FastAPI,React"
 ```
-Outputs (in docs/ by default):
-- project_design.md
-- devplan.md (+ phase1.md … phaseN.md)
-- handoff_prompt.md
-
-### Mandatory update ritual (after every N tasks)
-
-To keep all models in sync, Devussy enforces a simple update ritual. After completing a group of tasks, pause to update the artifacts, then continue.
-
-- Task group size: configurable; defaults to 3 for devplan generation and 5 for handoff prompts
-- After each group, update all three locations before proceeding:
-  1) devplan.md — add progress and next tasks
-  2) phaseX.md (the active phase file) — summarize outcomes and blockers
-  3) handoff_prompt.md — brief status and next steps
-
-Use these anchors so any model can reliably update the right sections:
-
-- In devplan.md:
-  - <!-- PROGRESS_LOG_START --> ... <!-- PROGRESS_LOG_END -->
-  - <!-- NEXT_TASK_GROUP_START --> ... <!-- NEXT_TASK_GROUP_END -->
-- In the current phase file (phaseX.md):
-  - <!-- PHASE_PROGRESS_START --> ... <!-- PHASE_PROGRESS_END -->
-- In handoff_prompt.md:
-  - <!-- HANDOFF_NOTES_START --> ... <!-- HANDOFF_NOTES_END -->
-
-If a file doesn’t exist, create it and include the anchors.
-
-Example (devplan.md):
-
-```
-<!-- PROGRESS_LOG_START -->
-- Completed 2.1 Implement DB schema – added tables, indexes, migration file
-- Completed 2.2 Connection manager – pooled connections, retry, logging
-<!-- PROGRESS_LOG_END -->
-
-<!-- NEXT_TASK_GROUP_START -->
-- 2.3: Write unit tests for DB layer
-- 2.4: Code quality checks (black/flake8/isort)
-- 2.5: Commit changes (feat: db layer)
-<!-- NEXT_TASK_GROUP_END -->
-```
-
-### Configure task group size
-
-Programmatic API:
-- Basic plan generation: BasicDevPlanGenerator.generate(..., task_group_size=3)
-- Detailed plan generation: DetailedDevPlanGenerator.generate(..., task_group_size=3)
-- Handoff prompt: HandoffPromptGenerator.generate(..., task_group_size=5)
-
-CLI: the default group sizes apply unless you integrate a flag in your own wrapper.
-
-## What you’ll see (UX)
-- Stage spinners while each phase runs
-- A per-phase progress bar during detailed plan generation (updates as phases finish)
-- A persistent bottom status line showing current stage, model, and token usage (prompt/completion/total + accumulated)
-- The interactive “continue” flow uses the same streaming UI for DevPlan and Handoff
-
-## Launch
-
-From a clone (no pip install):
-```bash
-git clone https://github.com/mojomast/devussy.git
-cd devussy
-python -m src.entry
-```
-
-At startup, Devussy applies your last-used preferences automatically (provider, per-provider API keys, base URLs). You can change them anytime under Settings → Provider & Models. Only the Generic provider prompts for a Base URL; others use safe defaults.
-
-## Interview Mode ✅ COMPLETE
-
-Devussy can analyze your existing codebase and conduct an LLM-driven interview to generate a context-aware devplan:
-
-```bash
-python -m src.cli interview .
-```
-
-This will:
-1. Analyze your project structure, dependencies, and patterns (supports Python, Node, Go, Rust, Java)
-2. Display a summary of your repository (files, lines, dependencies, frameworks)
-3. Conduct an interactive interview about your development goals
-4. Extract relevant code samples from your codebase (architecture, patterns, tests)
-5. Generate a devplan that respects your existing architecture
-
-The interview uses natural conversation with an LLM, making it easy to describe what you want to build. Code samples and repository context are automatically included in the generated devplan.
-
-**Features:**
-- Automatic project type detection
-- Dependency parsing for all major ecosystems
-- Smart code sample extraction (entry points, patterns, tests, goal-relevant files)
-- Repository context threaded through entire pipeline
-- Backward compatible (works without repo analysis)
-
-**Test it:**
-```bash
-# Analyze a repository
-python -m src.cli analyze-repo . --json
-
-# Full interview flow
-python scripts/test_full_interview_flow.py
-```
-
-## Terminal UI 🚧 IN PROGRESS
-
-Phases 4 & 5 are complete! The terminal UI provides:
-- ✅ Responsive grid layout (5 cols / 3x2 / 1x5 based on terminal width)
-- ✅ Phase state management with full lifecycle support
-- ✅ Color-coded status indicators (idle, streaming, complete, interrupted, error, regenerating)
-- ✅ Scrollable content areas for each phase
-- ✅ Built with Textual for a modern, async-first TUI experience
-- ✅ **Real-time token streaming from LLM to terminal (Phase 5 - NEW!)**
-- ✅ **Phase cancellation with abort support**
-- ✅ **Concurrent generation of multiple phases**
-- 🚧 Interactive steering: cancel, feedback, regenerate (Phase 7)
-- 🚧 Fullscreen viewer for detailed phase content (Phase 6)
-
-Try the demos:
-```bash
-# Basic UI demo with simulated streaming
-python scripts/demo_terminal_ui.py
-
-# Real LLM streaming integration test
-python scripts/test_streaming_integration.py
-```
-
-**Current Status (Session 5):**
-- All 63 tests passing (56 unit + 7 integration)
-- Phase 5 token streaming fully implemented and tested
-- Real-time LLM streaming to terminal UI working end-to-end
-- Phase cancellation with clean abort handling
-- Concurrent phase generation with asyncio
-- UI with keybindings (q=Quit, ?=Help, c=Cancel, f=Fullscreen)
-- Ready for rendering enhancements and fullscreen viewer
-
-## Core commands
-
-Initialize a new repo with a docs/ folder and templates:
-```bash
-python -m src.cli init-repo ./my-project
-```
-
-Optional pre‑review (fix design before planning):
-```bash
-python -m src.cli run-full-pipeline \
-  --name "My App" \
-  --languages "Python" \
-  --requirements "Build an API" \
-  --pre-review
-```
-This sends the freshly generated design to the DevPlan (phase 2) model to detect and fix compatibility/workflow/backend/efficiency issues before generating the devplan. A report is saved to docs/design_review.md and improvements are applied automatically if returned.
-
-Interactive design interview (recommended):
-```bash
-python -m src.cli interactive-design
-```
-After the interview, confirm the “Proceed to run full pipeline now?” prompt to stream
-DevPlan and Handoff progress live in your terminal.
-
-One-shot full pipeline:
-```bash
-python -m src.cli run-full-pipeline --name "My App" --languages "Python" --requirements "Build an API"
-```
-
-Only design:
-```bash
-python -m src.cli generate-design --name "My App" --languages "Python" --requirements "Build an API"
-```
-
-Only devplan from an in-memory design (advanced) or resume via checkpoints (see below).
 
 ## Providers & models
 You can override provider/model on the CLI or via config. You can also manage them in the app via Settings → Provider & Models.
@@ -360,6 +200,14 @@ pytest -q
 # lint/format
 black src && isort src && flake8 src
 ```
+
+## Recent Updates (Session 11)
+
+- Hardened interactive single-window streaming:
+  - Fixed coroutine-not-awaited warnings by using synchronous token callbacks in project design and basic devplan generators.
+  - Ensured console streaming for design and devplan via StreamingHandler (token prefixes [design] and [devplan]).
+  - Fixed nested asyncio.run() errors by running the Textual terminal UI from interactive in a background thread.
+- Updated docs (README, DEVUSSYPLAN.md, devussyhandoff.md) to describe the console-based interview + streaming design/devplan + terminal UI phases workflow.
 
 ## Recent Updates (Session 5)
 

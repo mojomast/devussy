@@ -29,6 +29,7 @@ from .state_manager import StateManager
 from .ui.menu import run_main_menu, run_menu, SessionSettings, apply_settings_to_config, load_last_used_preferences
 from .terminal.terminal_ui import run_terminal_ui
 from .terminal.phase_generator import TerminalPhaseGenerator
+from .streaming import StreamingHandler
 
 from rich.console import Console
 from rich.panel import Panel
@@ -2770,23 +2771,29 @@ def interactive(
             # Create orchestrator
             orchestrator = _create_orchestrator(config)
             
-            print("📝 Generating project design with real-time streaming...")
+            print("📝 Generating project design with real-time streaming...\n")
+            design_stream = StreamingHandler.create_console_handler(prefix="[design] ")
             design = await orchestrator.project_design_gen.generate(
                 project_name=design_inputs["name"],
                 languages=design_inputs["languages"].split(","),
                 requirements=design_inputs["requirements"],
                 frameworks=design_inputs.get("frameworks", "").split(",") if design_inputs.get("frameworks") else None,
                 apis=design_inputs.get("apis", "").split(",") if design_inputs.get("apis") else None,
+                streaming_handler=design_stream,
             )
-            print("✅ Project design generated!")
+            print("\n✅ Project design generated!")
             
             # Step 3: Generate devplan with streaming
             print("\n📋 Step 3: Development Plan Generation")
             print("-" * 40)
             
-            print("📋 Creating basic development plan structure with real-time streaming...")
-            devplan = await orchestrator.basic_devplan_gen.generate(design)
-            print("✅ Development plan structure created!")
+            print("📋 Creating basic development plan structure with real-time streaming...\n")
+            devplan_stream = StreamingHandler.create_console_handler(prefix="[devplan] ")
+            devplan = await orchestrator.basic_devplan_gen.generate(
+                design,
+                streaming_handler=devplan_stream,
+            )
+            print("\n✅ Development plan structure created!")
             
             # Step 4: Generate all phases with streaming in terminal UI
             print("\n🚀 Step 4: Phase Generation with Real-time Streaming")
@@ -2804,11 +2811,12 @@ def interactive(
             state_manager = PhaseStateManager(["plan", "design", "implement", "test", "review"])
             phase_generator = TerminalPhaseGenerator(llm_client, state_manager)
             
-            # Launch terminal UI with streaming phase generation
-            run_terminal_ui(
-                phase_names=["plan", "design", "implement", "test", "review"],
-                phase_generator=phase_generator,
-                devplan=devplan,
+            # Launch terminal UI with streaming phase generation in a background thread
+            await asyncio.to_thread(
+                run_terminal_ui,
+                ["plan", "design", "implement", "test", "review"],
+                phase_generator,
+                devplan,
             )
             
             print("\n🎉 All phases generated successfully in terminal UI!")
