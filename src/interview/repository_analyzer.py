@@ -52,6 +52,16 @@ class ConfigFiles:
 
 
 @dataclass
+class ProjectMetadata:
+    """Project metadata extracted from manifest files."""
+    name: Optional[str] = None
+    version: Optional[str] = None
+    description: Optional[str] = None
+    author: Optional[str] = None
+    homepage: Optional[str] = None
+
+
+@dataclass
 class RepoAnalysis:
     root_path: Path
     project_type: str
@@ -60,7 +70,8 @@ class RepoAnalysis:
     code_metrics: CodeMetrics
     patterns: CodePatterns
     config_files: ConfigFiles
-    errors: List[str]
+    project_metadata: ProjectMetadata = field(default_factory=ProjectMetadata)
+    errors: List[str] = field(default_factory=list)
 
     def to_prompt_context(self) -> dict:
         """Create a trimmed JSON-friendly representation for LLM prompts.
@@ -81,7 +92,7 @@ class RepoAnalysis:
         if self.dependencies.java:
             notable_deps["java"] = self.dependencies.java[:10]
         
-        return {
+        context = {
             "project_type": self.project_type,
             "structure": {
                 "source_dirs": self.structure.source_dirs,
@@ -99,6 +110,18 @@ class RepoAnalysis:
                 "build_tools": self.patterns.build_tools,
             },
         }
+        
+        # Add project metadata if available
+        if self.project_metadata.name:
+            context["project_name"] = self.project_metadata.name
+        if self.project_metadata.description:
+            context["description"] = self.project_metadata.description
+        if self.project_metadata.version:
+            context["version"] = self.project_metadata.version
+        if self.project_metadata.author:
+            context["author"] = self.project_metadata.author
+        
+        return context
 
 
 class RepositoryAnalyzer:
@@ -112,6 +135,7 @@ class RepositoryAnalyzer:
         code_metrics = self._compute_code_metrics(structure)
         patterns = self._detect_patterns(dependencies)
         config_files = self._collect_config_files()
+        project_metadata = self._extract_project_metadata()
         errors: List[str] = []
 
         return RepoAnalysis(
@@ -122,6 +146,7 @@ class RepositoryAnalyzer:
             code_metrics=code_metrics,
             patterns=patterns,
             config_files=config_files,
+            project_metadata=project_metadata,
             errors=errors,
         )
 
@@ -220,14 +245,53 @@ class RepositoryAnalyzer:
     def _compute_code_metrics(self, structure: DirectoryStructure) -> CodeMetrics:
         total_files = 0
         total_lines = 0
-
-        for dirpath, _, filenames in os.walk(self.root_path):
+        
+        # Skip problematic directories
+        skip_dirs = {
+            '.git', '.svn', '.hg', '__pycache__', '.pytest_cache',
+            'node_modules', '.venv', 'venv', '.mypy_cache', 'build', 'dist'
+        }
+        
+        # File extensions to analyze (text files only)
+        code_extensions = {
+            '.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp',
+            '.cs', '.go', '.rs', '.php', '.rb', '.swift', '.kt', '.scala', '.clj',
+            '.html', '.css', '.scss', '.sass', '.less', '.xml', '.json', '.yaml', '.yml',
+            '.toml', '.ini', '.cfg', '.conf', '.sh', '.bash', '.zsh', '.fish',
+            '.md', '.rst', '.txt', '.sql', '.r', '.m', '.pl', '.lua', '.vim'
+        }
+        
+        for dirpath, dirnames, filenames in os.walk(self.root_path):
+            # Skip problematic subdirectories
+            dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+            
             for filename in filenames:
                 total_files += 1
+                
+                # Skip binary files and files without code extensions
+                file_path = Path(dirpath) / filename
+                if file_path.suffix.lower() not in code_extensions:
+                    continue
+                
+                # Skip very large files (>10MB) to prevent hangs
                 try:
-                    with open(Path(dirpath) / filename, "r", encoding="utf-8", errors="ignore") as f:
-                        total_lines += sum(1 for _ in f)
+                    if file_path.stat().st_size > 10 * 1024 * 1024:
+                        continue
                 except OSError:
+                    continue
+                
+                # Count lines efficiently
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        line_count = 0
+                        # Read file in chunks to handle large files efficiently
+                        for _ in f:
+                            line_count += 1
+                            # Early exit for very large files (safety check)
+                            if line_count > 100000:
+                                break
+                        total_lines += line_count
+                except (OSError, UnicodeDecodeError):
                     continue
 
         return CodeMetrics(total_files=total_files, total_lines=total_lines)
@@ -449,3 +513,105 @@ class RepositoryAnalyzer:
                 found.append(candidate)
 
         return ConfigFiles(files=found)
+
+    def _extract_project_metadata(self) -> ProjectMetadata:
+        """Extract project metadata from manifest files."""
+        metadata = ProjectMetadata()
+        
+        # Try pyproject.toml first (Python projects)
+        pyproject_path = self.root_path / "pyproject.toml"
+        if pyproject_path.exists():
+            try:
+                with pyproject_path.open("rb") as f:
+                    if tomllib is not None:
+                        data = tomllib.load(f)
+                    else:
+                        return metadata  # Can't parse TOML
+                
+                # Extract from [project] section
+                project = data.get("project", {})
+                if isinstance(project, dict):
+                    metadata.name = project.get("name")
+                    metadata.version = project.get("version")
+                    metadata.description = project.get("description")
+                    
+                    # Extract author from authors list
+                    authors = project.get("authors", [])
+                    if authors and isinstance(authors, list) and authors[0]:
+                        author_info = authors[0]
+                        if isinstance(author_info, dict):
+                            metadata.author = author_info.get("name")
+                    
+                    # Extract homepage from URLs
+                    urls = project.get("urls", {})
+                    if isinstance(urls, dict):
+                        metadata.homepage = urls.get("Homepage")
+                
+            except Exception:  # Catch any parsing errors
+                pass
+        
+        # Try package.json (Node.js projects)
+        package_path = self.root_path / "package.json"
+        if package_path.exists():
+            try:
+                data = json.loads(package_path.read_text(encoding="utf-8"))
+                if not metadata.name:  # Only set if not already set
+                    metadata.name = data.get("name")
+                if not metadata.version:
+                    metadata.version = data.get("version")
+                if not metadata.description:
+                    metadata.description = data.get("description")
+                if not metadata.author:
+                    author = data.get("author")
+                    if isinstance(author, str):
+                        metadata.author = author
+                    elif isinstance(author, dict):
+                        metadata.author = author.get("name")
+                if not metadata.homepage:
+                    metadata.homepage = data.get("homepage")
+            except (OSError, json.JSONDecodeError):
+                pass
+        
+        # Try go.mod (Go projects)
+        gomod_path = self.root_path / "go.mod"
+        if gomod_path.exists() and not metadata.name:
+            try:
+                content = gomod_path.read_text(encoding="utf-8")
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line.startswith("module "):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            # Extract module name from path
+                            module_path = parts[1]
+                            # Remove version suffix if present
+                            if " =>" in module_path:
+                                module_path = module_path.split(" =>")[0]
+                            metadata.name = module_path.split("/")[-1]  # Get last part
+                            break
+            except OSError:
+                pass
+        
+        # Try Cargo.toml (Rust projects)
+        cargo_path = self.root_path / "Cargo.toml"
+        if cargo_path.exists() and not metadata.name:
+            try:
+                with cargo_path.open("rb") as f:
+                    if tomllib is not None:
+                        data = tomllib.load(f)
+                        # Try [package] section first
+                        package = data.get("package")
+                        if isinstance(package, dict):
+                            metadata.name = package.get("name")
+                            metadata.version = package.get("version")
+                            metadata.description = package.get("description")
+                        
+                        # Try root level for simpler Cargo.toml
+                        if not metadata.name:
+                            metadata.name = data.get("name")
+                            metadata.version = data.get("version")
+                            metadata.description = data.get("description")
+            except Exception:  # Catch any parsing errors
+                pass
+        
+        return metadata

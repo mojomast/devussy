@@ -17,6 +17,12 @@ from prompt_toolkit.shortcuts import (
 
 from ..config import AppConfig, LLMConfig
 from ..state_manager import StateManager
+from ..logger import get_logger
+import subprocess
+import sys
+from pathlib import Path
+
+logger = get_logger(__name__)
 
 
 class SessionSettings(BaseModel):
@@ -41,6 +47,31 @@ class SessionSettings(BaseModel):
     handoff_api_timeout: Optional[int] = None
     # Concurrency
     max_concurrent_requests: Optional[int] = None
+    
+    # Experimental Features (Development Sandbox)
+    debug_ui_mode: Optional[bool] = False
+    experimental_single_window: Optional[bool] = False
+    color_theme_tester: Optional[bool] = False
+    responsive_layout: Optional[bool] = False
+    repository_tools_enabled: Optional[bool] = False
+    
+    # Development & Testing Tools
+    mock_api_mode: Optional[bool] = False
+    api_response_logger: Optional[bool] = False
+    performance_profiler: Optional[bool] = False
+    token_usage_tracker: Optional[bool] = False
+    
+    # Pipeline Experimental Modes
+    experimental_pipeline: Optional[bool] = False
+    batch_generation_mode: Optional[bool] = False
+    enhanced_error_recovery: Optional[bool] = False
+    parallel_generation: Optional[bool] = False
+    
+    # Prototype Features
+    ai_code_review: Optional[bool] = False
+    smart_recommendations: Optional[bool] = False
+    auto_documentation: Optional[bool] = False
+    cross_reference_analysis: Optional[bool] = False
 
 
 def _is_tty() -> bool:
@@ -83,8 +114,12 @@ def _load_prefs() -> SessionSettings:
     try:
         sm = StateManager()
         data = sm.load_state("ui_prefs") or {}
-        return SessionSettings(**data)
-    except Exception:
+        logger.debug(f"_load_prefs: Loaded data from state: {data}")
+        result = SessionSettings(**data)
+        logger.debug(f"_load_prefs: Created SessionSettings with repository_tools_enabled: {getattr(result, 'repository_tools_enabled', 'NOT_SET')}")
+        return result
+    except Exception as e:
+        logger.debug(f"_load_prefs: Exception occurred: {e}")
         return SessionSettings()
 
 
@@ -441,10 +476,17 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
     # Merge last-used preferences as defaults
     saved = _load_prefs()
     base = session or SessionSettings()
+    
+    # Log the preference loading for debugging
+    logger.debug(f"run_menu: Loaded preferences - provider: {saved.provider}, temp: {saved.temperature}")
+    
     # Prefer explicit session values, else saved prefs
     for field in SessionSettings.model_fields.keys():
         if getattr(base, field, None) is None and getattr(saved, field, None) is not None:
             setattr(base, field, getattr(saved, field))
+    
+    # Log the final merged session
+    logger.debug(f"run_menu: Final session - provider: {base.provider}, temp: {base.temperature}")
     session = base
 
     # TTY path (prompt_toolkit dialogs)
@@ -806,8 +848,8 @@ def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> App
             config.handoff_llm = LLMConfig(model=config.llm.model, provider=config.llm.provider, api_timeout=session.handoff_api_timeout)
         else:
             config.handoff_llm.api_timeout = session.handoff_api_timeout
-
-    # Persist key settings into .env so they survive new processes.
+    
+        # Persist key settings into .env so they survive new processes.
     # Only write keys that are meaningful across sessions.
     env_updates: Dict[str, Optional[str]] = {}
 
@@ -1295,6 +1337,370 @@ def show_readme() -> None:
     message_dialog(title="Devussy Readme", text=text, ok_text="Back").run()
 
 
+def _toggle_repository_tools(session: SessionSettings) -> SessionSettings:
+    """Toggle repository tools enabled state and return updated session."""
+    current_state = session.repository_tools_enabled or False
+    new_state = not current_state
+    
+    if _is_tty():
+        state_text = "ENABLED" if new_state else "DISABLED"
+        print(f"\n[TOOL] Repository Tools: {state_text}")
+        if new_state:
+            print("\nWhen enabled, the interview will:")
+            print("  • Ask for repository path before starting")
+            print("  • Prompt for project type (New vs Existing)")
+            print("  • Run init_repo for new projects")
+            print("  • Run analyze_repo for existing projects")
+            print("  • Enhance the interview with repository context")
+        print("\nThis setting affects the interview workflow.")
+        
+        if new_state:
+            # We are enabling (new_state is True, so we want to enable)
+            confirm = yes_no_dialog(
+                title="Enable Repository Tools",
+                text=f"Repository Tools are currently {'ENABLED' if current_state else 'DISABLED'}.\n\nEnable Repository Tools for enhanced repository-aware interviews?",
+                yes_text="Enable",
+                no_text="Keep Disabled",
+            ).run()
+            if not confirm:
+                return session
+        else:
+            # We are disabling (new_state is False, so we want to disable)
+            confirm = yes_no_dialog(
+                title="Disable Repository Tools",
+                text=f"Repository Tools are currently {'ENABLED' if current_state else 'DISABLED'}.\n\nDisable Repository Tools?",
+                yes_text="Disable",
+                no_text="Keep Enabled",
+            ).run()
+            if not confirm:
+                return session
+        
+        session.repository_tools_enabled = new_state
+        print(f"[OK] Repository Tools {'ENABLED' if new_state else 'DISABLED'}")
+        return session
+    else:
+        current_state = session.repository_tools_enabled or False
+        new_state = not current_state
+        
+        print(f"\nRepository Tools: {'ENABLED' if current_state else 'DISABLED'}")
+        response = input(f"Enable Repository Tools? (y/n, current: {'ENABLED' if current_state else 'DISABLED'}): ").strip().lower()
+        
+        if response in ["y", "yes"]:
+            session.repository_tools_enabled = True
+            print("[OK] Repository Tools ENABLED")
+            print("\nWhen enabled, the interview will:")
+            print("  • Ask for repository path before starting")
+            print("  • Prompt for project type (New vs Existing)")
+            print("  • Run init_repo for new projects")
+            print("  • Run analyze_repo for existing projects")
+            print("  • Enhance the interview with repository context")
+            return session
+        elif response in ["n", "no"]:
+            session.repository_tools_enabled = False
+            print("[OK] Repository Tools DISABLED")
+            return session
+        else:
+            print("No change made.")
+            return session
+
+def _submenu_testing(config: AppConfig, session: SessionSettings) -> SessionSettings:
+    """Testing menu for accessing dead CLI commands that aren't reachable through python -m src.entry."""
+    
+    def _run_cli_command(command: str, args: Optional[list] = None) -> bool:
+        """Run a CLI command and return success status."""
+        try:
+            cmd = [sys.executable, "-m", "src.entry", command]
+            if args:
+                cmd.extend(args)
+            
+            print(f"\n[TOOL] Running: {' '.join(cmd)}")
+            print("=" * 50)
+            
+            result = subprocess.run(cmd, cwd=Path.cwd())
+            
+            if result.returncode == 0:
+                print(f"[OK] Command completed successfully")
+            else:
+                print(f"[ERROR] Command failed with exit code {result.returncode}")
+            
+            return result.returncode == 0
+        except Exception as e:
+            print(f"[ERROR] Failed to run command: {e}")
+            return False
+    
+    def _submenu_repository_management() -> None:
+        """Repository management tools."""
+        while True:
+            if _is_tty():
+                choice = (
+                    radiolist_dialog(
+                        title="Repository Management",
+                        text="Repository initialization and analysis tools",
+                        values=[
+                            ("init-repo", "Initialize Repository"),
+                            ("analyze-repo", "Analyze Repository"),
+                            ("back", "Back"),
+                        ],
+                    ).run()
+                    or "back"
+                )
+            else:
+                print("\n=== Repository Management ===")
+                print("1) Initialize Repository")
+                print("2) Analyze Repository")
+                print("3) Back")
+                choice = input("Enter 1-3 [3]: ").strip() or "3"
+                choice_map = {"1": "init-repo", "2": "analyze-repo", "3": "back"}
+                choice = choice_map.get(choice, "back")
+            
+            if choice == "back":
+                return
+            elif choice in ["init-repo", "analyze-repo"]:
+                args = None
+                if choice == "init-repo":
+                    repo_path = input("Repository path (current directory): ").strip()
+                    if repo_path:
+                        args = [repo_path]
+                elif choice == "analyze-repo":
+                    repo_path = input("Repository path (current directory): ").strip()
+                    if repo_path:
+                        args = [repo_path]
+                
+                _run_cli_command(choice, args)
+            else:
+                print("Please enter a valid option.")
+    
+    def _submenu_pipeline_tools() -> None:
+        """Pipeline generation tools."""
+        while True:
+            if _is_tty():
+                choice = (
+                    radiolist_dialog(
+                        title="Pipeline Tools",
+                        text="Generate designs, devplans, and handoffs",
+                        values=[
+                            ("generate-design", "Generate Design"),
+                            ("generate-devplan", "Generate DevPlan"),
+                            ("generate-handoff", "Generate Handoff"),
+                            ("run-full-pipeline", "Run Full Pipeline"),
+                            ("launch", "Launch"),
+                            ("back", "Back"),
+                        ],
+                    ).run()
+                    or "back"
+                )
+            else:
+                print("\n=== Pipeline Tools ===")
+                print("1) Generate Design")
+                print("2) Generate DevPlan")
+                print("3) Generate Handoff")
+                print("4) Run Full Pipeline")
+                print("5) Launch")
+                print("6) Back")
+                choice = input("Enter 1-6 [6]: ").strip() or "6"
+                choice_map = {
+                    "1": "generate-design",
+                    "2": "generate-devplan",
+                    "3": "generate-handoff",
+                    "4": "run-full-pipeline",
+                    "5": "launch",
+                    "6": "back"
+                }
+                choice = choice_map.get(choice, "back")
+            
+            if choice == "back":
+                return
+            elif choice in ["generate-design", "generate-devplan", "generate-handoff", "run-full-pipeline", "launch"]:
+                _run_cli_command(choice)
+            else:
+                print("Please enter a valid option.")
+    
+    def _submenu_terminal_ui_tools() -> None:
+        """Terminal and UI tools."""
+        while True:
+            if _is_tty():
+                choice = (
+                    radiolist_dialog(
+                        title="Terminal & UI Tools",
+                        text="Different UI modes and terminal interfaces",
+                        values=[
+                            ("generate-terminal", "Generate Terminal"),
+                            ("interactive", "Interactive Mode"),
+                            ("interview", "Interview Mode"),
+                            ("back", "Back"),
+                        ],
+                    ).run()
+                    or "back"
+                )
+            else:
+                print("\n=== Terminal & UI Tools ===")
+                print("1) Generate Terminal")
+                print("2) Interactive Mode")
+                print("3) Interview Mode")
+                print("4) Back")
+                choice = input("Enter 1-4 [4]: ").strip() or "4"
+                choice_map = {
+                    "1": "generate-terminal",
+                    "2": "interactive",
+                    "3": "interview",
+                    "4": "back"
+                }
+                choice = choice_map.get(choice, "back")
+            
+            if choice == "back":
+                return
+            elif choice in ["generate-terminal", "interactive", "interview"]:
+                _run_cli_command(choice)
+            else:
+                print("Please enter a valid option.")
+    
+    def _submenu_checkpoint_management() -> None:
+        """Checkpoint management tools."""
+        while True:
+            if _is_tty():
+                choice = (
+                    radiolist_dialog(
+                        title="Checkpoint Management",
+                        text="Manage development session checkpoints",
+                        values=[
+                            ("list-checkpoints", "List Checkpoints"),
+                            ("delete-checkpoint", "Delete Checkpoint"),
+                            ("cleanup-checkpoints", "Cleanup Checkpoints"),
+                            ("back", "Back"),
+                        ],
+                    ).run()
+                    or "back"
+                )
+            else:
+                print("\n=== Checkpoint Management ===")
+                print("1) List Checkpoints")
+                print("2) Delete Checkpoint")
+                print("3) Cleanup Checkpoints")
+                print("4) Back")
+                choice = input("Enter 1-4 [4]: ").strip() or "4"
+                choice_map = {
+                    "1": "list-checkpoints",
+                    "2": "delete-checkpoint",
+                    "3": "cleanup-checkpoints",
+                    "4": "back"
+                }
+                choice = choice_map.get(choice, "back")
+            
+            if choice == "back":
+                return
+            elif choice in ["list-checkpoints", "cleanup-checkpoints"]:
+                _run_cli_command(choice)
+            elif choice == "delete-checkpoint":
+                checkpoint_id = input("Checkpoint ID to delete: ").strip()
+                if checkpoint_id:
+                    _run_cli_command(choice, [checkpoint_id])
+            else:
+                print("Please enter a valid option.")
+    
+    def _submenu_utilities() -> None:
+        """Utility commands."""
+        while True:
+            if _is_tty():
+                choice = (
+                    radiolist_dialog(
+                        title="Utilities",
+                        text="Utility commands and tools",
+                        values=[
+                            ("version", "Show Version"),
+                            ("back", "Back"),
+                        ],
+                    ).run()
+                    or "back"
+                )
+            else:
+                print("\n=== Utilities ===")
+                print("1) Show Version")
+                print("2) Back")
+                choice = input("Enter 1-2 [2]: ").strip() or "2"
+                choice_map = {"1": "version", "2": "back"}
+                choice = choice_map.get(choice, "back")
+            
+            if choice == "back":
+                return
+            elif choice == "version":
+                _run_cli_command(choice)
+            else:
+                print("Please enter a valid option.")
+    
+    # Main testing menu loop
+    while True:
+        try:
+            print("\n=== Testing Menu - Dead CLI Commands ===")
+            print("[WARN] ADVANCED FEATURES - NOT ACCESSIBLE VIA MAIN ENTRY [WARN]")
+            print("")
+            print("These CLI commands exist but aren't reachable through 'python -m src.entry'")
+            print("They are accessible here for development and testing purposes.")
+            print("")
+            # Get current repository tools status for display
+            repo_status = "ENABLED" if (session.repository_tools_enabled or False) else "DISABLED"
+            
+            print("Select a category:")
+            print(f"  1) Repository Tools (<{repo_status}>)")
+            print("  2) Pipeline Tools")
+            print("  3) Terminal & UI Tools")
+            print("  4) Checkpoint Management")
+            print("  5) Utilities")
+            print("  6) Back to Main Menu")
+            
+            if _is_tty():
+                choice = (
+                    radiolist_dialog(
+                        title="Testing Menu",
+                        text="Choose a category for dead CLI commands",
+                        values=[
+                            ("repo_tools", f"Repository Tools ({repo_status})"),
+                            ("pipeline", "Pipeline Tools"),
+                            ("terminal_ui", "Terminal & UI Tools"),
+                            ("checkpoint", "Checkpoint Management"),
+                            ("utilities", "Utilities"),
+                            ("back", "Back to Main Menu"),
+                        ],
+                    ).run()
+                    or "back"
+                )
+            else:
+                raw = input("Enter 1-6 [6]: ").strip() or "6"
+                choice_map = {
+                    "1": "repo_tools",
+                    "2": "pipeline",
+                    "3": "terminal_ui",
+                    "4": "checkpoint",
+                    "5": "utilities",
+                    "6": "back"
+                }
+                choice = choice_map.get(raw, "back")
+            
+            if choice == "repo_tools":
+                session = _toggle_repository_tools(session)
+                apply_settings_to_config(config, session)
+                _save_prefs(session)
+                continue
+            elif choice == "pipeline":
+                _submenu_pipeline_tools()
+                continue
+            elif choice == "terminal_ui":
+                _submenu_terminal_ui_tools()
+                continue
+            elif choice == "checkpoint":
+                _submenu_checkpoint_management()
+                continue
+            elif choice == "utilities":
+                _submenu_utilities()
+                continue
+            elif choice == "back":
+                return session
+        except (KeyboardInterrupt, EOFError):
+            return session
+        except Exception as e:
+            print(f"Error in testing menu: {e}")
+            return session
+
+
 def run_main_menu(config: AppConfig, force_show: bool = False) -> str:
     """Display a minimal start menu beneath the splash banner.
 
@@ -1309,10 +1715,11 @@ def run_main_menu(config: AppConfig, force_show: bool = False) -> str:
             print("  1) Start Devussy Workflow")
             print("  2) Modify Options")
             print("  3) Readme: Circular Development, DevPlan & Handoff")
-            print("  4) Quit")
+            print("  4) Testing (Experimental Features)")
+            print("  5) Quit")
 
             try:
-                choice = input("Enter 1-4 [1]: ").strip()
+                choice = input("Enter 1-5 [1]: ").strip()
             except Exception:
                 # Fallback when stdin isn't interactive
                 choice = "1"
@@ -1332,9 +1739,20 @@ def run_main_menu(config: AppConfig, force_show: bool = False) -> str:
                 show_readme()
                 continue
             if choice == "4":
+                sess = SessionSettings()
+                # Load saved preferences for testing menu display
+                saved = _load_prefs()
+                for field in SessionSettings.model_fields.keys():
+                    if getattr(sess, field, None) is None and getattr(saved, field, None) is not None:
+                        setattr(sess, field, getattr(saved, field))
+                sess = _submenu_testing(config, sess)
+                apply_settings_to_config(config, sess)
+                # After testing, loop back to main menu
+                continue
+            if choice == "5":
                 return "quit"
 
-            print("Please enter a number between 1 and 4.")
+            print("Please enter a number between 1 and 5.")
         except (KeyboardInterrupt, EOFError):
             return "quit"
 

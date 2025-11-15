@@ -59,10 +59,10 @@ def validate_file(path: Path) -> bool:
             missing.append(logical)
 
     if missing:
-        print(f"❌ {path}: missing anchors {', '.join(missing)}")
+        print(f"[ERROR] {path}: missing anchors {', '.join(missing)}")
         return False
 
-    print(f"✅ {path}: all required anchors present")
+    print(f"[OK] {path}: all required anchors present")
     return True
 
 

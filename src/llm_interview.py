@@ -107,9 +107,8 @@ When interview is complete, output a JSON block with extracted data:
 
         self.llm_client = create_llm_client(config)
 
-        # Set debug flag on client after creation if verbose mode enabled
-        if hasattr(self.llm_client, "_debug"):
-            self.llm_client._debug = verbose
+        # Apply debug/verbose flag to client (robust attribute discovery)
+        self._apply_client_debug(verbose)
 
         self.conversation_history = []
         self.extracted_data = {}
@@ -145,6 +144,57 @@ When interview is complete, output a JSON block with extracted data:
         logger.info(f"Verbose mode: {self.verbose}")
         logger.info(f"Provider: {config.llm.provider}")
         logger.info(f"Model: {config.llm.model}")
+
+    def _apply_client_debug(self, enabled: bool) -> None:
+        """Best-effort propagation of a debug/verbose flag to the underlying LLM client.
+
+        The concrete client implementations may expose different attribute or method
+        names. This helper attempts a variety of common patterns but never raises.
+
+        Args:
+            enabled: Whether verbose/debug output should be enabled.
+        """
+        try:
+            client = self.llm_client
+        except AttributeError:
+            return
+
+        if client is None:
+            return
+
+        # Direct attribute flips
+        for attr in ("verbose", "debug", "log_prompts", "logging_enabled"):
+            if hasattr(client, attr):
+                try:
+                    setattr(client, attr, enabled)
+                except Exception:
+                    pass
+
+        # Common setter / enabler methods
+        for method_name in ("set_debug", "enable_debug", "set_verbose"):
+            if hasattr(client, method_name):
+                try:
+                    getattr(client, method_name)(enabled)
+                except Exception:
+                    pass
+
+        # Nested config objects
+        if hasattr(client, "config"):
+            cfg = getattr(client, "config")
+            for attr in ("verbose", "debug"):
+                if hasattr(cfg, attr):
+                    try:
+                        setattr(cfg, attr, enabled)
+                    except Exception:
+                        pass
+
+        # Optional: attach a simple flag so downstream logic can check
+        try:
+            setattr(client, "_devussy_verbose", enabled)
+        except Exception:
+            pass
+
+        logger.debug(f"Applied debug/verbose={enabled} to LLM client")
 
     def _build_repo_summary(self, analysis: RepoAnalysis) -> str:
         """Build a compact, text-only summary of the analyzed repository."""
@@ -238,9 +288,17 @@ When interview is complete, output a JSON block with extracted data:
             self._print_project_summary()
         
         # Start with initial greeting
-        initial_response = self._send_to_llm(
-            "Hi! I'm excited to help you plan your project. Let's start with the basics - what would you like to name your project?"
-        )
+        if self.repo_analysis and self.repo_analysis.project_metadata.name:
+            # Use the project name from repository analysis
+            project_name = self.repo_analysis.project_metadata.name
+            initial_response = self._send_to_llm(
+                f"Hi! I'm excited to help you plan your project '{project_name}'. I can see this is a {self.repo_analysis.project_type} project with {self.repo_analysis.code_metrics.total_files} files. What would you like to accomplish with this project?"
+            )
+        else:
+            # Ask for project name as before
+            initial_response = self._send_to_llm(
+                "Hi! I'm excited to help you plan your project. Let's start with the basics - what would you like to name your project?"
+            )
         # Only display if streaming wasn't already showing it
         streaming_enabled = getattr(self.config, 'streaming_enabled', False)
         if not streaming_enabled:
@@ -393,9 +451,8 @@ When interview is complete, output a JSON block with extracted data:
             self.verbose = not self.verbose
             status = "ON" if self.verbose else "OFF"
             
-            # Update the LLM client debug flag to control Requesty output
-            if hasattr(self.llm_client, '_debug'):
-                self.llm_client._debug = self.verbose
+            # Update the LLM client debug/verbose flag
+            self._apply_client_debug(self.verbose)
             
             console.print(f"[cyan]ℹ️ Verbose mode: {status}[/cyan]")
             logger.info(f"Verbose mode toggled: {status}")
@@ -426,8 +483,7 @@ When interview is complete, output a JSON block with extracted data:
                 apply_settings_to_config(self.config, self.session_settings)
                 # Recreate LLM client to pick up new settings
                 self.llm_client = create_llm_client(self.config)
-                if hasattr(self.llm_client, '_debug'):
-                    self.llm_client._debug = self.verbose
+                self._apply_client_debug(self.verbose)
                 console.print("[green]✓ Settings applied for this session.[/green]")
                 # Show quick summary
                 usage = self.session_settings.last_token_usage or {}
@@ -449,8 +505,7 @@ When interview is complete, output a JSON block with extracted data:
                     self.session_settings.final_stage_model = final_model.strip()
                 apply_settings_to_config(self.config, self.session_settings)
                 self.llm_client = create_llm_client(self.config)
-                if hasattr(self.llm_client, '_debug'):
-                    self.llm_client._debug = self.verbose
+                self._apply_client_debug(self.verbose)
                 console.print("[green]✓ Model settings updated.[/green]")
             except Exception as e:
                 console.print(f"[red]Failed to update model: {e}[/red]")
@@ -464,8 +519,7 @@ When interview is complete, output a JSON block with extracted data:
                     self.session_settings.temperature = t
                     apply_settings_to_config(self.config, self.session_settings)
                     self.llm_client = create_llm_client(self.config)
-                    if hasattr(self.llm_client, '_debug'):
-                        self.llm_client._debug = self.verbose
+                    self._apply_client_debug(self.verbose)
                     console.print("[green]✓ Temperature updated.[/green]\n")
                 else:
                     console.print("[yellow]Temperature must be between 0.0 and 2.0[/yellow]")
@@ -1067,7 +1121,12 @@ When interview is complete, output a JSON block with extracted data:
             return ""
         
         try:
-            extractor = CodeSampleExtractor(root_path=str(self.repo_analysis.root_path))
+            # Safeguard: repo_analysis might be None if code_samples were injected externally
+            root_path = (
+                str(getattr(self.repo_analysis, "root_path", "."))
+                if self.repo_analysis is not None else "."
+            )
+            extractor = CodeSampleExtractor(root_path=root_path)
             return extractor.format_samples_for_prompt(self.code_samples)
         except Exception:
             return ""

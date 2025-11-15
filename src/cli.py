@@ -6,9 +6,10 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import traceback
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Any, Annotated, Optional
 
 import typer
 from dotenv import load_dotenv
@@ -59,7 +60,9 @@ def _apply_last_prefs_to_config(config: AppConfig) -> None:
     try:
         prefs = load_last_used_preferences()
         apply_settings_to_config(config, prefs)
-    except Exception:
+    except Exception as e:
+        # Log the exception so we can debug preference loading issues
+        logger.debug(f"Failed to load UI preferences: {e}", exc_info=True)
         pass
 
 
@@ -123,7 +126,7 @@ def _render_splash() -> None:
         box=ROUNDED,
         border_style="cyan",
         padding=(1, 2),
-        title="🎼 DEVUSSY",
+        title="[LOGO] DEVUSSY",
         expand=True,
     )
     console.print(panel)
@@ -157,10 +160,10 @@ def _resolve_requesty_api_key(config: AppConfig) -> str:
     if existing_key:
         return existing_key
 
-    typer.echo("\n⚠️  Requesty API key not found in config or environment.")
+    typer.echo("\n[WARN] Requesty API key not found in config or environment.")
     if not typer.confirm("Would you like to enter a Requesty API key now?", default=True):
         typer.echo(
-            "❌ Requesty model selection requires an API key. Aborting.",
+            "[ERROR] Requesty model selection requires an API key. Aborting.",
             err=True,
             color=True,
         )
@@ -223,7 +226,7 @@ def _select_requesty_model_interactively(config: AppConfig) -> str:
     provider = getattr(config.llm, "provider", "openai").lower()
     if provider != "requesty":
         typer.echo(
-            f"\nℹ️  Active provider is '{provider}'. Switching to Requesty for this run."
+            f"\n[INFO] Active provider is '{provider}'. Switching to Requesty for this run."
         )
         config.llm.provider = "requesty"
 
@@ -235,16 +238,16 @@ def _select_requesty_model_interactively(config: AppConfig) -> str:
 
     api_key = _resolve_requesty_api_key(config)
 
-    typer.echo("\n🔄 Fetching available Requesty models...\n")
+    typer.echo("\n[WAIT] Fetching available Requesty models...\n")
     try:
         models = asyncio.run(_fetch_requesty_models(api_key, base_url))
     except Exception as exc:  # noqa: BLE001
-        typer.echo(f"❌ Failed to retrieve Requesty models: {exc}", err=True, color=True)
+        typer.echo(f"[ERROR] Failed to retrieve Requesty models: {exc}", err=True, color=True)
         raise typer.Exit(code=1)
 
     if not models:
         typer.echo(
-            "❌ Requesty returned no models. Please verify your credentials.",
+            "[ERROR] Requesty returned no models. Please verify your credentials.",
             err=True,
             color=True,
         )
@@ -289,7 +292,7 @@ def _select_requesty_model_interactively(config: AppConfig) -> str:
             if not getattr(stage_config, "api_key", None):
                 stage_config.api_key = api_key
 
-    typer.echo(f"\n✅ Selected Requesty model: {selected}\n")
+    typer.echo(f"\n[OK] Selected Requesty model: {selected}\n")
     return selected
 
 
@@ -301,6 +304,7 @@ def _load_app_config(
     verbose: bool,
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
+    load_ui_preferences: bool = True,
 ) -> AppConfig:
     """Load configuration with CLI overrides.
 
@@ -310,6 +314,7 @@ def _load_app_config(
         model: Model override
         output_dir: Output directory override
         verbose: Enable verbose logging
+        load_ui_preferences: Whether to load UI preferences (default: True)
 
     Returns:
         AppConfig: Configured application config
@@ -345,6 +350,15 @@ def _load_app_config(
         config.llm.max_tokens = max_tokens
     if verbose:
         config.log_level = "DEBUG"
+
+    # Apply UI preferences to config during startup (if not CLI-only commands)
+    if load_ui_preferences:
+        try:
+            _apply_last_prefs_to_config(config)
+        except Exception as e:
+            # Never break startup due to preference loading issues
+            logger.debug(f"Failed to load UI preferences: {e}")
+            pass
 
     # Setup logging
     setup_logging(config.log_level, str(config.log_file), config.log_format)
@@ -535,14 +549,14 @@ def generate_design(
 
         # Run design generation
         typer.echo("\n" + "=" * 60)
-        typer.echo(f"🚀 Generating project design for: {project_name}")
+        typer.echo(f"[ROCKET] Generating project design for: {project_name}")
         typer.echo("=" * 60 + "\n")
         typer.echo(f"Languages: {', '.join(languages_list)}")
         if frameworks_list:
             typer.echo(f"Frameworks: {', '.join(frameworks_list)}")
         if apis_list:
             typer.echo(f"APIs: {', '.join(apis_list)}")
-        typer.echo("\n⏳ Generating design (this may take a moment)...\n")
+        typer.echo("\n[WAIT] Generating design (this may take a moment)...\n")
 
         logger.info(f"Generating project design for: {project_name}")
 
@@ -570,7 +584,7 @@ def generate_design(
                 h.setLevel(lvl)
 
         # Display intermediate results
-        typer.echo("\n📋 Project Design Summary:")
+        typer.echo("\n[LIST] Project Design Summary:")
         typer.echo("-" * 40)
         if design.objectives:
             typer.echo(f"Objectives: {len(design.objectives)} defined")
@@ -591,24 +605,101 @@ def generate_design(
             for tech in design.tech_stack:
                 f.write(f"- {tech}\n")
 
-        typer.echo(f"✓ Project design saved to: {output_file}", color=True)
+        typer.echo(f"[OK] Project design saved to: {output_file}", color=True)
         logger.info(f"Project design saved to: {output_file}")
 
     except typer.Exit:
         raise
     except Exception as e:
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         logger.error(f"Error generating project design: {e}", exc_info=True)
         if debug:
             typer.echo("\nDebug traceback:", err=True)
             typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
 
+def _parse_markdown_design(content: str, project_name: str) -> ProjectDesign:
+    """Parse markdown project design into ProjectDesign model.
+    
+    Args:
+        content: Raw markdown content from project design file
+        project_name: Fallback project name if not found in content
+    
+    Returns:
+        Parsed ProjectDesign model
+    """
+    import re
+    
+    # Initialize defaults
+    objectives = []
+    tech_stack = []
+    dependencies = []
+    challenges = []
+    mitigations = []
+    architecture_overview = ""
+    
+    # Extract project name from header
+    name_match = re.search(r'# Project Design:\s*(.+)', content)
+    if name_match:
+        project_name = name_match.group(1).strip()
+    
+    # Extract architecture overview
+    arch_match = re.search(r'## Architecture Overview\s*\n\s*(.+?)(?=\n##|\n#|\Z)', content, re.DOTALL)
+    if arch_match:
+        architecture_overview = arch_match.group(1).strip()
+    
+    # Extract tech stack
+    tech_matches = re.findall(r'## Tech Stack\s*\n((?:- .+\n?)+)', content, re.DOTALL)
+    if tech_matches:
+        for line in tech_matches[0].split('\n'):
+            if line.strip().startswith('-'):
+                tech_stack.append(line.strip()[1:].strip())
+    
+    # Extract objectives (if present in markdown)
+    obj_matches = re.findall(r'## Objectives\s*\n((?:- .+\n?)+)', content, re.DOTALL)
+    if obj_matches:
+        for line in obj_matches[0].split('\n'):
+            if line.strip().startswith('-'):
+                objectives.append(line.strip()[1:].strip())
+    
+    # Extract dependencies (if present)
+    dep_matches = re.findall(r'## Dependencies\s*\n((?:- .+\n?)+)', content, re.DOTALL)
+    if dep_matches:
+        for line in dep_matches[0].split('\n'):
+            if line.strip().startswith('-'):
+                dependencies.append(line.strip()[1:].strip())
+    
+    # Extract challenges (if present)
+    challenge_matches = re.findall(r'## Challenges?\s*\n((?:- .+\n?)+)', content, re.DOTALL)
+    if challenge_matches:
+        for line in challenge_matches[0].split('\n'):
+            if line.strip().startswith('-'):
+                challenges.append(line.strip()[1:].strip())
+    
+    # Extract mitigations (if present)
+    mitigation_matches = re.findall(r'## Mitigations?\s*\n((?:- .+\n?)+)', content, re.DOTALL)
+    if mitigation_matches:
+        for line in mitigation_matches[0].split('\n'):
+            if line.strip().startswith('-'):
+                mitigations.append(line.strip()[1:].strip())
+    
+    return ProjectDesign(
+        project_name=project_name,
+        objectives=objectives if objectives else ["Generate project objectives based on requirements"],
+        tech_stack=tech_stack if tech_stack else ["Technology stack to be determined"],
+        architecture_overview=architecture_overview or "Architecture overview to be generated from markdown content",
+        dependencies=dependencies,
+        challenges=challenges,
+        mitigations=mitigations
+    )
+
+
+@app.command()
 
 @app.command()
 def generate_devplan(
     design_file: Annotated[
-        str, typer.Argument(help="Path to project design JSON file")
+        str, typer.Argument(help="Path to project design Markdown file")
     ],
     config_path: Annotated[
         Optional[str], typer.Option("--config", help="Path to config file")
@@ -719,8 +810,9 @@ def generate_devplan(
             raise typer.Exit(code=1)
 
         with open(design_path, "r", encoding="utf-8") as f:
-            design_data = json.load(f)
-            design = ProjectDesign.model_validate(design_data)
+            content = f.read()
+            # Only support markdown files now
+            design = _parse_markdown_design(content, "")
 
         # Create orchestrator
         orchestrator = _create_orchestrator(config)
@@ -741,15 +833,15 @@ def generate_devplan(
                 total_corr = summary["total_corrections"]
                 total_edits = summary["total_manual_edits"]
                 typer.echo(
-                    f"\n📝 Loaded feedback: {total_corr} corrections, "
+                    f"\n[NOTE] Loaded feedback: {total_corr} corrections, "
                     f"{total_edits} manual edits"
                 )
 
         # Run devplan generation
         typer.echo("\n" + "=" * 60)
-        typer.echo(f"📝 Generating development plan for: {design.project_name}")
+        typer.echo(f"[PLAN] Generating development plan for: {design.project_name}")
         typer.echo("=" * 60 + "\n")
-        typer.echo("⏳ Step 1/2: Generating basic devplan structure...")
+        typer.echo("[WAIT] Step 1/2: Generating basic devplan structure...")
 
         logger.info(f"Generating devplan from: {design_file}")
 
@@ -762,9 +854,9 @@ def generate_devplan(
         )
 
         # Display intermediate results
-        typer.echo("✓ Basic structure complete")
-        typer.echo("⏳ Step 2/2: Generating detailed steps...")
-        typer.echo("\n📊 DevPlan Summary:")
+        typer.echo("[OK] Basic structure complete")
+        typer.echo("[WAIT] Step 2/2: Generating detailed steps...")
+        typer.echo("\n[STATS] DevPlan Summary:")
         typer.echo("-" * 40)
         typer.echo(f"Phases: {len(devplan.phases)} identified")
         total_steps = sum(len(phase.steps) for phase in devplan.phases)
@@ -780,17 +872,17 @@ def generate_devplan(
         fm = FileManager()
         ok, written_path = fm.safe_write_devplan(output_file, devplan_md)
         if ok:
-            typer.echo(f"✓ DevPlan saved to: {output_file}", color=True)
+            typer.echo(f"[OK] DevPlan saved to: {output_file}", color=True)
             logger.info(f"DevPlan saved to: {output_file}")
         else:
-            typer.echo(f"⚠️  DevPlan content failed validation; wrote candidate to: {written_path}", err=True, color=True)
+            typer.echo(f"[WARN] DevPlan content failed validation; wrote candidate to: {written_path}", err=True, color=True)
             logger.warning(f"DevPlan write redirected to tmp: {written_path}")
 
     except typer.Exit:
         raise
     except json.JSONDecodeError as e:
         typer.echo(
-            f"\n❌ Error: Invalid JSON in design file: {str(e)}",
+            f"\n[ERROR] Error: Invalid JSON in design file: {str(e)}",
             err=True,
             color=True,
         )
@@ -800,7 +892,7 @@ def generate_devplan(
             typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
     except Exception as e:
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         logger.error(f"Error generating devplan: {e}", exc_info=True)
         if debug:
             typer.echo("\nDebug traceback:", err=True)
@@ -908,16 +1000,16 @@ def generate_handoff(
 
         # Run handoff generation
         typer.echo("\n" + "=" * 60)
-        typer.echo(f"📤 Generating handoff prompt for: {project_name}")
+        typer.echo(f"[SEND] Generating handoff prompt for: {project_name}")
         typer.echo("=" * 60 + "\n")
-        typer.echo("⏳ Creating handoff document...\n")
+        typer.echo("[WAIT] Creating handoff document...\n")
 
         logger.info(f"Generating handoff prompt from: {devplan_file}")
 
         handoff = asyncio.run(orchestrator.run_handoff_only(devplan, project_name))
 
         # Display intermediate results
-        typer.echo("\n✓ Handoff prompt generated")
+        typer.echo("\n[OK] Handoff prompt generated")
         if handoff.next_steps:
             typer.echo(f"Next steps: {len(handoff.next_steps)} defined\n")
 
@@ -928,14 +1020,14 @@ def generate_handoff(
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(handoff.content)
 
-        typer.echo(f"✓ Handoff prompt saved to: {output_file}", color=True)
+        typer.echo(f"[OK] Handoff prompt saved to: {output_file}", color=True)
         logger.info(f"Handoff prompt saved to: {output_file}")
 
     except typer.Exit:
         raise
     except json.JSONDecodeError as e:
         typer.echo(
-            f"\n❌ Error: Invalid JSON in devplan file: {str(e)}",
+            f"\n[ERROR] Error: Invalid JSON in devplan file: {str(e)}",
             err=True,
             color=True,
         )
@@ -945,7 +1037,7 @@ def generate_handoff(
             typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
     except Exception as e:
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         logger.error(f"Error generating handoff prompt: {e}", exc_info=True)
         if debug:
             typer.echo("\nDebug traceback:", err=True)
@@ -1099,7 +1191,7 @@ def run_full_pipeline(
                 total_corr = summary["total_corrections"]
                 total_edits = summary["total_manual_edits"]
                 typer.echo(
-                    f"\n📝 Loaded feedback: {total_corr} corrections, "
+                    f"\n[NOTE] Loaded feedback: {total_corr} corrections, "
                     f"{total_edits} manual edits"
                 )
 
@@ -1109,7 +1201,7 @@ def run_full_pipeline(
         # Handle checkpoint resumption
         if resume_from:
             typer.echo("\n" + "=" * 60)
-            typer.echo(f"🔄 Resuming pipeline from checkpoint: {resume_from}")
+            typer.echo(f"[REFRESH] Resuming pipeline from checkpoint: {resume_from}")
             typer.echo("=" * 60 + "\n")
 
             logger.info(f"Resuming pipeline from checkpoint: {resume_from}")
@@ -1124,9 +1216,9 @@ def run_full_pipeline(
                     )
                 )
             except ValueError as e:
-                typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+                typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
                 typer.echo(
-                    "\n💡 Tip: Use 'devussy list-checkpoints' to see "
+                    "\n[TIP] Use 'devussy list-checkpoints' to see "
                     "available checkpoints",
                     color=True,
                 )
@@ -1154,11 +1246,11 @@ def run_full_pipeline(
     except typer.Exit:
         raise
     except KeyboardInterrupt:
-        typer.echo("\n\n⚠️ Pipeline interrupted by user", err=True, color=True)
+        typer.echo("\n\n[WARN] Pipeline interrupted by user", err=True, color=True)
         logger.warning("Pipeline interrupted by user")
         raise typer.Exit(code=130)
     except Exception as e:
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         logger.error(f"Error running full pipeline: {e}", exc_info=True)
         if debug:
             typer.echo("\nDebug traceback:", err=True)
@@ -1191,7 +1283,7 @@ def init_repo(
         target_path = target_path.resolve()
 
         typer.echo("\n" + "=" * 60)
-        typer.echo("🚀 Initializing DevPlan Orchestrator repository")
+        typer.echo("[ROCKET] Initializing DevPlan Orchestrator repository")
         typer.echo("=" * 60 + "\n")
         typer.echo(f"Target directory: {target_path}\n")
 
@@ -1203,7 +1295,7 @@ def init_repo(
         # Check if directory is empty
         if list(target_path.iterdir()) and not force:
             typer.echo(
-                "\n⚠️  Error: Directory is not empty. "
+                "\n[WARN] Error: Directory is not empty. "
                 "Use --force to initialize anyway.",
                 err=True,
                 color=True,
@@ -1211,7 +1303,7 @@ def init_repo(
             raise typer.Exit(code=1)
 
         # Initialize Git repository
-        typer.echo("⏳ Initializing Git repository...")
+        typer.echo("[WAIT] Initializing Git repository...")
         result = subprocess.run(
             ["git", "init"],
             cwd=target_path,
@@ -1222,14 +1314,14 @@ def init_repo(
 
         if result.returncode != 0:
             typer.echo(
-                f"\n⚠️  Warning: Failed to initialize Git: {result.stderr}",
+                f"\n[WARN] Warning: Failed to initialize Git: {result.stderr}",
                 err=True,
             )
         else:
-            typer.echo("✓ Git repository initialized")
+            typer.echo("[OK] Git repository initialized")
 
         # Create .gitignore
-        typer.echo("⏳ Creating .gitignore...")
+        typer.echo("[WAIT] Creating .gitignore...")
         gitignore_content = """# Python
 __pycache__/
 *.py[cod]
@@ -1264,10 +1356,10 @@ logs/
 Thumbs.db
 """
         (target_path / ".gitignore").write_text(gitignore_content)
-        typer.echo("✓ Created .gitignore")
+        typer.echo("[OK] Created .gitignore")
 
         # Create README.md
-        typer.echo("⏳ Creating README.md...")
+        typer.echo("[WAIT] Creating README.md...")
         readme_content = """# DevPlan Orchestrator Project
 
 This project was initialized with [DevPlan Orchestrator](
@@ -1302,10 +1394,10 @@ https://github.com/yourusername/devplan-orchestrator).
 Generated documentation will be stored in the `docs/` directory.
 """
         (target_path / "README.md").write_text(readme_content)
-        typer.echo("✓ Created README.md")
+        typer.echo("[OK] Created README.md")
 
         # Create config directory and config.yaml
-        typer.echo("⏳ Creating config directory...")
+        typer.echo("[WAIT] Creating config directory...")
         config_dir = target_path / "config"
         config_dir.mkdir(exist_ok=True)
 
@@ -1325,10 +1417,10 @@ output_dir: ./docs
 log_level: INFO
 """
         (config_dir / "config.yaml").write_text(config_content)
-        typer.echo("✓ Created config/config.yaml")
+        typer.echo("[OK] Created config/config.yaml")
 
         # Create .env.example
-        typer.echo("⏳ Creating .env.example...")
+        typer.echo("[WAIT] Creating .env.example...")
         env_example_content = """# DevPlan Orchestrator Environment Variables
 
 # OpenAI Configuration
@@ -1347,18 +1439,18 @@ OPENAI_API_KEY=your_openai_api_key_here
 LLM_PROVIDER=openai
 """
         (target_path / ".env.example").write_text(env_example_content)
-        typer.echo("✓ Created .env.example")
+        typer.echo("[OK] Created .env.example")
 
         # Create docs directory
-        typer.echo("⏳ Creating docs directory...")
+        typer.echo("[WAIT] Creating docs directory...")
         docs_dir = target_path / "docs"
         docs_dir.mkdir(exist_ok=True)
         (docs_dir / ".gitkeep").write_text("")
-        typer.echo("✓ Created docs/ directory")
+        typer.echo("[OK] Created docs/ directory")
 
         # Add remote if specified
         if remote:
-            typer.echo(f"\n⏳ Adding remote: {remote}")
+            typer.echo(f"\n[WAIT] Adding remote: {remote}")
             result = subprocess.run(
                 ["git", "remote", "add", "origin", remote],
                 cwd=target_path,
@@ -1368,14 +1460,14 @@ LLM_PROVIDER=openai
             )
             if result.returncode != 0:
                 typer.echo(
-                    f"⚠️  Warning: Failed to add remote: {result.stderr}", err=True
+                    f"[WARN] Warning: Failed to add remote: {result.stderr}", err=True
                 )
             else:
-                typer.echo("✓ Remote added")
+                typer.echo("[OK] Remote added")
 
         # Initial commit
         if result.returncode == 0:  # Only if git init succeeded
-            typer.echo("\n⏳ Creating initial commit...")
+            typer.echo("\n[WAIT] Creating initial commit...")
             subprocess.run(
                 ["git", "add", "."],
                 cwd=target_path,
@@ -1388,11 +1480,11 @@ LLM_PROVIDER=openai
                 capture_output=True,
                 check=False,
             )
-            typer.echo("✓ Initial commit created")
+            typer.echo("[OK] Initial commit created")
 
         # Success message
         typer.echo("\n" + "=" * 60)
-        typer.echo("✓ Repository initialized successfully!", color=True)
+        typer.echo("[OK] Repository initialized successfully!", color=True)
         typer.echo("=" * 60)
         typer.echo("\nNext steps:")
         typer.echo("  1. Copy .env.example to .env and add your API keys")
@@ -1405,7 +1497,7 @@ LLM_PROVIDER=openai
     except typer.Exit:
         raise
     except Exception as e:
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         logger.error(f"Error initializing repository: {e}", exc_info=True)
         raise typer.Exit(code=1)
 
@@ -1431,13 +1523,13 @@ def list_checkpoints(
         checkpoints = state_manager.list_checkpoints()
 
         if not checkpoints:
-            typer.echo("\nℹ️  No checkpoints found", color=True)
+            typer.echo("\n[INFO] No checkpoints found", color=True)
             typer.echo(
-                "💡 Checkpoints are created automatically when running pipelines\n"
+                "[TIP] Checkpoints are created automatically when running pipelines\n"
             )
             return
 
-        typer.echo(f"\n📦 Found {len(checkpoints)} checkpoint(s):\n")
+        typer.echo(f"\n[BOOKMARK] Found {len(checkpoints)} checkpoint(s):\n")
 
         for checkpoint in checkpoints:
             key = checkpoint["key"]
@@ -1453,7 +1545,7 @@ def list_checkpoints(
             except (ValueError, TypeError):
                 time_str = timestamp
 
-            typer.echo(f"🔖 {key}")
+            typer.echo(f"[BOOKMARK] {key}")
             typer.echo(f"   Stage: {stage}")
             typer.echo(f"   Created: {time_str}")
 
@@ -1463,7 +1555,7 @@ def list_checkpoints(
             typer.echo("")
 
     except Exception as e:
-        typer.echo(f"\n❌ Error listing checkpoints: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error listing checkpoints: {str(e)}", err=True, color=True)
         logger.error(f"Error listing checkpoints: {e}", exc_info=True)
         raise typer.Exit(code=1)
 
@@ -1490,10 +1582,10 @@ def delete_checkpoint(
         checkpoint = state_manager.load_checkpoint(checkpoint_key)
         if checkpoint is None:
             typer.echo(
-                f"\n❌ Checkpoint not found: {checkpoint_key}", err=True, color=True
+                f"\n[ERROR] Checkpoint not found: {checkpoint_key}", err=True, color=True
             )
             typer.echo(
-                "💡 Use 'devussy list-checkpoints' to see available checkpoints\n"
+                "[TIP] Use 'devussy list-checkpoints' to see available checkpoints\n"
             )
             raise typer.Exit(code=1)
 
@@ -1509,7 +1601,7 @@ def delete_checkpoint(
         except (ValueError, TypeError):
             time_str = timestamp
 
-        typer.echo(f"\n🔖 Found checkpoint: {checkpoint_key}")
+        typer.echo(f"\n[BOOKMARK] Found checkpoint: {checkpoint_key}")
         typer.echo(f"   Stage: {stage}")
         typer.echo(f"   Created: {time_str}")
 
@@ -1519,17 +1611,17 @@ def delete_checkpoint(
                 "\nAre you sure you want to delete this checkpoint?"
             )
             if not confirmed:
-                typer.echo("\n❌ Deletion cancelled", color=True)
+                typer.echo("\n[ERROR] Deletion cancelled", color=True)
                 return
 
         # Delete the checkpoint
         state_manager.delete_checkpoint(checkpoint_key)
-        typer.echo(f"\n✅ Deleted checkpoint: {checkpoint_key}", color=True)
+        typer.echo(f"\n[OK] Deleted checkpoint: {checkpoint_key}", color=True)
 
     except typer.Exit:
         raise
     except Exception as e:
-        typer.echo(f"\n❌ Error deleting checkpoint: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error deleting checkpoint: {str(e)}", err=True, color=True)
         logger.error(f"Error deleting checkpoint: {e}", exc_info=True)
         raise typer.Exit(code=1)
 
@@ -1561,11 +1653,11 @@ def cleanup_checkpoints(
         checkpoints_before = len(state_manager.list_checkpoints())
 
         if checkpoints_before == 0:
-            typer.echo("\nℹ️  No checkpoints found to clean up", color=True)
+            typer.echo("\n[INFO] No checkpoints found to clean up", color=True)
             return
 
         typer.echo(
-            f"\n🧹 Cleaning up checkpoints (keeping {keep_latest} latest per project)"
+            f"\n[BROOM] Cleaning up checkpoints (keeping {keep_latest} latest per project)"
         )
         typer.echo(f"   Current checkpoints: {checkpoints_before}")
 
@@ -1573,7 +1665,7 @@ def cleanup_checkpoints(
         if not force:
             confirmed = typer.confirm("\nProceed with cleanup?")
             if not confirmed:
-                typer.echo("\n❌ Cleanup cancelled", color=True)
+                typer.echo("\n[ERROR] Cleanup cancelled", color=True)
                 return
 
         # Perform cleanup
@@ -1583,14 +1675,14 @@ def cleanup_checkpoints(
         checkpoints_after = len(state_manager.list_checkpoints())
         deleted_count = checkpoints_before - checkpoints_after
 
-        typer.echo("\n✅ Cleanup complete!")
+        typer.echo("\n[OK] Cleanup complete!")
         typer.echo(f"   Deleted: {deleted_count} checkpoints")
         typer.echo(f"   Remaining: {checkpoints_after} checkpoints", color=True)
 
     except typer.Exit:
         raise
     except Exception as e:
-        typer.echo(f"\n❌ Error during cleanup: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error during cleanup: {str(e)}", err=True, color=True)
         logger.error(f"Error during checkpoint cleanup: {e}", exc_info=True)
         raise typer.Exit(code=1)
 
@@ -1699,46 +1791,54 @@ def interactive_design(
         use_llm_interview = llm_interview and not scripted
 
         # Optional repository analysis for LLM-driven interview mode
+        # Only run if repository tools are enabled in preferences
         repo_analysis = None
         if use_llm_interview and repo_dir:
+            # Reload preferences to get the latest settings from menu
             try:
-                root = Path(repo_dir).resolve()
-                if root.exists() and root.is_dir():
-                    analyzer = RepositoryAnalyzer(root)
-                    repo_analysis = analyzer.analyze()
-                elif verbose:
-                    typer.echo(
-                        f"⚠️  Repo directory not found or not a directory: {root}",
-                        err=True,
-                        color=True,
-                    )
-            except Exception as exc:
-                if verbose:
-                    typer.echo(
-                        f"⚠️  Repo analysis failed ({exc}). Continuing without it.",
-                        err=True,
-                        color=True,
-                    )
+                prefs = load_last_used_preferences()
+                logger.debug(f"CLI reload - Loaded preferences: {prefs}")
+                logger.debug(f"CLI reload - repository_tools_enabled attribute: {getattr(prefs, 'repository_tools_enabled', 'ATTRIBUTE_NOT_FOUND')}")
+                logger.debug(f"CLI reload - All attributes: {[attr for attr in dir(prefs) if not attr.startswith('_')]}")
+            except Exception as e:
+                logger.debug(f"CLI reload - Exception loading preferences: {e}")
+                pass
+            
+            # Check if repository tools are enabled in user preferences
+            repository_tools_enabled = getattr(prefs, 'repository_tools_enabled', False)
+            
+            if repository_tools_enabled:
+                try:
+                    root = Path(repo_dir).resolve()
+                    if root.exists() and root.is_dir():
+                        analyzer = RepositoryAnalyzer(root)
+                        repo_analysis = analyzer.analyze()
+                    elif verbose:
+                        typer.echo(
+                            f"[WARN] Repo directory not found or not a directory: {root}",
+                            err=True,
+                            color=True,
+                        )
+                except Exception as exc:
+                    if verbose:
+                        typer.echo(
+                            f"[WARN] Repo analysis failed ({exc}). Continuing without it.",
+                            err=True,
+                            color=True,
+                        )
+            elif verbose:
+                typer.echo(
+                    "[NOTE] Repository tools disabled in settings - skipping repository analysis",
+                    color=True,
+                )
 
-        if use_llm_interview:
-            typer.echo("🤖 Using LLM-driven conversational interview")
-            if verbose:
-                typer.echo("🔍 Verbose mode enabled")
-            # Import LLM interview manager
-            from .llm_interview import LLMInterviewManager
-            interview_manager = LLMInterviewManager(
-                config,
-                verbose=verbose,
-                repo_analysis=repo_analysis,
-            )
-            typer.echo(f"📝 Logging to: {interview_manager.log_file}")
         else:
-            typer.echo("📝 Using scripted questionnaire")
+            typer.echo("[SCRIPT] Using scripted questionnaire")
             # Setup interactive questionnaire
             questions_path = Path("config/questions.yaml")
             if not questions_path.exists():
                 typer.echo(
-                    f"❌ Error: Questions config not found at {questions_path}",
+                    f"[ERROR] Error: Questions config not found at {questions_path}",
                     err=True,
                     color=True,
                 )
@@ -1753,6 +1853,30 @@ def interactive_design(
         try:
             prefs = load_last_used_preferences()
             apply_settings_to_config(config, prefs)
+            
+            # Check for experimental features and warn user
+            experimental_features = []
+            if getattr(prefs, 'debug_ui_mode', False):
+                experimental_features.append("Debug UI Mode")
+            if getattr(prefs, 'experimental_single_window', False):
+                experimental_features.append("Experimental Single Window")
+            if getattr(prefs, 'mock_api_mode', False):
+                experimental_features.append("Mock API Mode")
+            if getattr(prefs, 'performance_profiler', False):
+                experimental_features.append("Performance Profiler")
+            if getattr(prefs, 'experimental_pipeline', False):
+                experimental_features.append("Experimental Pipeline")
+            if getattr(prefs, 'ai_code_review', False):
+                experimental_features.append("AI Code Review")
+                
+            if experimental_features:
+                typer.echo("\n[WARN] EXPERIMENTAL FEATURES ACTIVE [WARN]", color=True)
+                typer.echo("The following experimental features are enabled:", color=True)
+                for feature in experimental_features:
+                    typer.echo(f"  - {feature}", color=True)
+                typer.echo("\nThese features are for development/testing and may be unstable.", color=True)
+                typer.echo("Use 'Testing' menu to disable if needed.\n", color=True)
+                
         except Exception:
             pass
 
@@ -1768,7 +1892,7 @@ def interactive_design(
             llm_cfg = None
 
         # Check stage-specific API keys
-        typer.echo("\n🔑 Checking API key configuration...")
+        typer.echo("\n[KEY] Checking API key configuration...")
         
         missing_keys = []
         design_config = config.get_llm_config_for_stage("design")
@@ -1776,7 +1900,7 @@ def interactive_design(
             missing_keys.append("design")
         
         if missing_keys:
-            typer.echo(f"\n⚠️  Missing API keys for stages: {', '.join(missing_keys)}")
+            typer.echo(f"\n[WARN] Missing API keys for stages: {', '.join(missing_keys)}")
             typer.echo("   You'll need API keys to generate the project design.\n")
             
             if typer.confirm("Would you like to enter API key(s) now?", default=True):
@@ -1787,14 +1911,14 @@ def interactive_design(
                 config.llm.api_key = api_key
                 if config.design_llm:
                     config.design_llm.api_key = api_key
-                typer.echo("✓ API key set for this session.\n")
+                typer.echo("[OK] API key set for this session.\n")
             else:
                 typer.echo(
-                    "\n⚠️  Proceeding without API keys. Pipeline will fail during generation.\n",
+                    "\n[WARN] Proceeding without API keys. Pipeline will fail during generation.\n",
                     err=True,
                 )
         else:
-            typer.echo("✓ API keys configured for all required stages.\n")
+            typer.echo("[OK] API keys configured for all required stages.\n")
 
         # Startup chooser: Settings, Readme, or Start (interactive mode)
         # Non-TTY environments will default to 'start' internally.
@@ -1804,14 +1928,221 @@ def interactive_design(
                 # LOG: After each run_main_menu return, show the current provider
                 logger.debug(f"[interactive_design] Provider after run_main_menu: {getattr(config.llm, 'provider', None)}")
                 if action == "start":
+                    # CHECK FOR REPOSITORY TOOLS - Only ask after user selects "start"
+                    repository_context = None
+                    
+                    # DEBUG: Add detailed logging to understand the flow
+                    logger.info("=== REPOSITORY TOOLS DETECTION START ===")
+                    
+                    # Reload preferences to get the latest settings from menu
+                    try:
+                        prefs = load_last_used_preferences()
+                        logger.info(f"CLI repo tools reload - Loaded preferences successfully")
+                        repo_tools_enabled = getattr(prefs, 'repository_tools_enabled', False)
+                        logger.info(f"CLI repo tools reload - repository_tools_enabled = {repo_tools_enabled} (type: {type(repo_tools_enabled)})")
+                        logger.debug(f"CLI repo tools reload - All attributes: {[attr for attr in dir(prefs) if not attr.startswith('_')]}")
+                    except Exception as e:
+                        logger.error(f"CLI repo tools reload - Exception loading preferences: {e}")
+                        repo_tools_enabled = False
+                    
+                    logger.info(f"Repository tools enabled check result: {repo_tools_enabled}")
+                    
+                    if repo_tools_enabled:
+                        logger.info("Repository tools ENABLED - entering repository tools flow")
+                        print("\n[TOOLS] Repository Tools Enabled")
+                        print("=" * 50)
+                        
+                        # Ask for repository path
+                        repo_path = typer.prompt(
+                            "What is the path to your project's repository?",
+                            default=".",
+                            show_default=True
+                        ).strip()
+                        
+                        logger.info(f"User entered repository path: {repo_path}")
+                        
+                        # Ask for project type
+                        project_type = typer.prompt(
+                            "Are we starting a new project or working on an existing one?",
+                            default="existing",
+                            type=str
+                        ).strip().lower()
+                        
+                        # Validate and retry if invalid
+                        while project_type not in ["new", "existing"]:
+                            typer.echo("Please enter 'new' or 'existing'")
+                            project_type = typer.prompt(
+                                "Are we starting a new project or working on an existing one?",
+                                default="existing",
+                                type=str
+                            ).strip().lower()
+                        
+                        logger.info(f"User selected project type: {project_type}")
+                        
+                        try:
+                            import subprocess
+                            
+                            # Clean and validate the repository path
+                            # Remove quotes and normalize path
+                            clean_repo_path = repo_path.strip().strip('"').strip("'")
+                            repo_root = Path(clean_repo_path).resolve()
+                            
+                            logger.info(f"Cleaned repository path: {clean_repo_path}")
+                            logger.info(f"Resolved repository root: {repo_root}")
+                            
+                            # Validate that the path is reasonable
+                            # Allow "." for current directory, check resolved path instead
+                            if clean_repo_path and len(clean_repo_path.strip()) < 1:
+                                print("[WARN] Warning: Invalid repository path provided")
+                                print("Continuing with normal interview flow...")
+                                logger.warning("Invalid repository path provided - falling back to normal flow")
+                                repository_context = None
+                            else:
+                                # Create directory if it doesn't exist for new projects
+                                if project_type == "new":
+                                    repo_root.mkdir(parents=True, exist_ok=True)
+                                    print(f"\n[INIT] Initializing new repository at: {repo_root}")
+                                    
+                                    # Run init_repo directly instead of subprocess
+                                    try:
+                                        # Create basic repository structure
+                                        init_git = subprocess.run([
+                                            "git", "init"
+                                        ], cwd=repo_root, capture_output=True, text=True, check=False)
+                                        
+                                        if init_git.returncode == 0:
+                                            print("[OK] Git repository initialized")
+                                            
+                                            # Create .gitignore
+                                            gitignore_content = """# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# DevPlan Orchestrator
+.env
+.devussy_state/
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+"""
+                                            (repo_root / ".gitignore").write_text(gitignore_content)
+                                            print("[OK] Created .gitignore")
+                                            
+                                            # Create README.md
+                                            readme_content = """# DevPlan Project
+
+Generated by DevPlan Orchestrator.
+
+## Getting Started
+
+1. Add your API keys to .env file
+2. Run devussy to generate project plans
+"""
+                                            (repo_root / "README.md").write_text(readme_content)
+                                            print("[OK] Created README.md")
+                                            
+                                            print("[OK] Repository initialized successfully!")
+                                            
+                                            # Create repository context for new projects
+                                            repository_context = {
+                                                "path": clean_repo_path,
+                                                "type": "new",
+                                                "analysis_output": f"New repository initialized at: {repo_root}",
+                                                "analysis_object": None
+                                            }
+                                            logger.info(f"Repository context created for new project: {repository_context}")
+                                        else:
+                                            print(f"[WARN] Warning: Git initialization failed: {init_git.stderr}")
+                                            logger.warning(f"Git initialization failed for new project")
+                                            
+                                    except Exception as e:
+                                        print(f"[WARN] Warning: Repository initialization failed: {e}")
+                                        logger.error(f"Repository initialization failed: {e}")
+                                else:
+                                    # For existing projects, verify the directory exists
+                                    if not repo_root.exists() or not repo_root.is_dir():
+                                        print(f"[WARN] Warning: Directory does not exist: {repo_root}")
+                                        print("Continuing with normal interview flow...")
+                                        logger.warning(f"Directory does not exist: {repo_root}")
+                                        repository_context = None
+                                    else:
+                                        print(f"\n[ANALYZE] Analyzing existing repository at: {repo_root}")
+                                        
+                                        # Run repository analysis directly instead of subprocess
+                                        try:
+                                            analyzer = RepositoryAnalyzer(repo_root)
+                                            analysis = analyzer.analyze()
+                                            
+                                            # Convert analysis to readable output for user feedback
+                                            analysis_output = f"Repository Analysis\n"
+                                            analysis_output += f"Root: {analysis.root_path}\n"
+                                            analysis_output += f"Project type: {analysis.project_type or 'unknown'}\n"
+                                            analysis_output += f"Total files: {analysis.code_metrics.total_files}, total lines: {analysis.code_metrics.total_lines}\n"
+                                            
+                                            if analysis.structure.directories:
+                                                analysis_output += f"Top-level directories: {', '.join(sorted(analysis.structure.directories))}\n"
+                                            if analysis.dependencies.python:
+                                                analysis_output += f"Python dependencies: {', '.join(sorted(analysis.dependencies.python))}\n"
+                                            if analysis.dependencies.node:
+                                                analysis_output += f"Node dependencies: {', '.join(sorted(analysis.dependencies.node))}\n"
+                                            
+                                            print("[OK] Repository analyzed successfully!")
+                                            print(f"[INFO] Analysis complete - {analysis.code_metrics.total_files} files analyzed")
+                                            
+                                            # Create repository context for enhanced interview
+                                            repository_context = {
+                                                "path": clean_repo_path,
+                                                "type": "existing",
+                                                "analysis_output": analysis_output,
+                                                "analysis_object": analysis
+                                            }
+                                            logger.info(f"Repository context created: {repository_context}")
+                                        except Exception as e:
+                                            print(f"[WARN] Warning: Repository analysis failed: {e}")
+                                            print("Continuing with normal interview flow...")
+                                            logger.error(f"Repository analysis failed: {e}")
+                                            repository_context = None
+                        except Exception as e:
+                            print(f"[WARN] Warning: Repository tools failed: {e}")
+                            print("Continuing with normal interview flow...")
+                            logger.error(f"Repository tools failed: {e}")
+                            repository_context = None
+                    else:
+                        logger.info("Repository tools DISABLED - skipping repository tools flow")
+                        print("[NOTE] Repository tools disabled in settings - using normal interview flow")
+                    
+                    logger.info(f"=== REPOSITORY TOOLS DETECTION END ===")
+                    logger.info(f"Final repository_context: {repository_context}")
+                    
+                    # Continue to normal interview flow after repository tools
                     break
+                
                 if action == "select_model":
                     try:
                         _select_requesty_model_interactively(config)
                         # LOG: After interactive model selection, provider may have changed
                         logger.debug(f"[interactive_design] Provider after select_model: {getattr(config.llm, 'provider', None)}")
                     except Exception as exc:
-                        typer.echo(f"⚠️  Model selection unavailable: {exc}")
+                        typer.echo(f"[WARN] Model selection unavailable: {exc}")
                     continue
                 if action == "quit":
                     raise typer.Exit(code=0)
@@ -1823,21 +2154,66 @@ def interactive_design(
             if verbose:
                 typer.echo(f"(startup menu unavailable: {e})")
         
+        # CREATE INTERVIEW MANAGER AFTER REPOSITORY TOOLS FLOW
+        # This ensures we have the latest repository analysis from the tools flow
+        interview_manager = None
+        questionnaire = None
+        
+        if use_llm_interview:
+            typer.echo("[ROBOT] Using LLM-driven conversational interview")
+            if verbose:
+                typer.echo("[DEBUG] Verbose mode enabled")
+            
+            # Import LLM interview manager
+            from .llm_interview import LLMInterviewManager
+            
+            # Use repository analysis from tools flow if available, otherwise fall back to original
+            final_repo_analysis = None
+            if repository_context and "analysis_object" in repository_context:
+                final_repo_analysis = repository_context["analysis_object"]
+                typer.echo(f"[NOTE] Using repository analysis from tools flow")
+            elif repo_analysis:
+                final_repo_analysis = repo_analysis
+                typer.echo(f"[NOTE] Using repository analysis from --repo-dir parameter")
+            
+            interview_manager = LLMInterviewManager(
+                config,
+                verbose=verbose,
+                repo_analysis=final_repo_analysis,
+            )
+            typer.echo(f"[NOTE] Logging to: {interview_manager.log_file}")
+        else:
+            typer.echo("[SCRIPT] Using scripted questionnaire")
+            # Setup interactive questionnaire
+            questions_path = Path("config/questions.yaml")
+            if not questions_path.exists():
+                typer.echo(
+                    f"[ERROR] Error: Questions config not found at {questions_path}",
+                    err=True,
+                    color=True,
+                )
+                typer.echo(
+                    "   Please ensure config/questions.yaml exists in your project.",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+            questionnaire = InteractiveQuestionnaireManager(questions_path)
+        
 
         # Resume session if requested (only available for scripted mode)
         if resume_session and not use_llm_interview:
             session_path = Path(resume_session)
             if session_path.exists():
                 questionnaire.load_session(session_path)
-                typer.echo(f"📂 Resumed session from {resume_session}\n")
+                typer.echo(f"[FOLDER] Resumed session from {resume_session}\n")
             else:
                 typer.echo(
-                    f"⚠️  Warning: Session file not found at {resume_session}",
+                    f"[WARN] Warning: Session file not found at {resume_session}",
                     color=True,
                 )
                 typer.echo("   Starting a new session instead.\n")
         elif resume_session and use_llm_interview:
-            typer.echo("⚠️  Session resume not available for LLM interview mode", color=True)
+            typer.echo("[WARN] Session resume not available for LLM interview mode", color=True)
 
         # Run interview (either LLM or scripted)
         typer.echo("")  # Add spacing
@@ -1846,15 +2222,15 @@ def interactive_design(
             try:
                 answers = interview_manager.run()
             except Exception as e:
-                typer.echo(f"\n❌ Error during LLM interview: {e}", err=True, color=True)
-                typer.echo("💡 Falling back to scripted questionnaire...", color=True)
+                typer.echo(f"\n[ERROR] Error during LLM interview: {e}", err=True, color=True)
+                typer.echo("[TIP] Falling back to scripted questionnaire...", color=True)
                 # Fallback to scripted mode
                 questions_path = Path("config/questions.yaml")
                 if questions_path.exists():
                     questionnaire = InteractiveQuestionnaireManager(questions_path)
                     answers = questionnaire.run()
                 else:
-                    typer.echo("❌ Cannot fall back - questions.yaml not found", err=True, color=True)
+                    typer.echo("[ERROR] Cannot fall back - questions.yaml not found", err=True, color=True)
                     raise typer.Exit(code=1)
         else:
             answers = questionnaire.run()
@@ -1863,9 +2239,9 @@ def interactive_design(
         if save_session and not use_llm_interview:
             session_path = Path(save_session)
             questionnaire.save_session(session_path)
-            typer.echo(f"\n💾 Session saved to {save_session}")
+            typer.echo(f"\n[SAVE] Session saved to {save_session}")
         elif save_session and use_llm_interview:
-            typer.echo("⚠️  Session save not available for LLM interview mode", color=True)
+            typer.echo("[WARN] Session save not available for LLM interview mode", color=True)
 
         # Convert to generate_design inputs
         try:
@@ -1874,24 +2250,24 @@ def interactive_design(
             else:
                 inputs = questionnaire.to_generate_design_inputs()
         except ValueError as e:
-            typer.echo(f"\n❌ Error: {e}", err=True, color=True)
-            typer.echo("\n💡 Tip: In LLM interview mode, use /done to finalize and generate files", color=True)
+            typer.echo(f"\n[ERROR] Error: {e}", err=True, color=True)
+            typer.echo("\n[TIP] Tip: In LLM interview mode, use /done to finalize and generate files", color=True)
             typer.echo("   The LLM needs to output a JSON summary before files can be generated.", color=True)
             raise typer.Exit(code=1)
 
         # Validate we have the required inputs
         if "name" not in inputs:
             typer.echo(
-                "\n❌ Error: Project name is required but was not provided",
+                "\n[ERROR] Error: Project name is required but was not provided",
                 err=True,
                 color=True,
             )
-            typer.echo("\n💡 Tip: Use /done during the interview to finalize", color=True)
+            typer.echo("\n[TIP] Use /done during the interview to finalize", color=True)
             raise typer.Exit(code=1)
 
         if "languages" not in inputs:
             typer.echo(
-                "\n❌ Error: At least one language must be specified",
+                "\n[ERROR] Error: At least one language must be specified",
                 err=True,
                 color=True,
             )
@@ -1899,7 +2275,7 @@ def interactive_design(
 
         if "requirements" not in inputs:
             typer.echo(
-                "\n❌ Error: Project requirements are required",
+                "\n[ERROR] Error: Project requirements are required",
                 err=True,
                 color=True,
             )
@@ -1907,14 +2283,14 @@ def interactive_design(
 
         # Generate design using existing pipeline
         typer.echo("\n" + "=" * 60)
-        typer.echo(f"🎨 Generating project design for: {inputs['name']}")
+        typer.echo(f"[DESIGN] Generating project design for: {inputs['name']}")
         typer.echo("=" * 60 + "\n")
         typer.echo(f"Languages: {inputs['languages']}")
         if "frameworks" in inputs:
             typer.echo(f"Frameworks: {inputs['frameworks']}")
         if "apis" in inputs:
             typer.echo(f"APIs: {inputs['apis']}")
-        typer.echo("\n⏳ Generating design (this may take a moment)...\n")
+        typer.echo("\n[WAIT] Generating design (this may take a moment)...\n")
 
         logger.info(f"Generating project design for: {inputs['name']}")
         
@@ -1922,10 +2298,28 @@ def interactive_design(
         from datetime import datetime
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         project_slug = inputs['name'].lower().replace(" ", "-").replace("_", "-")
-        project_folder = Path(config.output_dir) / f"{project_slug}_{timestamp}"
+        
+        # Check if Repo Tools are enabled and repository context exists
+        if repository_context and "path" in repository_context:
+            # Use external repository's docs folder when Repo Tools are enabled
+            repo_path = Path(repository_context["path"])
+            base_output_dir = repo_path / "docs"
+            typer.echo(f"[TOOLS] Using repository tools - output to: {base_output_dir.resolve()}")
+            
+            # CRITICAL FIX: Update config.output_dir to use repository-specific path
+            # This ensures the orchestrator uses the correct output directory
+            config.output_dir = base_output_dir
+            logger.info(f"Repository Tools enabled - using repo path: {repo_path}")
+            logger.info(f"Base output directory set to: {base_output_dir}")
+        else:
+            # Use default output directory when Repo Tools are disabled
+            base_output_dir = config.output_dir
+            logger.info(f"Repository Tools disabled - using default output dir: {base_output_dir}")
+        
+        project_folder = Path(base_output_dir) / f"{project_slug}_{timestamp}"
         project_folder.mkdir(parents=True, exist_ok=True)
         
-        typer.echo(f"📁 Project folder: {project_folder.resolve()}\n")
+        typer.echo(f"[FOLDER] Project folder: {project_folder.resolve()}\n")
         logger.info(f"Created project folder: {project_folder}")
 
         # Extract code samples if available from interview
@@ -1939,6 +2333,16 @@ def interactive_design(
             repo_analysis=repo_analysis,
             code_samples=code_samples,
         )
+        
+        # Add debugging output for repository context
+        if repository_context and "path" in repository_context:
+            logger.info(f"Creating orchestrator with repository context:")
+            logger.info(f"  Repository path: {repository_context['path']}")
+            logger.info(f"  Repository type: {repository_context.get('type', 'unknown')}")
+            logger.info(f"  Output directory in config: {config.output_dir}")
+        else:
+            logger.info("Creating orchestrator without repository context")
+            logger.info(f"  Output directory in config: {config.output_dir}")
 
         # Parse lists
         languages_list = [lang.strip() for lang in inputs["languages"].split(",")]
@@ -1977,7 +2381,7 @@ def interactive_design(
                 h.setLevel(lvl)
 
         # Display intermediate results
-        typer.echo("\n📋 Project Design Summary:")
+        typer.echo("\n[LIST] Project Design Summary:")
         typer.echo("-" * 40)
         if design.objectives:
             typer.echo(f"Objectives: {len(design.objectives)} defined")
@@ -1997,8 +2401,8 @@ def interactive_design(
             for tech in design.tech_stack:
                 f.write(f"- {tech}\n")
 
-        typer.echo(f"✅ Project design generated successfully!")
-        typer.echo(f"📄 Saved to: {output_file.resolve()}")
+        typer.echo(f"[OK] Project design generated successfully!")
+        typer.echo(f"[FILE] Saved to: {output_file.resolve()}")
         
         # For LLM interview mode, automatically continue through full pipeline
         if use_llm_interview:
@@ -2012,18 +2416,18 @@ def interactive_design(
                 proceed = False
             if not proceed:
                 typer.echo(
-                    f"\n💡 Next step: Run 'devussy generate-devplan {output_file}' to create the development plan"
+                    f"\n[IDEA] Next step: Run 'devussy generate-devplan {output_file}' to create the development plan"
                 )
                 return
             typer.echo("\n" + "=" * 60)
-            typer.echo("🔄 Continuing with full circular development pipeline...")
+            typer.echo("[REFRESH] Continuing with full circular development pipeline...")
             typer.echo("=" * 60 + "\n")
             typer.echo("This will generate:")
-            typer.echo("  1. ✓ Project Design (complete)")
+            typer.echo("  1. [OK] Project Design (complete)")
             typer.echo("  2. Development Plan (devplan.md)")
             typer.echo("  3. Handoff Document (handoff_prompt.md)")
-            typer.echo(f"\n📁 Output directory: {project_folder.resolve()}")
-            typer.echo("\n⏳ Running full pipeline...\n")
+            typer.echo(f"\n[FOLDER] Output directory: {project_folder.resolve()}")
+            typer.echo("\n[WAIT] Running full pipeline...\n")
             
             # Run only DevPlan + Handoff using the design we just created
             async def _run_devplan_and_handoff():
@@ -2053,7 +2457,7 @@ def interactive_design(
                     h.setLevel(lvl)
             
             typer.echo("\n" + "=" * 60)
-            typer.echo("💾 Saving files to disk...")
+            typer.echo("[SAVE] Saving files to disk...")
             typer.echo("=" * 60)
             
             # EXPLICIT FILE WRITES - Force write all files directly
@@ -2073,41 +2477,41 @@ def interactive_design(
                 
                 design_path = project_folder / "project_design.md"
                 file_mgr.write_markdown(str(design_path), design_content)
-                typer.echo(f"  ✅ Wrote project_design.md ({design_path.stat().st_size} bytes)")
+                typer.echo(f"  [OK] Wrote project_design.md ({design_path.stat().st_size} bytes)")
                 
                 # Write devplan - Use orchestrator's markdown converter
                 devplan_content = orchestrator._devplan_to_markdown(devplan_result)
                 
                 devplan_path = project_folder / "devplan.md"
                 file_mgr.write_markdown(str(devplan_path), devplan_content)
-                typer.echo(f"  ✅ Wrote devplan.md dashboard ({devplan_path.stat().st_size} bytes)")
+                typer.echo(f"  [OK] Wrote devplan.md dashboard ({devplan_path.stat().st_size} bytes)")
                 
                 # Generate individual phase files
                 phase_files = orchestrator._generate_phase_files(devplan_result, str(project_folder))
                 phase_file_names = [Path(f).name for f in phase_files]
                 for phase_file in phase_files:
                     phase_path = Path(phase_file)
-                    typer.echo(f"  ✅ Wrote {phase_path.name} ({phase_path.stat().st_size} bytes)")
+                    typer.echo(f"  [OK] Wrote {phase_path.name} ({phase_path.stat().st_size} bytes)")
                 
                 # Write handoff prompt
                 handoff_path = project_folder / "handoff_prompt.md"
                 file_mgr.write_markdown(str(handoff_path), handoff_result.content)
-                typer.echo(f"  ✅ Wrote handoff_prompt.md ({handoff_path.stat().st_size} bytes)")
+                typer.echo(f"  [OK] Wrote handoff_prompt.md ({handoff_path.stat().st_size} bytes)")
                 
-                typer.echo("\n✅ All files written successfully!")
-                typer.echo(f"\n📁 Project folder: {project_folder.resolve()}")
+                typer.echo("\n[OK] All files written successfully!")
+                typer.echo(f"\n[FOLDER] Project folder: {project_folder.resolve()}")
                 typer.echo("\nVerifying files...")
                 
                 # Verify all files including phase files
                 all_files = [design_path, devplan_path, handoff_path] + [Path(f) for f in phase_files]
                 for file in all_files:
                     if file.exists():
-                        typer.echo(f"  ✓ {file.name} - {file.stat().st_size} bytes")
+                        typer.echo(f"  [OK] {file.name} - {file.stat().st_size} bytes")
                     else:
-                        typer.echo(f"  ✗ {file.name} - MISSING!", err=True)
+                        typer.echo(f"  [ERROR] {file.name} - MISSING!", err=True)
                 
             except Exception as e:
-                typer.echo(f"\n⚠️  Error writing files: {e}", err=True, color=True)
+                typer.echo(f"\n[WARN] Error writing files: {e}", err=True, color=True)
                 logger.error(f"Failed to write files: {e}", exc_info=True)
                 if debug:
                     import traceback
@@ -2115,7 +2519,7 @@ def interactive_design(
                 raise
             
             typer.echo("\n" + "=" * 60)
-            typer.echo("✅ Circular development pipeline complete!", color=True)
+            typer.echo("[OK] Circular development pipeline complete!", color=True)
             typer.echo("=" * 60)
             
             # Build absolute paths for display using project folder
@@ -2130,42 +2534,42 @@ def interactive_design(
                 "handoff": handoff_file.exists()
             }
             
-            typer.echo("\n📦 Generated files:")
-            typer.echo(f"\n  📄 Project Design:")
+            typer.echo("\n[BOOKMARK] Generated files:")
+            typer.echo(f"\n  [FILE] Project Design:")
             typer.echo(f"     {design_file}")
             if files_exist["design"]:
-                typer.echo(f"     ✅ File written successfully ({design_file.stat().st_size} bytes)")
+                typer.echo(f"     [OK] File written successfully ({design_file.stat().st_size} bytes)")
             
-            typer.echo(f"\n  📝 Development Plan Dashboard:")
+            typer.echo(f"\n  [DASHBOARD] Development Plan Dashboard:")
             typer.echo(f"     {devplan_file}")
             if files_exist["devplan"]:
-                typer.echo(f"     ✅ Dashboard written successfully ({devplan_file.stat().st_size} bytes)")
-                typer.echo(f"     📋 Individual phase files generated for implementation agents")
+                typer.echo(f"     [OK] Dashboard written successfully ({devplan_file.stat().st_size} bytes)")
+                typer.echo(f"     [LIST] Individual phase files generated for implementation agents")
             
-            typer.echo(f"\n  📤 Handoff Prompt:")
+            typer.echo(f"\n  [SEND] Handoff Prompt:")
             typer.echo(f"     {handoff_file}")
             if files_exist["handoff"]:
-                typer.echo(f"     ✅ File written successfully ({handoff_file.stat().st_size} bytes)")
+                typer.echo(f"     [OK] File written successfully ({handoff_file.stat().st_size} bytes)")
             
             # List phase files if they exist
             phase_files = list(project_folder.glob("phase*.md"))
             if phase_files:
-                typer.echo(f"\n  🚀 Phase Files:")
+                typer.echo(f"\n  [ROCKET] Phase Files:")
                 for phase_file in sorted(phase_files):
-                    typer.echo(f"     {phase_file} ✅ ({phase_file.stat().st_size} bytes)")
+                    typer.echo(f"     {phase_file} [OK] ({phase_file.stat().st_size} bytes)")
             
             # Warning if any files are missing
             if not all(files_exist.values()):
-                typer.echo("\n⚠️  Warning: Some files were not written to disk", err=True, color=True)
+                typer.echo("\n[WARN] Warning: Some files were not written to disk", err=True, color=True)
                 typer.echo("\nDebug info:", err=True)
                 typer.echo(f"  Project folder: {project_folder}", err=True)
                 typer.echo(f"  Folder exists: {project_folder.exists()}", err=True)
                 typer.echo(f"  Files in folder: {list(project_folder.glob('*.md'))}", err=True)
             else:
-                typer.echo("\n✅ All files verified and saved successfully!")
+                typer.echo("\n[OK] All files verified and saved successfully!")
             
             typer.echo("\n" + "=" * 60)
-            typer.echo("💡 Next Steps:")
+            typer.echo("[IDEA] Next Steps:")
             typer.echo(f"   1. Review the devplan: {devplan_file}")
             typer.echo(f"   2. Open folder in explorer: {project_folder}")
             typer.echo("   3. Use these markdown files with other tools")
@@ -2174,7 +2578,7 @@ def interactive_design(
         else:
             # Scripted mode: just suggest next step
             typer.echo(
-                f"\n💡 Next step: Run 'devussy generate-devplan {output_file}' to create the development plan"
+                f"\n[IDEA] Next step: Run 'devussy generate-devplan {output_file}' to create the development plan"
             )
 
     except typer.Exit:
@@ -2184,7 +2588,7 @@ def interactive_design(
         if debug:
             typer.echo("\nDebug traceback:", err=True)
             typer.echo(traceback.format_exc(), err=True)
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         raise typer.Exit(code=1)
 
 
@@ -2290,16 +2694,16 @@ def interview(
         root = Path(directory).resolve()
         if not root.exists() or not root.is_dir():
             typer.echo(
-                f"❌ Error: Directory not found or not a directory: {root}",
+                f"[ERROR] Error: Directory not found or not a directory: {root}",
                 err=True,
                 color=True,
             )
             raise typer.Exit(code=1)
 
         typer.echo("\n" + "=" * 60)
-        typer.echo("🎤 Devussy Interview Mode")
+        typer.echo("[INTERVIEW] Devussy Interview Mode")
         typer.echo("=" * 60)
-        typer.echo(f"\n📂 Analyzing: {root}\n")
+        typer.echo(f"\n[FOLDER] Analyzing: {root}\n")
 
         # Run the interactive design with LLM interview and repo analysis
         interactive_design(
@@ -2321,14 +2725,14 @@ def interview(
         )
 
         typer.echo("\n" + "=" * 60)
-        typer.echo("✅ Interview complete!")
+        typer.echo("[OK] Interview complete!")
         typer.echo("=" * 60 + "\n")
 
     except typer.Exit:
         raise
     except Exception as e:
         typer.echo(
-            f"\n❌ Error during interview: {e}",
+            f"\n[ERROR] Error during interview: {e}",
             err=True,
             color=True,
         )
@@ -2368,7 +2772,7 @@ def analyze_repo(
             typer.echo(json.dumps(_serialize_repo_analysis(analysis), indent=2))
             return
 
-        typer.echo("\n📂 Repository Analysis")
+        typer.echo("\n[FOLDER] Repository Analysis")
         typer.echo("=" * 60)
         typer.echo(f"Root: {analysis.root_path}")
         typer.echo(f"Project type: {analysis.project_type or 'unknown'}")
@@ -2424,7 +2828,7 @@ def analyze_repo(
         raise
     except Exception as e:
         typer.echo(
-            f"\n❌ Error analyzing repository: {e}",
+            f"\n[ERROR] Error analyzing repository: {e}",
             err=True,
             color=True,
         )
@@ -2451,7 +2855,7 @@ def launch(
             try:
                 _resolve_requesty_api_key(cfg)
             except Exception as e:
-                typer.echo(f"\n❌ Could not resolve Requesty API key: {e}", err=True, color=True)
+                typer.echo(f"\n[ERROR] Could not resolve Requesty API key: {e}", err=True, color=True)
                 raise typer.Exit(code=1)
 
         # Run the LLM interview flow (same as interactive_design with defaults),
@@ -2476,7 +2880,7 @@ def launch(
     except typer.Exit:
         raise
     except Exception as e:
-        typer.echo(f"\n❌ Error in launch: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error in launch: {str(e)}", err=True, color=True)
         logger.error(f"Error in launch: {e}", exc_info=True)
         raise typer.Exit(code=1)
 
@@ -2598,13 +3002,13 @@ def generate_terminal(
 
         # Display startup info
         typer.echo("\n" + "=" * 60)
-        typer.echo(f"🎼 Launching Devussy Terminal UI")
+        typer.echo(f"[LOGO] Launching Devussy Terminal UI")
         typer.echo("=" * 60 + "\n")
-        typer.echo(f"DevPlan: {devplan.project_name}")
+        typer.echo(f"DevPlan: {devplan.summary[:50] if devplan.summary else 'Development Plan'}")
         typer.echo(f"Phases: {len(devplan.phases)} configured")
         typer.echo(f"Provider: {config.llm.provider}")
         typer.echo(f"Model: {config.llm.model}")
-        typer.echo("\n🚀 Starting terminal UI...\n")
+        typer.echo("\n[ROCKET] Starting terminal UI...\n")
 
         # Launch terminal UI
         run_terminal_ui(
@@ -2615,7 +3019,7 @@ def generate_terminal(
 
     except json.JSONDecodeError as e:
         typer.echo(
-            f"\n❌ Error: Invalid JSON in devplan file: {str(e)}",
+            f"\n[ERROR] Error: Invalid JSON in devplan file: {str(e)}",
             err=True,
             color=True,
         )
@@ -2625,7 +3029,7 @@ def generate_terminal(
             typer.echo(traceback.format_exc(), err=True)
         raise typer.Exit(code=1)
     except Exception as e:
-        typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
         logger.error(f"Error in generate_terminal: {e}", exc_info=True)
         if debug:
             typer.echo("\nDebug traceback:", err=True)
@@ -2716,13 +3120,13 @@ def interactive(
             # Enable streaming for real-time feedback
             config.streaming_enabled = True
             
-            print("🎼 DevUssY Interactive Mode - Single Window")
+            print("[LOGO] DevUssY Interactive Mode - Single Window")
             print("=" * 50)
             print("Running everything in this terminal with real-time streaming...")
             print()
             
             # Step 1: Run interview with terminal UI
-            print("📋 Step 1: Interactive Requirements Gathering")
+            print("[LIST] Step 1: Interactive Requirements Gathering")
             print("-" * 40)
             
             # Analyze current repository if in one
@@ -2732,11 +3136,11 @@ def interactive(
                 analyzer = RepositoryAnalyzer(Path.cwd())
                 repo_analysis = analyzer.analyze()
                 if repo_analysis:
-                    print(f"📁 Analyzed repository: {repo_analysis.project_type}")
+                    print(f"[FOLDER] Analyzed repository: {repo_analysis.project_type}")
             except Exception as e:
                 logging.warning(f"Repository analysis failed: {e}")
             
-            print("🚀 Launching console-based interactive interview (fallback)...")
+            print("[ROCKET] Launching console-based interactive interview (fallback)...")
             print("You'll stay in this terminal while we gather project requirements.\n")
 
             # Run interview using the existing console-based LLMInterviewManager
@@ -2753,25 +3157,38 @@ def interactive(
             # interactive command's event loop.
             answers = await asyncio.to_thread(interview_manager.run)
             if not answers:
-                print("❌ Interview was cancelled or failed.")
+                print("[ERROR] Interview was cancelled or failed.")
                 return
 
             # Convert collected data to generate_design inputs
             interview_data = interview_manager.to_generate_design_inputs()
 
-            print("✅ Interview completed successfully!")
+            print("[OK] Interview completed successfully!")
+            
+            # Continue with full pipeline automatically
+            print("\n" + "=" * 60)
+            print("[REFRESH] Continuing with full circular development pipeline...")
+            print("=" * 60 + "\n")
+            print("This will generate:")
+            print("  1. Project Design")
+            print("  2. Development Plan (devplan.md)")
+            print("  3. Individual Phase Files")
+            print("  4. Handoff Document")
+            print(f"\n[FOLDER] Output directory: {Path.cwd()}")
+            print("\n[WAIT] Running full pipeline...\n")
             
             # Step 2: Generate design with streaming
-            print("\n📐 Step 2: Project Design Generation")
+            print("\n[TARGET] Step 2: Project Design Generation")
             print("-" * 40)
             
             # Convert to design inputs
             design_inputs = interview_data
             
-            # Create orchestrator
-            orchestrator = _create_orchestrator(config)
+            # Create orchestrator with repo analysis and code samples
+            code_samples = design_inputs.get("code_samples")
+            orchestrator = _create_orchestrator(config, repo_analysis=repo_analysis, code_samples=code_samples)
             
-            print("📝 Generating project design with real-time streaming...\n")
+            print("[STREAM] Generating project design with real-time streaming...\n")
             design_stream = StreamingHandler.create_console_handler(prefix="[design] ")
             design = await orchestrator.project_design_gen.generate(
                 project_name=design_inputs["name"],
@@ -2781,69 +3198,109 @@ def interactive(
                 apis=design_inputs.get("apis", "").split(",") if design_inputs.get("apis") else None,
                 streaming_handler=design_stream,
             )
-            print("\n✅ Project design generated!")
+            print("\n[OK] Project design generated!")
             
             # Step 3: Generate devplan with streaming
-            print("\n📋 Step 3: Development Plan Generation")
+            print("\n[LIST] Step 3: Development Plan Generation")
             print("-" * 40)
             
-            print("📋 Creating basic development plan structure with real-time streaming...\n")
+            print("[LIST] Creating complete development plan with real-time streaming...\n")
             devplan_stream = StreamingHandler.create_console_handler(prefix="[devplan] ")
-            devplan = await orchestrator.basic_devplan_gen.generate(
-                design,
+            
+            # Run complete devplan generation including individual phase files
+            detailed_devplan = await orchestrator.run_devplan_only(
+                project_design=design,
+                feedback_manager=None,
                 streaming_handler=devplan_stream,
             )
-            print("\n✅ Development plan structure created!")
             
-            # Step 4: Generate all phases with streaming in terminal UI
-            print("\n🚀 Step 4: Phase Generation with Real-time Streaming")
+            print("\n[OK] Development plan generated!")
+            
+            # Step 4: Generate handoff document
+            print("\n[SEND] Step 4: Handoff Document Generation")
             print("-" * 40)
-            print("Launching terminal UI for parallel phase generation...")
-            print("Watch as all 5 phases are generated simultaneously with live streaming!\n")
             
-            # Create phase generator with proper dependencies for terminal UI
-            from .clients.factory import create_llm_client
-            from .terminal.phase_state import PhaseStateManager
-            from .terminal.phase_generator import TerminalPhaseGenerator
-            from .terminal.terminal_ui import run_terminal_ui
-            
-            llm_client = create_llm_client(config)
-            state_manager = PhaseStateManager(["plan", "design", "implement", "test", "review"])
-            phase_generator = TerminalPhaseGenerator(llm_client, state_manager)
-            
-            # Launch terminal UI with streaming phase generation in a background thread
-            await asyncio.to_thread(
-                run_terminal_ui,
-                ["plan", "design", "implement", "test", "review"],
-                phase_generator,
-                devplan,
+            print("[SEND] Creating handoff document with real-time streaming...\n")
+            handoff_stream = StreamingHandler.create_console_handler(prefix="[handoff] ")
+            handoff = await orchestrator.run_handoff_only(
+                devplan=detailed_devplan,
+                project_name=design_inputs["name"],
+                project_summary=detailed_devplan.summary or "",
+                architecture_notes=design.architecture_overview or "",
+                streaming_handler=handoff_stream,
             )
             
-            print("\n🎉 All phases generated successfully in terminal UI!")
-            print(f"✅ Generated phases for project: {devplan.project_name}")
+            print("\n[OK] Handoff document generated!")
             
-            # Save results
+            # Save all results to disk
+            print("\n" + "=" * 60)
+            print("[SAVE] Saving files to disk...")
+            print("=" * 60)
+            
             output_path = Path(output_dir) if output_dir else Path.cwd()
-            devplan_file = output_path / "devplan.json"
             
-            with open(devplan_file, 'w', encoding='utf-8') as f:
-                json.dump(devplan.model_dump(), f, indent=2)
+            try:
+                from .file_manager import FileManager
+                file_mgr = FileManager()
+                
+                # Write project design
+                design_content = f"# Project Design: {design_inputs['name']}\n\n"
+                design_content += f"## Architecture Overview\n\n{design.architecture_overview}\n\n"
+                design_content += "## Tech Stack\n\n"
+                for tech in design.tech_stack:
+                    design_content += f"- {tech}\n"
+                design_content += f"\n## Project Details\n\n"
+                design_content += f"**Languages:** {design_inputs['languages']}\n\n"
+                design_content += f"**Requirements:** {design_inputs['requirements']}\n\n"
+                
+                design_path = output_path / "project_design.md"
+                file_mgr.write_markdown(str(design_path), design_content)
+                print(f"  [OK] Wrote project_design.md ({design_path.stat().st_size} bytes)")
+                
+                # Write devplan dashboard
+                devplan_content = orchestrator._devplan_to_markdown(detailed_devplan)
+                devplan_path = output_path / "devplan.md"
+                file_mgr.write_markdown(str(devplan_path), devplan_content)
+                print(f"  [OK] Wrote devplan.md dashboard ({devplan_path.stat().st_size} bytes)")
+                
+                # Generate individual phase files
+                phase_files = orchestrator._generate_phase_files(detailed_devplan, str(output_path))
+                for phase_file in phase_files:
+                    phase_path = Path(phase_file)
+                    print(f"  [OK] Wrote {phase_path.name} ({phase_path.stat().st_size} bytes)")
+                
+                # Write handoff prompt
+                handoff_path = output_path / "handoff_prompt.md"
+                file_mgr.write_markdown(str(handoff_path), handoff.content)
+                print(f"  [OK] Wrote handoff_prompt.md ({handoff_path.stat().st_size} bytes)")
+                
+                print("\n[OK] All files written successfully!")
+                print(f"\n[FOLDER] Output directory: {output_path.resolve()}")
+                
+            except Exception as e:
+                print(f"\n[WARN] Error writing files: {e}")
+                # Fallback: save devplan as JSON
+                devplan_file = output_path / "devplan.json"
+                with open(devplan_file, 'w', encoding='utf-8') as f:
+                    json.dump(detailed_devplan.model_dump(), f, indent=2)
+                print(f"  [FILE] Saved devplan as JSON: {devplan_file}")
             
-            # Save generated phases from state manager
-            phases = {}
-            for phase_name in ["plan", "design", "implement", "test", "review"]:
-                phase_state = state_manager.get_state(phase_name)
-                phases[phase_name] = phase_state.content
+            print("\n" + "=" * 60)
+            print("[OK] Interactive mode completed successfully!")
+            print("=" * 60)
             
-            phases_file = output_path / "phases.json"
-            with open(phases_file, 'w', encoding='utf-8') as f:
-                json.dump(phases, f, indent=2)
+            # Summary of generated files
+            print("\n[BOOKMARK] Generated files:")
+            print(f"\n  [FILE] Project Design: project_design.md")
+            print(f"  [DASHBOARD] Development Plan Dashboard: devplan.md")
+            print(f"  [ROCKET] Individual Phase Files: phase1.md, phase2.md, etc.")
+            print(f"  [SEND] Handoff Document: handoff_prompt.md")
             
-            print(f"\n📁 Results saved to:")
-            print(f"   Development plan: {devplan_file}")
-            print(f"   Generated phases: {phases_file}")
-            
-            print("\n✅ Interactive mode completed successfully!")
+            print("\n[IDEA] Next Steps:")
+            print("   1. Review the devplan: devplan.md")
+            print("   2. Start implementing Phase 0")
+            print("   3. Use individual phase files for focused implementation")
+            print("=" * 60 + "\n")
             
         except typer.Exit:
             raise
@@ -2852,7 +3309,7 @@ def interactive(
             if debug:
                 typer.echo("\nDebug traceback:", err=True)
                 typer.echo(traceback.format_exc(), err=True)
-            typer.echo(f"\n❌ Error: {str(e)}", err=True, color=True)
+            typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
             raise typer.Exit(code=1)
     
     # Run the async function

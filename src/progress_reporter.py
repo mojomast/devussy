@@ -52,7 +52,7 @@ class PipelineProgressReporter:
         """
         self.console.print()
         self.console.print("=" * 60, style="bold cyan")
-        self.console.print(f"🚀 Pipeline Started: {project_name}", style="bold cyan")
+        self.console.print(f"[ROCKET] Pipeline Started: {project_name}", style="bold cyan")
         self.console.print("=" * 60, style="bold cyan")
         self.console.print()
         
@@ -172,7 +172,7 @@ class PipelineProgressReporter:
             stage: Stage name that was checkpointed
         """
         self.console.print(
-            f"  [dim]💾 Checkpoint saved: {checkpoint_key} ({stage})[/dim]"
+            f"  [dim][SAVE] Checkpoint saved: {checkpoint_key} ({stage})[/dim]"
         )
         
     def show_phase_generation(self, phase_number: int, phase_title: str) -> None:
@@ -193,7 +193,7 @@ class PipelineProgressReporter:
             phase_count: Number of phases being generated
         """
         self.console.print(
-            f"  [yellow]⚡ Generating {phase_count} phases concurrently...[/yellow]"
+            f"  [yellow][FAST] Generating {phase_count} phases concurrently...[/yellow]"
         )
         
     def start_phase_progress(self, total: int, description: str = "Generating phases") -> None:
@@ -329,6 +329,6 @@ class PipelineProgressReporter:
             error_message: The error message to display
         """
         self.console.print()
-        self.console.print(f"[bold red]❌ Error:[/bold red] {error_message}")
+        self.console.print(f"[bold red][ERROR] Error:[/bold red] {error_message}")
         self.console.print()
         logger.error(f"Pipeline error: {error_message}")

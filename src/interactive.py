@@ -115,7 +115,7 @@ class InteractiveQuestionnaireManager:
         if not config_path.exists():
             raise FileNotFoundError(f"Questions config not found: {config_path}")
 
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         if not config or "questions" not in config:
@@ -131,7 +131,7 @@ class InteractiveQuestionnaireManager:
         """
         self.console.print(
             Panel.fit(
-                "[bold cyan]🚀 DevPlan Interactive Builder[/bold cyan]\n"
+                "[bold cyan][ROCKET] DevPlan Interactive Builder[/bold cyan]\n"
                 "Let's build your development plan together!",
                 border_style="cyan",
             )
@@ -158,7 +158,7 @@ class InteractiveQuestionnaireManager:
             self.session.last_updated = self._get_timestamp()
             answered += 1
 
-        self.console.print("\n[bold green]✨ All questions answered![/bold green]\n")
+        self.console.print("\n[bold green][SPARKLE] All questions answered![/bold green]\n")
         return self.session.answers
 
     def _ask_question(self, question: Question) -> Any:
@@ -319,7 +319,7 @@ class InteractiveQuestionnaireManager:
             path: Path to save session JSON file
         """
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(self.session.model_dump(), f, indent=2)
         self.console.print(f"[dim]Session saved to {path}[/dim]")
 
@@ -335,7 +335,7 @@ class InteractiveQuestionnaireManager:
         if not path.exists():
             raise FileNotFoundError(f"Session file not found: {path}")
 
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         self.session = InteractiveSession(**data)
         self.console.print(f"[green]Session loaded from {path}[/green]")

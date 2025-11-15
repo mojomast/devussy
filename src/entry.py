@@ -37,6 +37,7 @@ def main(
         pass
 
     # Let _load_app_config resolve provider/model from config/.env unless explicitly overridden.
+    # Ensure UI preferences are loaded during startup
     cfg = _load_app_config(config_path, provider, model, output_dir, verbose)
 
     # If the resolved provider is Requesty, ensure its API key is available.

@@ -289,6 +289,8 @@ class PipelineOrchestrator:
             Tuple of (ProjectDesign, DevPlan, HandoffPrompt)
         """
         logger.info(f"Starting full pipeline for project: {project_name}")
+        logger.info(f"Output directory: {output_dir}")
+        logger.info(f"Current config.output_dir: {getattr(self.config, 'output_dir', 'Not set')}")
         
         # Show pipeline start
         self.progress_reporter.start_pipeline(project_name)
@@ -1094,10 +1096,10 @@ class PipelineOrchestrator:
             "## Summary\n\n",
             f"{devplan.summary}\n\n",
             "---\n\n",
-            "## 📋 Project Dashboard\n\n",
+            "[LIST] Project Dashboard\n\n",
             "This document serves as the main index and dashboard for project development. ",
             "Each phase below has its own dedicated markdown file with detailed actionable steps.\n\n",
-            "### 🚀 Phase Overview\n\n",
+            "### [ROCKET] Phase Overview\n\n",
             "| Phase | Title | Status | Steps | File |\n",
             "|-------|-------|--------|-------|------|\n"
         ]
@@ -1110,11 +1112,11 @@ class PipelineOrchestrator:
             
             # Status emoji
             if completion_pct == 100:
-                status = "✅ Complete"
+                status = "[OK] Complete"
             elif completion_pct > 0:
-                status = f"🔄 {completion_pct:.0f}%"
+                status = f"[REFRESH] {completion_pct:.0f}%"
             else:
-                status = "⏳ Not Started"
+                status = "[WAIT] Not Started"
             
             lines.append(
                 f"| {phase.number} | {phase.title} | {status} | {total_steps} | [phase{phase.number}.md](phase{phase.number}.md) |\n"
@@ -1146,7 +1148,7 @@ class PipelineOrchestrator:
             f"**Completed Steps**: {sum(sum(1 for step in phase.steps if step.done) for phase in devplan.phases)}\n\n",
             "*Last updated: " + self._get_timestamp() + "*\n",
             "\n---\n\n",
-            "## 🎯 Anchor Reference Guide (Read-Minimal)",
+            "[TARGET] Anchor Reference Guide (Read-Minimal)",
             "\n\n",
             "**devplan.md**\n",
             "- `PROGRESS_LOG`: recent completions (~100 tokens)\n",

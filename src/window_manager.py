@@ -184,7 +184,7 @@ class WindowManager:
     def run_interactive_session(self) -> None:
         """Run the complete interactive session with both windows."""
         try:
-            print("🚀 Starting DevUssY Interactive Mode")
+            print("[ROCKET] Starting DevUssY Interactive Mode")
             print("=" * 50)
             print("This will open two terminal windows:")
             print("1. Interview window - For gathering project requirements")
@@ -228,11 +228,11 @@ class WindowManager:
                     self.cleanup()
                 
             else:
-                print("❌ Interview timed out or failed to generate devplan")
+                print("[ERROR] Interview timed out or failed to generate devplan")
                 
         except Exception as e:
             logger.error(f"Error in interactive session: {e}")
-            print(f"❌ Error: {e}")
+            print(f"[ERROR] Error: {e}")
             self.cleanup()
     
     def cleanup(self) -> None:
@@ -346,7 +346,7 @@ def main():
         interview_data = interview_manager.run()
         
         if not interview_data:
-            print("❌ No data collected from interview")
+            print("[ERROR] No data collected from interview")
             sys.exit(1)
         
         # Convert to design inputs
@@ -367,21 +367,21 @@ def main():
             frameworks=design_inputs.get("frameworks", "").split(",") if design_inputs.get("frameworks") else None,
             apis=design_inputs.get("apis", "").split(",") if design_inputs.get("apis") else None,
         )
-        print("✅ Project design generated!")
+        print("[OK] Project design generated!")
         
-        print("📋 Creating basic development plan structure with real-time streaming...")
+        print("[LIST] Creating basic development plan structure with real-time streaming...")
         # Generate only basic devplan structure (this is fast)
         devplan = await orchestrator.basic_devplan_gen.generate(design)
-        print("✅ Development plan structure created!")
+        print("[OK] Development plan structure created!")
         
         # Save devplan immediately for the terminal UI to pick up
         devplan_file.parent.mkdir(parents=True, exist_ok=True)
         with open(devplan_file, 'w', encoding='utf-8') as f:
             json.dump(devplan.model_dump(), f, indent=2)
         
-        print(f"✅ Development plan saved to: {{devplan_file}}")
-        print("✅ Interview completed successfully!")
-        print("🚀 The phase generation window will open automatically and stream all phases in real-time.")
+        print(f"[OK] Development plan saved to: {{devplan_file}}")
+        print("[OK] Interview completed successfully!")
+        print("[ROCKET] The phase generation window will open automatically and stream all phases in real-time.")
         print("You can close this interview window after the phase generation window appears.")
         
         # Keep window open for user to see results
@@ -389,7 +389,7 @@ def main():
         
     except Exception as e:
         logging.error(f"Interview failed: {{e}}", exc_info=True)
-        print(f"❌ Interview failed: {{e}}")
+        print(f"[ERROR] Interview failed: {{e}}")
         input("\\nPress Enter to close this window...")
         sys.exit(1)
 
@@ -462,7 +462,7 @@ def main():
             # Check if file exists and has content
             if devplan_file.exists():
                 file_size = devplan_file.stat().st_size
-                print(f"📁 Devplan file found! Size: {{file_size}} bytes")
+                print(f"[FOLDER] Devplan file found! Size: {{file_size}} bytes")
                 
                 if file_size > 0:
                     # Try to read and validate the JSON
@@ -471,21 +471,21 @@ def main():
                             content = f.read()
                             print(f"📖 File content preview: {{content[:100]}}...")
                             json.load(f)  # Validate JSON
-                        print("✅ Development plan file is ready!")
+                        print("[OK] Development plan file is ready!")
                         break
                     except json.JSONDecodeError as e:
-                        print(f"⚠️  File found but JSON not yet complete: {{e}}")
+                        print(f"[WARN] File found but JSON not yet complete: {{e}}")
                         print("   Waiting for interview to finish writing...")
                     except Exception as e:
-                        print(f"⚠️  Error reading file: {{e}}")
+                        print(f"[WARN] Error reading file: {{e}}")
                 else:
-                    print("⚠️  File exists but is empty, waiting...")
+                    print("[WARN] File exists but is empty, waiting...")
             else:
                 print(f"⏳ Still waiting... (elapsed: {{int(time.time() - start_time)}}s)")
             
             # Check timeout
             if time.time() - start_time > timeout:
-                print(f"❌ Timeout waiting for development plan after {{timeout}} seconds")
+                print(f"[ERROR] Timeout waiting for development plan after {{timeout}} seconds")
                 print(f"   Expected file: {{devplan_file}}")
                 print(f"   File exists: {{devplan_file.exists()}}")
                 if devplan_file.exists():
@@ -519,7 +519,7 @@ def main():
         phase_generator = TerminalPhaseGenerator(llm_client, state_manager)
         
         # Launch terminal UI with streaming phase generation
-        print("🚀 Starting real-time phase generation...")
+        print("[ROCKET] Starting real-time phase generation...")
         print("Watch as each phase is generated and streamed live!")
         run_terminal_ui(
             phase_names=["plan", "design", "implement", "test", "review"],
@@ -529,7 +529,7 @@ def main():
         
     except Exception as e:
         logging.error(f"Terminal UI failed: {{e}}", exc_info=True)
-        print(f"❌ Terminal UI failed: {{e}}")
+        print(f"[ERROR] Terminal UI failed: {{e}}")
         input("\\nPress Enter to close this window...")
         sys.exit(1)
 
