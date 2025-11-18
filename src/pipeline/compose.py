@@ -367,7 +367,36 @@ class PipelineOrchestrator:
             logger.warning(f"Failed to save checkpoint after project design: {e}")
 
         if save_artifacts:
-            design_content = project_design.architecture_overview or "No design generated"
+            # Construct full markdown content similar to generate_design
+            design_md_lines = [
+                f"# Project Design: {project_name}\n",
+                f"## Architecture Overview\n\n{project_design.architecture_overview or 'No design generated'}\n",
+                "## Tech Stack\n"
+            ]
+            for tech in project_design.tech_stack:
+                design_md_lines.append(f"- {tech}")
+            
+            if project_design.objectives:
+                design_md_lines.append("\n## Objectives\n")
+                for obj in project_design.objectives:
+                    design_md_lines.append(f"- {obj}")
+
+            if project_design.dependencies:
+                design_md_lines.append("\n## Dependencies\n")
+                for dep in project_design.dependencies:
+                    design_md_lines.append(f"- {dep}")
+
+            if project_design.challenges:
+                design_md_lines.append("\n## Challenges\n")
+                for chal in project_design.challenges:
+                    design_md_lines.append(f"- {chal}")
+
+            if project_design.mitigations:
+                design_md_lines.append("\n## Mitigations\n")
+                for mit in project_design.mitigations:
+                    design_md_lines.append(f"- {mit}")
+
+            design_content = "\n".join(design_md_lines)
             self.file_manager.write_markdown(
                 f"{output_dir}/project_design.md",
                 design_content,

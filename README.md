@@ -112,8 +112,10 @@ AETHER_API_KEY=...
 AGENTROUTER_API_KEY=...
 # Optional (default: https://agentrouter.org/)
 # AGENTROUTER_BASE_URL=https://agentrouter.org/
+# Optional: Spoof as a specific model/provider
+# AGENTROUTER_SPOOF_AS=claude-code
 ```
-You can also set per-stage keys in config or via env if desired.
+You can also set per-stage keys (e.g., `DESIGN_API_KEY`, `DEVPLAN_API_KEY`) in config or via env if desired.
 
 ## Quick start
 
@@ -267,39 +269,6 @@ Legacy Devussy docs, handoff summaries, and helper scripts have been moved into 
 
 - `DEVUSSYPLAN.md`, `devussy-complete-plan.md`, `devussyhandoff.md`
 - `INTERACTIVE_FIXES_SUMMARY.md`, `INTERACTIVE_IMPLEMENTATION.md`, `RELEASE-01-SUMMARY.md`
-- `SINGLE_WINDOW_MODE.md`, `handoff-cleanup-guide.md`, `devplan.md.bak`
-- Setup and helper scripts: `setup-new-repo.ps1`, `start-backend.ps1`, `sitecustomize.py`
-
-These are kept for historical reference but are not required for the current 0.3 workflow.
-
-## Recent Updates (Session 11)
-
-- Hardened interactive single-window streaming:
-  - Fixed coroutine-not-awaited warnings by using synchronous token callbacks in project design and basic devplan generators.
-  - Ensured console streaming for design and devplan via StreamingHandler (token prefixes [design] and [devplan]).
-  - Fixed nested asyncio.run() errors by running the Textual terminal UI from interactive in a background thread.
-- Updated docs (README, DEVUSSYPLAN.md, devussyhandoff.md) to describe the console-based interview + streaming design/devplan + terminal UI phases workflow.
-
-## Recent Updates (Session 5)
-
-**Phase 5: Token Streaming Integration ✅**
-- Implemented real-time LLM token streaming to terminal UI
-- Created `TerminalPhaseGenerator` for streaming phase generation
-- Added phase cancellation support with abort events
-- Implemented concurrent generation of multiple phases
-- Added regeneration with steering feedback support
-- Created 12 comprehensive unit tests (all passing)
-- Created integration test script for end-to-end validation
-- Installed Textual library (v6.6.0) for terminal UI
-- All 63 tests passing (56 unit + 7 integration)
-
-**Previous Updates (Session 3):**
-
-**Bug Fixes:**
-- Fixed LLM client config access bug (all clients were incorrectly accessing `self._config.llm` instead of `self._config`)
-- Corrected timeout and parameter access in OpenAI, Requesty, Aether, AgentRouter, and Generic clients
-- All 51 tests passing with no diagnostics
-
 **Testing:**
 - Added comprehensive integration test script (`scripts/test_full_interview_flow.py`)
 - Validates repository analysis, code extraction, interview manager, and LLM integration

@@ -1,0 +1,112 @@
+# Detailed Development Plan Prompt
+
+You are breaking down a basic development plan into a comprehensive, step-by-step implementation guide.
+
+## Basic Development Plan
+{basic_devplan}
+
+## Your Task
+Create a **DETAILED Development Plan** with **100-300 numbered, actionable steps**.
+
+### Critical Requirements:
+1. **Number every step** (Step 1, Step 2, etc.)
+2. **Make steps atomic** - each step should be a single, clear action
+3. **Include ALL details** - don't skip small tasks
+4. **Order matters** - steps should be in logical execution order
+5. **Be specific** - "Create user model" not "Set up database"
+
+### Step Format:
+```
+### Step X: [Concise Action Title]
+**Action:** [Specific task to perform]
+**Files:** [Files to create/modify]
+**Details:** [Implementation details, code snippets if helpful]
+**Success Criteria:** [How to know this step is complete]
+**Dependencies:** [Previous steps this depends on]
+**Estimated Time:** [5m, 15m, 30m, 1h, 2h, etc.]
+```
+
+### Example Steps:
+```
+### Step 1: Initialize Project Repository
+**Action:** Create new Git repository and initial project structure
+**Files:** 
+- README.md
+- .gitignore
+- .env.example
+**Details:** 
+- Initialize git repo with `git init`
+- Add Python .gitignore template
+- Create README with project name and description
+**Success Criteria:** 
+- Repository created and initial commit made
+- .gitignore properly excludes venv, __pycache__, .env
+**Dependencies:** None
+**Estimated Time:** 15m
+
+### Step 2: Set Up Python Virtual Environment
+**Action:** Create and activate Python virtual environment
+**Files:** 
+- venv/ (directory)
+- requirements.txt (create)
+**Details:**
+```
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install --upgrade pip
+```
+**Success Criteria:** 
+- Virtual environment created
+- Pip upgraded to latest version
+**Dependencies:** Step 1
+**Estimated Time:** 10m
+
+### Step 3: Install Core Dependencies
+**Action:** Install FastAPI, Uvicorn, and SQLAlchemy
+**Files:** 
+- requirements.txt (update)
+**Details:**
+Add to requirements.txt:
+```
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+pydantic==2.5.0
+```
+Then run: `pip install -r requirements.txt`
+**Success Criteria:** 
+- All packages installed successfully
+- Can import fastapi, uvicorn, sqlalchemy in Python
+**Dependencies:** Step 2
+**Estimated Time:** 10m
+```
+
+### Coverage Areas - Make Sure to Include Steps For:
+- **Initial Setup** (15-25 steps): Repo, environment, dependencies, config
+- **Database** (20-30 steps): Schema, models, migrations, seeds
+- **Core Features** (40-80 steps): Break down EACH feature into small steps
+- **API Endpoints** (30-50 steps): Each endpoint with request/response models
+- **Authentication** (15-25 steps): If applicable, full auth flow
+- **Testing** (25-40 steps): Unit tests, integration tests, test data
+- **Frontend** (if applicable, 30-60 steps): Components, pages, state management
+- **Integration** (15-25 steps): Third-party services, external APIs
+- **Documentation** (10-15 steps): API docs, README updates, comments
+- **Deployment** (15-25 steps): Docker, CI/CD, production setup
+- **Final Polish** (10-15 steps): Error handling, logging, cleanup
+
+### Important Notes:
+- **Target 100-300 steps minimum** - more is better than less
+- **Every file creation is a step**
+- **Every function implementation is a step**
+- **Every test suite is multiple steps**
+- **Configuration changes are steps**
+- **Git commits after milestones are steps**
+
+## Output Format
+Generate a complete Markdown document with:
+1. Overview section
+2. Numbered steps (100-300 minimum)
+3. Clear section headers grouping related steps
+4. Each step following the format above
+
+This plan should be SO detailed that a junior developer could follow it step-by-step to build the entire project.

@@ -190,7 +190,7 @@ class DetailedDevPlanGenerator:
         
         # Add code samples if available in llm_kwargs
         if "code_samples" in llm_kwargs:
-            context["code_samples"] = llm_kwargs.get("code_samples")
+            context["code_samples"] = llm_kwargs.pop("code_samples")
 
         # Render the prompt template
         prompt = render_template("detailed_devplan.jinja", context)
