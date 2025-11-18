@@ -232,6 +232,19 @@ STREAMING_ENABLED=true
   - interactive settings: open **Settings → Concurrency / Parallel Phases** and set *Max concurrent API requests / phases*.
 
 ## Developing
+
+### Test layout
+
+All tests now live under the `tests/` directory:
+
+- `tests/unit/` – unit tests for core pipeline and helpers
+- `tests/integration/` – end-to-end and higher-level tests
+- `tests/legacy/` – top-level tests that previously lived in the repo root (e.g. `test_complete_fix.py`, `test_streaming_duplication_fix.py`, etc.)
+
+When adding new tests, prefer placing them in `tests/unit/` or `tests/integration/` rather than the repository root.
+
+### Running tests
+
 ```bash
 # run tests
 pytest -q
