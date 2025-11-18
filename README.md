@@ -16,38 +16,46 @@ Devussy turns a short project idea into a complete, actionable development plan.
 
 • Repo: https://github.com/mojomast/devussy
 • Python: 3.9+
-• Version: 0.2.0 (Release 01)
+• Version: 0.3.0 (Commit Stage)
 
-## What's New in Release 01
+## What's New in Commit Stage 0.3.0
 
-**🎉 Major Milestones Achieved:**
+**� Interview experience: real design review, not a second interview**
 
-1. **Interview Mode (Phases 1-3)** ✅
-   - Repository analysis engine for existing codebases
-   - LLM-driven interview with context-aware questioning
-   - Code sample extraction (architecture, patterns, tests)
-   - Context-aware devplan generation with repo insights
-   - Real-world validation with GPT-5 mini via Requesty
+- Added a dedicated **Design Review mode** to `LLMInterviewManager`.
+- The "Design Review Opportunity" in the interactive flow now:
+  - Loads the generated design (and optional devplan / repo summary) as **markdown context**.
+  - Starts a focused **design-review conversation** instead of re-asking basic questions.
+  - Guides the user to refine architecture, constraints, tech stack, and risks.
+- At the end of the review, Devussy extracts a **compact JSON summary** (updated requirements, new constraints, tech changes, risks, notes).
+- That summary is merged back into the design inputs and the design is **regenerated with the adjustments applied**.
 
-2. **Terminal UI Foundation (Phase 4)** ✅
-   - Textual-based modern TUI with responsive grid layout
-   - Phase state management with full lifecycle support
-   - Color-coded status indicators and scrollable content
-   - Async-first architecture for smooth performance
+**🧭 Single-window interactive workflow polish**
 
-3. **Token Streaming (Phase 5)** ✅
-   - Real-time LLM token streaming to terminal UI
-   - Phase cancellation with clean abort handling
-   - Concurrent generation of multiple phases
-   - Regeneration with steering feedback support
-   - **Phase-specific streaming control** - users can now enable/disable streaming per phase (Design, DevPlan, Handoff)
-   - 63 tests passing (56 unit + 7 integration)
+- "Start" → interview → design → design-review (optional) → devplan now runs as a **single, progress-aware flow**.
+- Streaming handlers prefix tokens in the console (`[design]`, `[devplan]`) for easy scanning.
+- The Textual terminal UI still runs in its own thread to avoid nested `asyncio.run()` issues on Windows.
 
-**📊 Project Status:**
-- 5 of 11 phases complete (45% of terminal UI roadmap)
-- Production-ready interview mode and streaming foundation
-- Comprehensive test coverage with zero diagnostics
-- Ready for rendering enhancements and fullscreen viewer
+**📡 Streaming and configuration improvements**
+
+- Phase-specific streaming flags for **Design / DevPlan / Handoff** with a clear priority model:
+  1. Phase-specific flag
+  2. Global streaming flag
+  3. Config fallback
+  4. Disabled
+- New **Streaming Options** menu in Settings lets you toggle phases individually without touching config files.
+- Concurrency controls now live in Settings as well (max concurrent API requests / phases).
+
+**🧱 Under-the-hood fixes**
+
+- Hardened `LLMInterviewManager` to be explicitly mode-aware (`initial` vs `design_review`).
+- Added helpers to safely parse the LLM's JSON feedback from the conversation history.
+- Reduced emoji usage in low-level console banners to avoid Windows encoding issues.
+
+**📊 Project Status (CLI / TUI engine)**
+
+- Interview mode and design-review loop are **production-ready** for day-to-day use.
+- Streaming and terminal UI foundations are in place; remaining work is mostly visual and workflow polish.
 
 ## Why Devussy
 - Multi-stage pipeline: Design → Basic DevPlan → Detailed DevPlan (per-phase files) → Handoff

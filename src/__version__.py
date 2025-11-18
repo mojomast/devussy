@@ -1,6 +1,6 @@
 """Version information for DevPlan Orchestrator."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __version_info__ = tuple(int(i) for i in __version__.split(".") if i.isdigit())
 
 __title__ = "devussy"

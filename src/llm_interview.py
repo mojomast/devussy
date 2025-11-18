@@ -161,12 +161,18 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
         # Apply debug/verbose flag to client (robust attribute discovery)
         self._apply_client_debug(verbose)
 
+        # Core interview state
         self.conversation_history = []
         self.extracted_data = {}
         self.code_samples: list[CodeSample] = []
+
         # Session-scoped interactive settings (not persisted)
         self.session_settings = SessionSettings()
-        
+
+        # Optional design-review specific context and extracted feedback
+        self._design_review_context_md = None
+        self._design_review_feedback = None
+
         # Track question counter for markdown output
         self.question_counter = 0
 
@@ -201,6 +207,54 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
         logger.info(f"Verbose mode: {self.verbose}")
         logger.info(f"Provider: {config.llm.provider}")
         logger.info(f"Model: {config.llm.model}")
+
+    # ------------------------------------------------------------------
+    # Design-review specific helpers
+    # ------------------------------------------------------------------
+
+    def set_design_review_context(
+        self,
+        design_md: str,
+        devplan_md: Optional[str] = None,
+        review_md: Optional[str] = None,
+        repo_summary_md: Optional[str] = None,
+    ) -> None:
+        """Attach rich markdown context for design-review mode.
+
+        The context is provided to the LLM at the beginning of the
+        conversation when running in ``mode="design_review"`` so the
+        assistant can act as a senior architect reviewing an existing
+        proposal instead of gathering fresh requirements.
+        """
+
+        sections: list[str] = []
+
+        # Artifact 1: Initial Project Design
+        sections.append("## Artifact 1: Initial Project Design (v1)\n\n")
+        sections.append((design_md or "_No design available._").strip())
+
+        # Artifact 2: DevPlan Summary
+        sections.append("\n\n## Artifact 2: DevPlan Summary\n\n")
+        devplan_text = (devplan_md or "").strip() or "_No devplan summary available yet._"
+        sections.append(devplan_text)
+
+        # Artifact 3: Automatic Design Review
+        sections.append("\n\n## Artifact 3: Automatic Design Review\n\n")
+        review_text = (review_md or "").strip() or "_No automatic design review available._"
+        sections.append(review_text)
+
+        # Artifact 4: Repo Analysis Summary
+        sections.append("\n\n## Artifact 4: Repo Analysis Summary\n\n")
+        repo_text = (repo_summary_md or "").strip() or "_No repo analysis summary available._"
+        sections.append(repo_text)
+
+        preamble = (
+            "Here is the current design and related context. "
+            "Read this fully, then ask me clarifying questions as a senior "
+            "architect before we finalize adjustments.\n\n"
+        )
+
+        self._design_review_context_md = preamble + "".join(sections)
 
     def _apply_client_debug(self, enabled: bool) -> None:
         """Best-effort propagation of a debug/verbose flag to the underlying LLM client.
@@ -366,45 +420,75 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
         self._design_review_context_md = preamble + "\n\n".join(sections)
 
     def run(self) -> Dict[str, Any]:
-        """
-        Run the conversational interview loop.
-        
+        """Run the conversational interview loop.
+
         Returns:
             Dict[str, Any]: Answers extracted from conversation
         """
-        console.print(Panel.fit(
-            "[bold blue]🚀 DevPlan Interactive Builder[/bold blue]\n"
-            "Let's build your development plan together!\n\n"
-            "[dim]Slash commands: /verbose, /help, /done, /quit, /settings, /model, /temp, /tokens[/dim]",
-            border_style="blue"
-        ))
+        # Use a plain ASCII title to avoid surrogate emoji issues on some terminals
+        console.print(
+            Panel.fit(
+                "[bold blue]DevPlan Interactive Builder[/bold blue]\n"
+                "Let's build your development plan together!\n\n"
+                "[dim]Slash commands: /verbose, /help, /done, /quit, /settings, /model, /temp, /tokens[/dim]",
+                border_style="blue",
+            )
+        )
 
         logger.info("Starting interview conversation")
 
-        # Display project summary if analyzing existing repo
         if self.repo_analysis:
             self._print_project_summary()
 
         # Start with initial greeting, customized by mode
-        streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+        streaming_enabled = getattr(self.config, "streaming_enabled", False)
+
         if self.mode == "design_review" and self._design_review_context_md:
-            # For design review, first send the consolidated context
-            initial_response = self._send_to_llm(self._design_review_context_md)
+            # Phase 1: send the consolidated design context
+            try:
+                self._send_to_llm(self._design_review_context_md)
+            except Exception:
+                logger.exception("Failed to send design review context to LLM")
+
+            # Phase 2: ask for a short, menu-style checklist of focus areas.
+            # This keeps the review manageable and user-directed: the model
+            # proposes a numbered list of areas to improve, and the user
+            # selects which ones to tackle. The model is also asked to show a
+            # simple progress indicator such as "[2/5 areas completed]" as
+            # sections are finished.
+            initial_response = self._send_to_llm(
+                "I've reviewed the full design and devplan context you shared. "
+                "First, propose a concise numbered checklist of 4-7 focus areas "
+                "we can improve (for example: architecture & integration, RNG & "
+                "determinism, persistence & save format, performance & memory, "
+                "testing & CI, assets & build pipeline, observability & telemetry). "
+                "For each focus area, give a one-line description only. Then ask me "
+                "to choose one or more numbers to work on first. As we complete "
+                "each area, show a brief progress summary like '[2/5 areas completed]'. "
+                "Keep every message tight so we stay within context limits."
+            )
             if not streaming_enabled:
                 self._display_llm_response(initial_response)
         else:
-            if self.repo_analysis and getattr(self.repo_analysis, "project_metadata", None) and self.repo_analysis.project_metadata.name:
+            if (
+                self.repo_analysis
+                and getattr(self.repo_analysis, "project_metadata", None)
+                and self.repo_analysis.project_metadata.name
+            ):
                 # Use the project name from repository analysis
                 project_name = self.repo_analysis.project_metadata.name
                 initial_response = self._send_to_llm(
-                    f"Hi! I'm excited to help you plan your project '{project_name}'. I can see this is a {self.repo_analysis.project_type} project with {self.repo_analysis.code_metrics.total_files} files. What would you like to accomplish with this project?"
+                    f"Hi! I'm excited to help you plan your project '{project_name}'. "
+                    f"I can see this is a {self.repo_analysis.project_type} project "
+                    f"with {self.repo_analysis.code_metrics.total_files} files. "
+                    "What would you like to accomplish with this project?"
                 )
             else:
                 # Ask for project name as before
                 initial_response = self._send_to_llm(
-                    "Hi! I'm excited to help you plan your project. Let's start with the basics - what would you like to name your project?"
+                    "Hi! I'm excited to help you plan your project. "
+                    "Let's start with the basics - what would you like to name your project?"
                 )
-            # Only display if streaming wasn't already showing it
             if not streaming_enabled:
                 self._display_llm_response(initial_response)
         
@@ -467,11 +551,104 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
         
         logger.info("Interview finished")
 
-        # Best-effort extraction of design review feedback if in that mode
+        # Best-effort extraction of design review feedback if in that mode.
+        # The helper keeps the JSON summary compact so we can safely merge it
+        # back into the project design/devplan without overblowing context.
         if self.mode == "design_review":
             self._design_review_feedback = self._extract_design_review_feedback()
 
         return self.extracted_data
+
+    def _extract_design_review_feedback(self) -> Dict[str, Any]:
+        """Extract the final, compact design-review JSON summary.
+
+        This is intentionally opinionated to avoid the earlier behavior where
+        the model produced multiple long-form reports. We:
+
+        - Walk assistant messages from last to first.
+        - Try to parse a small JSON-ish object.
+        - Normalize into a tight schema that callers (CLI, pipeline) can merge
+          back into design inputs without huge context growth.
+        """
+        default: Dict[str, Any] = {
+            "status": "ok",
+            "updated_requirements": "",
+            "new_constraints": [],
+            "updated_tech_stack": [],
+            "integration_risks": [],
+            "notes": "",
+        }
+
+        # Look from last assistant message backward
+        for msg in reversed(self.conversation_history):
+            if msg.get("role") != "assistant":
+                continue
+            content = msg.get("content") or ""
+            if not content:
+                continue
+
+            candidate = None
+            # Try pure JSON
+            try:
+                candidate = json.loads(content)
+            except Exception:
+                # Try to extract JSON blob inside fences or text
+                m = re.search(r"\{.*\}", content, re.DOTALL)
+                if m:
+                    try:
+                        candidate = json.loads(m.group(0))
+                    except Exception:
+                        candidate = None
+
+            if not isinstance(candidate, dict):
+                continue
+
+            def _get(key: str, fallback: Any) -> Any:
+                for k, v in candidate.items():
+                    if k.lower() == key:
+                        return v
+                return fallback
+
+            def _as_list(value: Any) -> list[str]:
+                if value is None:
+                    return []
+                if isinstance(value, list):
+                    return [str(v).strip() for v in value if str(v).strip()]
+                if isinstance(value, str):
+                    parts = re.split(r"[,\n]+", value)
+                    return [p.strip() for p in parts if p.strip()]
+                return [str(value).strip()]
+
+            return {
+                "status": str(_get("status", default["status"]) or "ok"),
+                "updated_requirements": str(
+                    _get("updated_requirements", default["updated_requirements"]) or ""
+                ),
+                "new_constraints": _as_list(
+                    _get("new_constraints", default["new_constraints"])
+                ),
+                "updated_tech_stack": _as_list(
+                    _get("updated_tech_stack", default["updated_tech_stack"])
+                ),
+                "integration_risks": _as_list(
+                    _get("integration_risks", default["integration_risks"])
+                ),
+                "notes": str(_get("notes", default["notes"]) or ""),
+            }
+
+        return default
+
+
+    def to_design_review_feedback(self) -> Dict[str, Any]:
+        """Return structured design-review feedback (design_review mode only)."""
+        if self.mode != "design_review":
+            raise ValueError(
+                "to_design_review_feedback() is only valid when mode='design_review'"
+            )
+
+        if self._design_review_feedback is None:
+            self._design_review_feedback = self._extract_design_review_feedback()
+        return self._design_review_feedback
 
     def _extract_design_review_feedback(self) -> Dict[str, Any]:
         """Extract the final design-review JSON summary from the conversation.

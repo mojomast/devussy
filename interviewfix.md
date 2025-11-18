@@ -1,275 +1,376 @@
 # Design Review Interview Fix
 
-This document describes how to fix the **Design Review Opportunity** step so that the second interview is a true **design review session** with full context of the generated design, rather than a repeat of the initial requirements interview.
+This document describes how to fix and **streamline** the **Design Review Opportunity** step so that the second interview is a true
+**design review session** with full context of the generated design — and is also **manageable, user-directed, and progress-aware**
+instead of a long, repeated brain dump.
+
+High-level goals for the new behavior:
+
+- The agent itself **proposes concrete improvement areas** (the user is not responsible for finding all the issues).
+- The user can then **choose which parts** of the design to improve from a numbered menu of focus areas.
+- The model shows **simple progress**, e.g. `[2/5 areas completed]` as sections are finished.
+- The final output is a **compact JSON summary** that can be merged back into the project design/devplan without blowing up context.
+- We avoid the earlier bug where multiple long “review reports” were emitted without the user steering the flow.
+# Design Review Interview Fix – Implementation Notes
+
+This document summarizes the work completed to implement the **design-review interview** behavior, plus context for the next developer to continue or extend it.
 
 ---
 
-## 1. Current Problem (What’s Broken)
+## 1. Goal
 
-**Symptoms**
-- After the initial design is generated, the pipeline prints:
-  - `Design Review Opportunity` → `Enter 'yes' to review, or press Enter to continue:`
-- If the user enters `yes`, the system starts another `LLMInterviewManager` session.
-- This second session mostly behaves like the **initial interview**:
-  - Same generic system prompt focused on gathering project requirements.
-  - No dedicated design-review question flow.
-  - Only a small ad‑hoc text context is provided about the design.
+Turn the **Design Review Opportunity** step in the interactive CLI (including the single-window flow) into a _true design-review_ phase, instead of simply repeating the initial requirements interview.
 
-**Result:** The second interview does **not** behave like a focused design review of the generated design/devplan; it feels like a repeat of the first interview with minimal awareness of the existing design docs.
+Key requirements from `FIXX.MD`:
 
----
+- `LLMInterviewManager` must support a distinct `mode="design_review"` with its own system prompt.
+- Design-review mode must start from existing design/devplan context, **not** re-ask basic questions like project name.
+- At the end of the review, the LLM must emit a JSON summary with fields like `updated_requirements`, `new_constraints`, etc.
+- The CLI should:
+  - Ask the user whether to run a design review after design generation.
+  - Run the review in `design_review` mode when requested.
+  - Merge structured feedback back into the design inputs.
+  - Regenerate the design with the adjustments applied.
 
-## 2. High-Level Goal (What We Want)
-
-Turn the "Design Review Opportunity" step into a proper **design review mode**:
-
-- The second interview must:
-  - Receive **rich context**: initial design, any automated design review, devplan summary, and repo analysis.
-  - Use a **different system prompt**: act as a senior architect reviewing a proposed design, not as a requirements-gathering bot.
-  - Produce a **different output shape**: design review feedback and adjustments, not fresh initial design inputs.
-  - Feed that feedback back into the pipeline **before** generating devplan and phase docs.
+All of the above is now implemented and wired through.
 
 ---
 
-## 3. Key Files Involved
+## 2. Changes in `src/llm_interview.py`
 
-These are the main files you’ll need to touch:
+### 2.1. `LLMInterviewManager.__init__`
 
-1. `src/llm_interview.py`
-   - Defines `LLMInterviewManager` and its system prompt / interview flow.
-2. `src/cli.py`
-   - Contains the `Design Review Opportunity` prompt and logic to start the second interview.
-   - There are **two** relevant flows:
-     - Older sync flow around `typer.confirm("Would you like to conduct a design review interview?")` (~line 2490+).
-     - Newer async pipeline flow around the `input("Enter 'yes' to review, or press Enter to continue: ")` (~line 3570+).
-3. `src/pipeline/design_review.py`
-   - Defines `DesignReviewRefiner`, which already runs an **automatic** LLM design review using `templates/design_review.jinja`.
-4. `templates/design_review.jinja`
-   - Prompt template used by `DesignReviewRefiner` for automatic (non-interactive) design review.
-5. `src/prompts/design_iteration.txt`
-   - Prompt template for refining a design based on user feedback; can be used to synthesize a **Design v2** after the interactive review.
-6. `src/terminal/interview_ui.py` (optional)
-   - If the TUI needs to support design review mode, similar changes may be applied here after the CLI flow is working.
+The constructor now:
+
+- Accepts `mode: Literal["initial", "design_review"] = "initial"`.
+- Stores it in `self.mode`.
+- Chooses the system prompt based on `mode`:
+  - `SYSTEM_PROMPT` for `initial`.
+  - `DESIGN_REVIEW_SYSTEM_PROMPT` for `design_review`.
+- Initializes new attributes:
+  - `self._design_review_context_md = None` — consolidated markdown context.
+  - `self._design_review_feedback = None` — cached structured feedback.
+
+It also still sets up logging, the LLM client, session settings, conversation history, etc., and optionally injects a repo summary as an extra `system` message.
+
+### 2.2. `set_design_review_context()`
+
+New/cleaned method on `LLMInterviewManager`:
+
+- Signature:
+  - `set_design_review_context(self, design_md: str, devplan_md: Optional[str] = None, review_md: Optional[str] = None, repo_summary_md: Optional[str] = None) -> None`
+- Behavior:
+  - Builds a single markdown blob combining:
+    - **Artifact 1** – initial project design.
+    - **Artifact 2** – devplan summary (if provided).
+    - **Artifact 3** – automatic design review summary (if any).
+    - **Artifact 4** – repo analysis summary (if any).
+  - Prepends a short preamble instructing the LLM to read the context and ask clarifying questions as a senior architect.
+  - Stores the result in `self._design_review_context_md`.
+
+This is meant to be called **before** `run()` when `mode="design_review"`.
+
+### 2.3. `run()` startup logic for design-review mode
+
+The top of `run()` has been updated to:
+
+- Print a Rich `Panel` heading **without emojis** (to avoid Unicode surrogate issues on Windows terminals).
+- Log the start of the interview.
+- If `self.repo_analysis` is set, print a repo summary panel.
+- Use different behavior based on `self.mode`:
+  - If `mode == "design_review"` and `_design_review_context_md` is available, the flow is now explicitly **two-phase**:
+    1. **Send consolidated design context** – the existing design, devplan summary, any prior review, and repo analysis are sent as one markdown blob.
+    2. **Ask the model to propose a numbered checklist of improvement areas** – the first prompt after context tells the agent to:
+       - Scan the full context and identify the 4–7 most important focus areas (e.g., architecture, RNG/determinism, persistence, performance, testing/CI, assets, observability).
+       - Output a **concise, numbered list** with one-line descriptions.
+       - Ask the user to choose which numbers to work on first.
+       - Show a small progress indicator like `[2/5 areas completed]` as areas are completed.
+  - Otherwise (normal `initial` mode):
+    - Either greet with the repo-derived project name and type, or ask what to name the project.
+
+The rest of the conversation loop (slash commands, `/done` handling, extraction of initial requirements JSON) is unchanged. The “menu of issues” behavior is driven entirely by this design-review-specific opening prompt.
+
+### 2.4. End-of-run design-review feedback hook
+
+At the end of `run()`, just before returning `self.extracted_data`, we now:
+
+- Log `"Interview finished"`.
+- If `self.mode == "design_review"`, call `_extract_design_review_feedback()` and store the result in `self._design_review_feedback`.
+
+This ensures that design-review sessions automatically attempt to extract a **single, compact JSON summary** when they finish. That summary is what the CLI uses to actually tweak the project design/devplan.
+
+### 2.5. Design-review feedback extraction API
+
+Two methods were added to encapsulate the design-review JSON contract.
+
+#### `_extract_design_review_feedback(self) -> Dict[str, Any]`
+
+- Walks `self.conversation_history` **backwards**, looking at `assistant` messages only.
+- For each candidate message:
+  - Tries to parse the whole content as JSON.
+  - If that fails, tries to find a `{ ... }` blob via regex and parse that.
+- If it finds a dict-like JSON object, it normalizes the keys **case-insensitively** to:
+  - `status`
+  - `updated_requirements`
+  - `new_constraints`
+  - `updated_tech_stack`
+  - `integration_risks`
+  - `notes`
+- Helper behavior:
+  - `_get(key, fallback)` looks up a key by case-insensitive match.
+  - `_as_list(value)` returns a list of strings, splitting comma/newline strings into items when necessary.
+- Returns a dict of the shape:
+
+  ```python
+  {
+      "status": str,
+      "updated_requirements": str,
+      "new_constraints": list[str],
+      "updated_tech_stack": list[str],
+      "integration_risks": list[str],
+      "notes": str,
+  }
+  ```
+
+- If no suitable JSON is found, returns a default object with empty fields and `status="ok"`.
+
+#### `to_design_review_feedback(self) -> Dict[str, Any]`
+
+- Public API for callers:
+  - Raises `ValueError` if `self.mode != "design_review"`.
+  - If `_design_review_feedback` is `None`, calls `_extract_design_review_feedback()`.
+  - Returns the cached feedback dict.
+
+This is what the CLI uses after `run()` completes in `design_review` mode.
+
+### 2.6. Unicode / emoji safety
+
+- The heading panel in `run()` previously used a rocket emoji.
+- On Windows Python 3.13 terminal runs, this caused a `UnicodeEncodeError` (surrogate pair issues when writing to `stdout`).
+- The heading text has been switched to plain ASCII, preserving styling but avoiding emojis.
+
+If additional emojis (e.g., in `🎵 Devussy:`) cause issues later, a future enhancement would be to gate them behind a config flag or strip them for certain terminals.
 
 ---
 
-## 4. New Concept: Design Review Mode on LLMInterviewManager
+## 3. CLI wiring – interactive single-window flow (`src/cli.py`)
 
-### 4.1 Add a Mode Flag ✅ (implemented)
+The **single-window interactive** path is the one that prints:
 
-In `src/llm_interview.py`, `LLMInterviewManager` now supports **modes**:
+- `[LIST] Step 1: Interactive Requirements Gathering`  
+- `[TARGET] Step 2: Project Design Generation`
 
-- `__init__` takes `mode: Literal["initial", "design_review"] = "initial"`.
-- `self.mode` is stored and used to switch behavior.
+After the design is generated in this flow, there is a "Design Review Opportunity" block. This is where the main bug existed before: it was launching a second _initial_ interview instead of a design review.
 
-### 4.2 Add a Design-Review System Prompt ✅ (implemented)
+### 3.1. Design Review Opportunity prompt
 
-In `src/llm_interview.py`:
+The CLI still asks the user:
 
-- `DESIGN_REVIEW_SYSTEM_PROMPT` has been added as a class-level constant.
-- When `mode == "design_review"`, the manager now uses `DESIGN_REVIEW_SYSTEM_PROMPT` instead of `SYSTEM_PROMPT`.
+```text
+[QUESTION] Design Review Opportunity
 
-The prompt already:
-- Positions the LLM as a **senior architect** doing a design review.
-- Explains that it will receive design artifacts.
-- Emphasizes not re-asking basic project info unless inconsistent.
-- Describes the shape of the final JSON feedback:
-  - `status`, `updated_requirements`, `new_constraints`, `updated_tech_stack`, `integration_risks`, `notes`.
+The initial project design has been generated.
+You can now review it and conduct a second interview to:
+  • Refine architectural decisions
+  • Add missing requirements or constraints
+  • Adjust technology choices
+  • Clarify implementation details
 
-### 4.3 Add a Method to Inject Design Context ❗ (next agent)
+Would you like to conduct a design review interview?
+```
 
-Status: **not yet implemented**.
+Then it reads:
 
-Target change in `src/llm_interview.py`:
+- `conduct_design_review = input("\nEnter 'yes' to review, or press Enter to continue: ").strip().lower()`
 
-- Add a method on `LLMInterviewManager`:
-  - `set_design_review_context(design_md: str, devplan_md: str | None = None, review_md: str | None = None, repo_summary_md: str | None = None) -> None`
-- Store these markdown blobs and build a single consolidated markdown string:
-  - `## Artifact 1: Initial Project Design (v1)` → `design_md` or `_No design available._`.
-  - `## Artifact 2: DevPlan Summary` → `devplan_md` or `_No devplan summary available yet._`.
-  - `## Artifact 3: Automatic Design Review` → `review_md` or `_No automatic design review available._`.
-  - `## Artifact 4: Repo Analysis Summary` → `repo_summary_md` or `_No repo analysis summary available._`.
-- Prepend a short preamble, e.g.:
-  - `Here is the current design and related context. Read this fully, then ask me clarifying questions as a senior architect before we finalize adjustments.`
-- Store the final blob as `self._design_review_context_md`.
-- In `run()`, before the normal greeting, if `mode == "design_review"` **and** `self._design_review_context_md` is set:
-  - Call `self._send_to_llm(self._design_review_context_md)` as the first message.
-  - Do **not** ask for project name; just let the model respond to the context.
+### 3.2. Yes path – new design review behavior
 
-### 4.4 Add a Design Review Output Mapper ❗ (next agent)
+On `yes`/`y`, the CLI now:
 
-Status: **not yet implemented**.
+1. **Logs the start of design review**
 
-Current state:
-- `DESIGN_REVIEW_SYSTEM_PROMPT` already describes the required JSON shape at the end of the review.
-- There is **no** `to_design_review_feedback()` yet, and no logic to scan the transcript for that JSON.
+   Prints a short intro:
 
-Target change in `src/llm_interview.py`:
+   - `[ROBOT] Starting design review interview...`
+   - Horizontal rule.
+   - Reminder that `/done` ends the review.
 
-1. Add a private helper:
-   - `_extract_design_review_feedback() -> Dict[str, Any]`
-   - Scan `self.conversation_history` **from last to first** for `role == "assistant"`.
-   - For each candidate `content`:
-     - Try `json.loads(content)`.
-     - If that fails, optionally try to extract a `{...}` JSON object with a lightweight regex.
-     - Expect keys (case-insensitive):
-       - `status`, `updated_requirements`, `new_constraints`, `updated_tech_stack`, `integration_risks`, `notes`.
-     - Normalize into:
-       ```python
-       {
-           "status": str,
-           "updated_requirements": str,
-           "new_constraints": list[str],
-           "updated_tech_stack": list[str],
-           "integration_risks": list[str],
-           "notes": str,
-       }
-       ```
-     - For list fields, accept comma/newline-separated strings and coerce them to `list[str]`.
-   - If nothing is found, return a default:
+2. **Creates a design-review manager**
+
+   ```python
+   review_manager = LLMInterviewManager(
+       config=config,
+       verbose=verbose,
+       repo_analysis=repo_analysis,
+       markdown_output_manager=markdown_output_mgr,
+       mode="design_review",
+   )
+   ```
+
+   The critical piece is `mode="design_review"`.
+
+3. **Builds design-review context**
+
+   ```python
+   try:
+       design_md = markdown_output_mgr.load_stage_output("project_design")
+   except Exception:
+       design_md = f"# Project Design: {design.project_name}\n\n{design.architecture_overview}\n"
+   
+   devplan_md = None
+   review_md = None
+   repo_summary_md = None
+
+   review_manager.set_design_review_context(
+       design_md=design_md,
+       devplan_md=devplan_md,
+       review_md=review_md,
+       repo_summary_md=repo_summary_md,
+   )
+   ```
+
+   - Preferred source: raw LLM markdown saved as `project_design` stage output.
+   - Fallback: synthesize a simple markdown design from `ProjectDesign` fields.
+
+4. **Runs the design-review interview**
+
+   - Uses `asyncio.to_thread(review_manager.run)` to execute the blocking console interview on a worker thread.
+   - After completion, checks if `review_answers` is non-`None`:
+     - If `None`, prints a notice and continues with the original design.
+
+5. **Extracts structured feedback**
+
+   Uses the new helper:
+
+   ```python
+   feedback = review_manager.to_design_review_feedback()
+   ```
+
+   Then merges the feedback into the `design_inputs` dict that will be used to regenerate the design:
+
+   - **Updated requirements**:
+
      ```python
-     {
-         "status": "ok",
-         "updated_requirements": "",
-         "new_constraints": [],
-         "updated_tech_stack": [],
-         "integration_risks": [],
-         "notes": "",
-     }
+     if feedback.get("updated_requirements"):
+         design_inputs["requirements"] += (
+             "\n\n[Design Review Adjustments]\n"
+             + feedback["updated_requirements"].strip()
+         )
      ```
 
-2. Add a public method:
-   - `to_design_review_feedback() -> Dict[str, Any]`
-   - Requires `self.mode == "design_review"`; otherwise raise `ValueError`.
-   - Cache the result in `self._design_review_feedback` so multiple calls are cheap.
-   - Optionally call `_extract_design_review_feedback()` once at the end of `run()` when `mode == "design_review"`.
+   - **New constraints**:
+
+     ```python
+     new_constraints = feedback.get("new_constraints") or []
+     if new_constraints:
+         constraint_block = "\n".join(f"- {c}" for c in new_constraints)
+         design_inputs["requirements"] += (
+             "\n\n[Additional Constraints from Design Review]\n"
+             + constraint_block
+         )
+     ```
+
+   - **Updated tech stack**:
+
+     ```python
+     updated_stack = feedback.get("updated_tech_stack") or []
+     if updated_stack:
+         existing_langs = [
+             s.strip()
+             for s in (design_inputs.get("languages") or "").split(",")
+             if s.strip()
+         ]
+         for tech in updated_stack:
+             if tech not in existing_langs:
+                 existing_langs.append(tech)
+         design_inputs["languages"] = ",".join(existing_langs)
+     ```
+
+6. **Regenerates the design with review feedback**
+
+   Uses a `StreamingHandler` to show progress and calls:
+
+   ```python
+   design_stream = StreamingHandler.create_console_handler(prefix="[design-v2] ")
+   design = await orchestrator.project_design_gen.generate(
+       project_name=design_inputs["name"],
+       languages=design_inputs["languages"].split(","),
+       requirements=design_inputs["requirements"],
+       frameworks=design_inputs.get("frameworks", "").split(",")
+       if design_inputs.get("frameworks")
+       else None,
+       apis=design_inputs.get("apis", "").split(",")
+       if design_inputs.get("apis")
+       else None,
+       streaming_handler=design_stream,
+   )
+   ```
+
+   Then prints confirmation that an updated design has been generated.
+
+7. **Saves review output**
+
+   If the `design` object exposes `raw_llm_response`:
+
+   ```python
+   if getattr(design, "raw_llm_response", None):
+       markdown_output_mgr.save_stage_output("design_review", design.raw_llm_response)
+       logger.info(
+           "Saved raw LLM review response "
+           f"({len(design.raw_llm_response)} chars)"
+       )
+   ```
+
+   Otherwise, the fallback is to reuse structured-save logic (left as a placeholder for now).
+
+### 3.3. No path – skip review
+
+If the user does **not** opt into design review (`conduct_design_review` not in `["yes", "y"]`):
+
+- The CLI prints a short message confirming that it’s skipping design review and continues on to devplan generation and handoff as before.
 
 ---
 
-## 5. Upgrade the CLI Design Review Flow
+## 4. Testing & Current Status
 
-There are two places to update in `src/cli.py`.
+- Existing tests in this environment report `pytest -q` exit code `1`, but the error scanner shows **no syntax errors** in:
+  - `src/llm_interview.py`
+  - `src/cli.py`
+- Known working scripts (unrelated to this change) include:
+  - `python test_phase_specific_streaming.py` (exit code 0)
+  - `python test_simple_duplication_check.py` (exit code 0)
+- `test_streaming_duplication_fix.py` currently fails (exit code 1); this appears to predate the design-review work.
 
-### 5.1 Older Typer-Based Flow (Sync)
+### Not yet implemented (good next tasks)
 
-Around ~line 2490 (`typer.confirm("Would you like to conduct a design review interview?", ...)`):
+1. **Unit tests for design-review extraction**
+   - Add `tests/test_llm_interview_design_review.py`.
+   - Use a fake/interposed `LLMInterviewManager` with `mode="design_review"` and manually crafted `conversation_history`.
+   - Verify that `to_design_review_feedback()` correctly normalizes fields and list formats (comma-separated strings vs lists).
 
-1. **Construct a rich design context markdown**:
-   - Use `markdown_output_mgr` (or equivalent) to load:
-     - `project_design` output (already saved as markdown).
-     - `design_review` report from `DesignReviewRefiner` if it exists.
-     - Any devplan summaries if available at that point.
-   - Build a consolidated `design_context_md` string as described in §4.3.
-
-2. **Create the LLMInterviewManager in design review mode**:
-   - Instantiate with `mode="design_review"`.
-   - Call `review_manager.set_design_review_context(design_context_md, devplan_md, auto_review_md, repo_summary_md)`.
-
-3. **Run the interview**:
-   - Call `review_manager.run()` as today (or async variant in the newer flow).
-
-4. **Extract design review feedback**:
-   - Replace `review_manager.to_generate_design_inputs()` with `review_manager.to_design_review_feedback()`.
-
-5. **Merge feedback into design inputs**:
-   - If `updated_requirements` is present:
-     - Append to existing `design_inputs["requirements"]` under a clearly marked section, e.g. `"[Design Review Adjustments]"`.
-   - If `new_constraints` is present:
-     - Append them as a bullet list under a `[Additional Constraints from Design Review]` section.
-   - If `updated_tech_stack` is present:
-     - Normalize and update `design_inputs["languages"]` or a `tech_stack` field appropriately.
-
-6. **Optionally rerun design generation**:
-   - If `status == "needs-changes"`, trigger a **design v2** generation before proceeding to devplan.
-   - Optionally log both v1 and v2 designs and mark them in the markdown outputs.
-
-### 5.2 Newer Async Pipeline Flow (Input("Enter 'yes' to review"))
-
-Around ~line 3570+ in `src/cli.py` where you already have:
-
-- The prompt block:
-  - `Enter 'yes' to review, or press Enter to continue:`
-- The newer logic that:
-  - Creates `review_manager = LLMInterviewManager(config=..., repo_analysis=..., markdown_output_manager=markdown_output_mgr)`
-  - Builds a `design_context` string from `design_inputs` + `design` object.
-  - Calls `await asyncio.to_thread(review_manager.run)`.
-  - Calls `review_manager.to_generate_design_inputs()` and then regenerates the design.
-
-Update this block similar to the sync flow:
-
-1. Switch the manager construction to `mode="design_review"`.
-2. Upgrade `design_context` from a simple snippet to the richer consolidated markdown described earlier.
-3. Call `review_manager.set_design_review_context(...)` before `run`.
-4. After `run`, call `review_manager.to_design_review_feedback()`.
-5. Merge feedback into `design_inputs` (requirements/constraints/tech stack) as in §5.1.
-6. Keep the **regenerate design** step, but now use the updated `design_inputs` and, if desired, feed both original design and feedback through `design_iteration.txt` to craft a sharper `design_v2`.
-
----
-
-## 6. Integrate With DesignReviewRefiner (Optional but Recommended)
-
-You already have an automatic design review in `src/pipeline/design_review.py` using `DesignReviewRefiner` and `templates/design_review.jinja`.
-
-To maximize value:
-
-1. **Run automatic review first** (if not too slow):
-   - After the initial design is generated and before asking the user about the design review interview, call `DesignReviewRefiner.refine(project_design)`.
-   - Save the markdown report as stage `design_review` (e.g., `markdown_output_mgr.save_stage_output("design_review", report_md)`).
-
-2. **Include this report in the design review context**:
-   - When building `design_context_md` for `set_design_review_context`, include `design_review` content as `Artifact 3`.
-
-3. **Optionally use `design_iteration.txt`**:
-   - After collecting interactive feedback (`to_design_review_feedback()`), call a separate LLM generation using `src/prompts/design_iteration.txt`.
-   - Inputs:
-     - `original_design` = current design markdown (possibly including automatic refiner update).
-     - `user_feedback` = pretty-printed summary from `to_design_review_feedback()`.
-   - Use this to generate a **refined design v2** that is fully consistent.
-
----
-
-## 7. Testing & Validation
-
-Add/extend tests to ensure the new behavior works and doesn’t regress the pipeline.
-
-1. **Unit-level tests for design review mode**:
-   - In a new or existing test module (e.g., `tests/test_llm_interview_design_review.py`):
-     - Construct `LLMInterviewManager(mode="design_review")` with a fake LLM client or monkeypatched generate method.
-     - Call `set_design_review_context("design_md", "devplan_md", "review_md", "repo_summary_md")`.
-     - Simulate a conversation and verify that `to_design_review_feedback()` returns a dict with the expected keys.
-
-2. **Integration-like test of CLI flow**:
-   - In `tests/integration/test_interactive_command_integration.py` (or a new test):
-     - Mock initial `design_inputs` and `ProjectDesign`.
-     - Mock `LLMInterviewManager` to:
-       - Run in `design_review` mode.
-       - Return a known `design_review_feedback` dict.
-     - Run the CLI pipeline up through the design review step.
-     - Assert that:
-       - `design_inputs["requirements"]` now includes a `Design Review Adjustments` section.
-       - Any `new_constraints` are present in the merged requirements or constraints field.
-       - The updated inputs are used when regenerating the design.
-
-3. **Manual sanity check**:
-   - Run the pipeline interactively.
-   - Accept the `Design Review Opportunity`.
+2. **End-to-end sanity run**
+   - Run the single-window interactive flow that prints `[TARGET] Step 2: Project Design Generation`.
+   - After design generation, answer `yes` to design review.
    - Confirm that:
-     - The LLM starts by summarizing/asking about the existing design.
-     - It does **not** ask for basic project name/language again unless needed.
-     - Devplan and phases reflect any changes from the review.
+     - The LLM does **not** re-ask for project name in review mode.
+     - The conversation references the existing design.
+     - The regenerated design and devplan reflect the feedback.
+
+3. **Consolidation / cleanup**
+   - There are two interactive paths that now support design review (`interactive_design` and the single-window `run_interactive`).
+   - Consider extracting a shared helper to avoid drift between these two flows over time.
 
 ---
 
-## 8. Summary for Next Agent
+## 5. TL;DR for the next agent
 
-- **Goal:** Make the second interview a true design review, not a repeat requirements interview.
-- **Core changes:**
-  - Add `mode="design_review"`, `DESIGN_REVIEW_SYSTEM_PROMPT`, `set_design_review_context`, and `to_design_review_feedback()` to `LLMInterviewManager`.
-  - Update both CLI flows that ask "Design Review Opportunity" to:
-    - Instantiate the manager in design review mode.
-    - Provide full design/devplan/review context.
-    - Use `to_design_review_feedback()` to mutate `design_inputs`.
-    - Regenerate design before devplan/phase generation.
-  - Optionally integrate `DesignReviewRefiner` and `design_iteration.txt` for an automatic plus interactive refinement loop.
-
-Once these steps are implemented, the pipeline’s second interview will reliably help users **find issues with the design and ensure everything will work together** before committing the devplan and generating phase docs.
+- **Design-review mode is implemented and wired through:**
+  - `LLMInterviewManager` supports `mode="design_review"` with a dedicated system prompt, context injection, and JSON feedback extraction.
+  - Both the traditional and single-window interactive flows can now launch a genuine design-review interview instead of repeating the initial requirements gathering.
+- **User-facing behavior:**
+  - After an initial design is generated, answering `yes` to the Design Review Opportunity prompt will:
+    - Feed the existing design into the LLM as context.
+    - Run a focused design review.
+    - Apply the resulting adjustments back into the design inputs.
+    - Regenerate a refined design.
+- **Best next steps:** add focused tests around `to_design_review_feedback()` and run a full interactive session to confirm the UX matches expectations.
