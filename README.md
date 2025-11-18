@@ -253,6 +253,17 @@ pytest -q
 black src && isort src && flake8 src
 ```
 
+### Dev archive
+
+Legacy Devussy docs, handoff summaries, and helper scripts have been moved into `devarchive/` to keep the repo root clean. This includes files like:
+
+- `DEVUSSYPLAN.md`, `devussy-complete-plan.md`, `devussyhandoff.md`
+- `INTERACTIVE_FIXES_SUMMARY.md`, `INTERACTIVE_IMPLEMENTATION.md`, `RELEASE-01-SUMMARY.md`
+- `SINGLE_WINDOW_MODE.md`, `handoff-cleanup-guide.md`, `devplan.md.bak`
+- Setup and helper scripts: `setup-new-repo.ps1`, `start-backend.ps1`, `sitecustomize.py`
+
+These are kept for historical reference but are not required for the current 0.3 workflow.
+
 ## Recent Updates (Session 11)
 
 - Hardened interactive single-window streaming:
