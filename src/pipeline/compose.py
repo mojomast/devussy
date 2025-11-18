@@ -12,11 +12,12 @@ from ..file_manager import FileManager
 from ..git_manager import GitManager
 from ..llm_client import LLMClient
 from ..logger import get_logger
-from ..models import DevPlan, HandoffPrompt, ProjectDesign
+from ..models import DevPlan, DevPlanPhase, HandoffPrompt, ProjectDesign
 from ..progress_reporter import PipelineProgressReporter
 from ..state_manager import StateManager
+from ..markdown_output_manager import MarkdownOutputManager
 from .basic_devplan import BasicDevPlanGenerator
-from .detailed_devplan import DetailedDevPlanGenerator
+from .detailed_devplan import DetailedDevPlanGenerator, PhaseDetailResult
 from .handoff_prompt import HandoffPromptGenerator
 from .design_review import DesignReviewRefiner
 from .project_design import ProjectDesignGenerator
@@ -39,6 +40,7 @@ class PipelineOrchestrator:
         progress_reporter: Optional[PipelineProgressReporter] = None,
         repo_analysis: Optional[Any] = None,
         code_samples: Optional[str] = None,
+        markdown_output_manager: Optional[MarkdownOutputManager] = None,
     ):
         """Initialize the orchestrator.
 
@@ -53,6 +55,7 @@ class PipelineOrchestrator:
             progress_reporter: Optional progress reporter for visual feedback
             repo_analysis: Optional RepoAnalysis for existing project context
             code_samples: Optional formatted code samples string for context
+            markdown_output_manager: Optional markdown output manager for saving stage outputs
         """
         self.llm_client = llm_client
         self.concurrency_manager = concurrency_manager
@@ -63,6 +66,7 @@ class PipelineOrchestrator:
         self.progress_reporter = progress_reporter or PipelineProgressReporter()
         self.repo_analysis = repo_analysis  # Store for use in generation stages
         self.code_samples = code_samples  # Store for use in generation stages
+        self.markdown_output_manager = markdown_output_manager  # Store for markdown outputs
 
         # Initialize Git manager if Git is enabled
         self.git_manager = None
@@ -323,6 +327,18 @@ class PipelineOrchestrator:
         # Update token usage if available
         self._update_progress_tokens(self.design_client)
         self.progress_reporter.end_stage("Project Design")
+        
+        # Save to markdown output if manager is configured
+        if self.markdown_output_manager:
+            try:
+                design_content = project_design.architecture_overview or "No design generated"
+                self.markdown_output_manager.save_stage_output(
+                    stage_name="project_design",
+                    content=design_content
+                )
+                logger.info("Saved project design to markdown output")
+            except Exception as e:
+                logger.warning(f"Failed to save project design to markdown output: {e}")
 
         # Save checkpoint after project design
         try:
@@ -400,6 +416,18 @@ class PipelineOrchestrator:
                         self.progress_reporter.report_file_created(
                             f"{output_dir}/design_review.md", "Design Review", len(review_md)
                         )
+                    
+                    # Save design review to markdown output if manager is configured
+                    if self.markdown_output_manager:
+                        try:
+                            self.markdown_output_manager.save_stage_output(
+                                stage_name="design_review",
+                                content=review_md
+                            )
+                            logger.info("Saved design review to markdown output")
+                        except Exception as e:
+                            logger.warning(f"Failed to save design review to markdown output: {e}")
+                    
                     if changed:
                         project_design = updated_design
                         logger.info("Applied design improvements from pre-review")
@@ -482,6 +510,17 @@ class PipelineOrchestrator:
         # Add code samples to kwargs if available
         if self.code_samples:
             llm_kwargs["code_samples"] = self.code_samples
+        def _handle_phase_complete(event: PhaseDetailResult) -> None:
+            try:
+                self.progress_reporter.advance_phase()
+                self.progress_reporter.report_phase_ready(
+                    phase_number=event.phase.number,
+                    steps=len(event.phase.steps),
+                    char_count=event.response_chars,
+                )
+            except Exception:
+                pass
+
         with self.progress_reporter.create_spinner_context("Generating detailed phase plans..."):
             detailed_devplan = await self.detailed_devplan_gen.generate(
                 basic_devplan,
@@ -489,12 +528,7 @@ class PipelineOrchestrator:
                 project_design.tech_stack,
                 feedback_manager=feedback_manager,
                 repo_analysis=self.repo_analysis,
-                on_phase_complete=lambda ph: (
-                    self.progress_reporter.advance_phase(),
-                    self.progress_reporter.console.print(
-                        f"  [green]✓[/green] Phase {ph.number} ready ({len(ph.steps)} steps)"
-                    )
-                ),
+                on_phase_complete=_handle_phase_complete,
                 **llm_kwargs,
             )
         # Ensure progress bar completes
@@ -548,6 +582,17 @@ class PipelineOrchestrator:
                     "DevPlan Dashboard (tmp)",
                     len(devplan_md)
                 )
+            
+            # Save detailed devplan to markdown output if manager is configured
+            if self.markdown_output_manager:
+                try:
+                    self.markdown_output_manager.save_stage_output(
+                        stage_name="detailed_devplan",
+                        content=devplan_md
+                    )
+                    logger.info("Saved detailed devplan to markdown output")
+                except Exception as e:
+                    logger.warning(f"Failed to save detailed devplan to markdown output: {e}")
 
             # Generate individual phase files
             phase_files = self._generate_phase_files(detailed_devplan, output_dir)
@@ -624,6 +669,17 @@ class PipelineOrchestrator:
                 "Handoff Prompt",
                 len(handoff.content)
             )
+            
+            # Save handoff prompt to markdown output if manager is configured
+            if self.markdown_output_manager:
+                try:
+                    self.markdown_output_manager.save_stage_output(
+                        stage_name="handoff_prompt",
+                        content=handoff.content
+                    )
+                    logger.info("Saved handoff prompt to markdown output")
+                except Exception as e:
+                    logger.warning(f"Failed to save handoff prompt to markdown output: {e}")
 
             # Commit handoff prompt if Git integration is enabled
             if self.git_manager and self.git_config.commit_after_handoff:
@@ -645,6 +701,7 @@ class PipelineOrchestrator:
         project_design: ProjectDesign,
         provider_override: Optional[str] = None,
         feedback_manager: Optional[Any] = None,
+        streaming_handler: Optional[Any] = None,
         pre_review: bool = False,
         **llm_kwargs: Any,
     ) -> DevPlan:
@@ -654,6 +711,7 @@ class PipelineOrchestrator:
             project_design: Existing project design
             provider_override: Optional provider to switch to before running
             feedback_manager: Optional FeedbackManager for iterative refinement
+            streaming_handler: Optional StreamingHandler for real-time output
             **llm_kwargs: LLM parameters
 
         Returns:
@@ -691,7 +749,11 @@ class PipelineOrchestrator:
             llm_kwargs["code_samples"] = self.code_samples
         with self.progress_reporter.create_spinner_context("Creating basic development plan..."):
             basic_devplan = await self.basic_devplan_gen.generate(
-                project_design, feedback_manager=feedback_manager, repo_analysis=self.repo_analysis, **llm_kwargs
+                project_design, 
+                feedback_manager=feedback_manager, 
+                repo_analysis=self.repo_analysis, 
+                streaming_handler=streaming_handler,
+                **llm_kwargs
             )
         self._update_progress_tokens(self.devplan_client)
         self.progress_reporter.end_stage("Basic DevPlan")
@@ -705,6 +767,17 @@ class PipelineOrchestrator:
         # Add code samples to kwargs if available
         if self.code_samples:
             llm_kwargs["code_samples"] = self.code_samples
+        def _handle_phase_complete(event: PhaseDetailResult) -> None:
+            try:
+                self.progress_reporter.advance_phase()
+                self.progress_reporter.report_phase_ready(
+                    phase_number=event.phase.number,
+                    steps=len(event.phase.steps),
+                    char_count=event.response_chars,
+                )
+            except Exception:
+                pass
+
         with self.progress_reporter.create_spinner_context("Generating detailed phase plans..."):
             detailed_devplan = await self.detailed_devplan_gen.generate(
                 basic_devplan,
@@ -712,12 +785,7 @@ class PipelineOrchestrator:
                 project_design.tech_stack,
                 feedback_manager=feedback_manager,
                 repo_analysis=self.repo_analysis,
-                on_phase_complete=lambda ph: (
-                    self.progress_reporter.advance_phase(),
-                    self.progress_reporter.console.print(
-                        f"  [green]✓[/green] Phase {ph.number} ready ({len(ph.steps)} steps)"
-                    )
-                ),
+                on_phase_complete=_handle_phase_complete,
                 **llm_kwargs,
             )
         self.progress_reporter.stop_phase_progress()
@@ -1196,7 +1264,10 @@ class PipelineOrchestrator:
             
             self.file_manager.write_markdown(phase_path, phase_content)
             generated_files.append(phase_path)
-            logger.info(f"Generated {phase_filename} with {len(phase.steps)} steps")
+            logger.info(
+                f"Generated {phase_filename} with {len(phase.steps)} steps",
+                extra={"suppress_console": True},
+            )
             
             # Report phase file creation
             self.progress_reporter.report_file_created(
@@ -1204,6 +1275,18 @@ class PipelineOrchestrator:
                 f"Phase {phase.number}",
                 len(phase_content)
             )
+            
+            # Save phase file to markdown output if manager is configured
+            if self.markdown_output_manager:
+                try:
+                    self.markdown_output_manager.save_phase_file(
+                        phase_number=phase.number,
+                        phase_name=phase.title,
+                        content=phase_content
+                    )
+                    logger.debug(f"Saved phase {phase.number} to markdown output")
+                except Exception as e:
+                    logger.warning(f"Failed to save phase {phase.number} to markdown output: {e}")
         
         return generated_files
 

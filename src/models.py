@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,7 @@ class ProjectDesign(BaseModel):
     dependencies: List[str] = Field(default_factory=list)
     challenges: List[str] = Field(default_factory=list)
     mitigations: List[str] = Field(default_factory=list)
+    raw_llm_response: Optional[str] = Field(default=None, description="Full raw markdown response from LLM")
 
     def to_json(self) -> str:
         return self.model_dump_json(indent=2)
@@ -53,6 +54,8 @@ class DevPlan(BaseModel):
 
     phases: List[DevPlanPhase] = Field(default_factory=list)
     summary: Optional[str] = None
+    raw_basic_response: Optional[str] = Field(default=None, description="Full raw markdown from basic devplan generation")
+    raw_detailed_responses: Optional[Dict[int, str]] = Field(default=None, description="Raw markdown for each phase detail")
 
     def to_json(self) -> str:
         return self.model_dump_json(indent=2)

@@ -50,6 +50,7 @@ class LLMConfig(BaseModel):
     )
     spoof_as: Optional[str] = Field(default=None, description="AgentRouter spoof profile")
     extra_headers: Optional[dict] = Field(default=None, description="Provider-specific extra headers")
+    streaming_enabled: bool = Field(default=False, description="Enable token streaming for this stage")
     
     # Per-stage model overrides (Phase 18/20)
     design_model: Optional[str] = Field(

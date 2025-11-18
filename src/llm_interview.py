@@ -12,7 +12,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Literal
 import sys
 
 from rich.console import Console
@@ -29,14 +29,20 @@ from .config import AppConfig
 from .ui.menu import run_menu, SessionSettings, apply_settings_to_config
 from .interview import RepoAnalysis
 from .interview.code_sample_extractor import CodeSampleExtractor, CodeSample
+from .markdown_output_manager import MarkdownOutputManager
 
 console = Console()
 logger = logging.getLogger(__name__)
 
 
 class LLMInterviewManager:
-    """Conducts conversational interviews using LLM to gather project requirements."""
-    
+    """Conducts conversational interviews using LLM.
+
+    The manager supports two modes:
+    - ``"initial"`` (default): requirements-gathering interview
+    - ``"design_review"``: focused review of an existing design/devplan
+    """
+
     SYSTEM_PROMPT = """You are a helpful development planning assistant for DevUssY, a circular development system. Your goal is to gather project requirements through natural conversation.
 
 IMPORTANT: Do NOT trigger any generation automatically. When you have all required information, clearly ask the user to confirm by typing '/done' to finalize the interview. Wait for '/done' before ending the interview.
@@ -75,23 +81,62 @@ RESPONSE FORMAT:
 
 When interview is complete, output a JSON block with extracted data:
 {
-  "project_name": "...",
-  "primary_language": "...",
-  "requirements": "...",
-  "project_type": "...",
-  "frameworks": [...],
-  "database": "...",
-  "authentication": false,
-  "deployment_platform": "...",
-  "testing_requirements": "...",
-  "ci_cd": true
+    "project_name": "...",
+    "primary_language": "...",
+    "requirements": "...",
+    "project_type": "...",
+    "frameworks": [...],
+    "database": "...",
+    "authentication": false,
+    "deployment_platform": "...",
+    "testing_requirements": "...",
+    "ci_cd": true
 }"""
+
+    # Design-review specific system prompt used when mode="design_review".
+    DESIGN_REVIEW_SYSTEM_PROMPT = """You are a senior software architect for DevUssY conducting a focused DESIGN REVIEW of an existing proposal.
+
+You are NOT gathering first-pass requirements. Instead, you are reviewing an existing project design and devplan for risks, gaps, and inconsistencies.
+
+You will receive design artifacts as context (project design, devplan summary, automatic design review, repo analysis). Read them carefully before asking questions.
+
+INTERVIEW GOAL:
+- Help the user refine the design so it is realistic, internally consistent, and implementation-ready.
+- Identify missing requirements or constraints.
+- Surface architectural risks, integration issues, and tech stack concerns.
+
+GUIDELINES:
+- Do NOT re-ask basic project name or language unless there is a clear conflict in the artifacts.
+- Focus questions on:
+    - Risky or ambiguous architectural choices
+    - Integration points between components/services
+    - Performance, scalability, and reliability concerns
+    - Data model and storage decisions
+    - Testing and observability strategies
+- Periodically summarize key risks and decisions.
+- When you have enough information, ask the user to type '/done' to finalize the review.
+
+FINAL OUTPUT REQUIREMENT:
+At the end of the review (after the user types /done), you MUST produce ONE final JSON summary with this exact shape:
+{
+    "status": "ok" | "needs-changes",
+    "updated_requirements": "...",   // markdown or text, can be empty
+    "new_constraints": ["..."],      // list of new or clarified constraints
+    "updated_tech_stack": ["..."],   // updated languages/frameworks/tools
+    "integration_risks": ["..."],    // notable integration/architecture risks
+    "notes": "..."                   // any other guidance or comments
+}
+
+Always output that JSON block clearly (optionally inside ```json fences) once the review is complete.
+"""
 
     def __init__(
         self,
         config: AppConfig,
         verbose: bool = False,
         repo_analysis: "RepoAnalysis | None" = None,
+        markdown_output_manager: "MarkdownOutputManager | None" = None,
+        mode: Literal["initial", "design_review"] = "initial",
     ):
         """Initialize with app config containing LLM settings.
 
@@ -100,10 +145,16 @@ When interview is complete, output a JSON block with extracted data:
             verbose: Enable verbose logging / debug output.
             repo_analysis: Optional repository analysis used to prime the
                 conversation with concrete project context.
+            markdown_output_manager: Optional markdown output manager for
+                saving responses.
+            mode: "initial" for requirements gathering, or "design_review" for
+                review of an existing design/devplan.
         """
         self.config = config
         self.verbose = verbose
         self.repo_analysis = repo_analysis
+        self.markdown_output_manager = markdown_output_manager
+        self.mode: Literal["initial", "design_review"] = mode
 
         self.llm_client = create_llm_client(config)
 
@@ -115,14 +166,20 @@ When interview is complete, output a JSON block with extracted data:
         self.code_samples: list[CodeSample] = []
         # Session-scoped interactive settings (not persisted)
         self.session_settings = SessionSettings()
+        
+        # Track question counter for markdown output
+        self.question_counter = 0
 
         # Setup logging
         self._setup_logging()
 
-        # Add system prompt (core behavior)
-        self.conversation_history.append(
-            {"role": "system", "content": self.SYSTEM_PROMPT}
-        )
+        # Add system prompt (core behavior), switched by mode
+        if self.mode == "design_review":
+            system_prompt = self.DESIGN_REVIEW_SYSTEM_PROMPT
+        else:
+            system_prompt = self.SYSTEM_PROMPT
+
+        self.conversation_history.append({"role": "system", "content": system_prompt})
 
         # If repository analysis is available, prepend a concise summary so the
         # interview is repo-aware without changing the primary instructions.
@@ -267,6 +324,47 @@ When interview is complete, output a JSON block with extracted data:
             # Never let summary building break the interview
             return ""
 
+        # Design-review specific context (injected via set_design_review_context)
+        self._design_review_context_md: Optional[str] = None
+        self._design_review_feedback: Dict[str, Any] = {}
+
+        logger.info("LLM Interview Manager initialized")
+        logger.info(f"Mode: {self.mode}")
+        logger.info(f"Verbose mode: {self.verbose}")
+        logger.info(f"Provider: {config.llm.provider}")
+        logger.info(f"Model: {config.llm.model}")
+
+    def set_design_review_context(
+        self,
+        design_md: str,
+        devplan_md: Optional[str] = None,
+        review_md: Optional[str] = None,
+        repo_summary_md: Optional[str] = None,
+    ) -> None:
+        """Attach rich design/devplan context for design review mode.
+
+        Combines all artifacts into a single markdown blob that can be sent as
+        the first user message in design review sessions.
+        """
+        sections = []
+        sections.append("## Artifact 1: Initial Project Design (v1)\n\n" + (design_md or "_No design available._"))
+        sections.append(
+            "## Artifact 2: DevPlan Summary\n\n" + (devplan_md or "_No devplan summary available yet._")
+        )
+        sections.append(
+            "## Artifact 3: Automatic Design Review\n\n" + (review_md or "_No automatic design review available._")
+        )
+        sections.append(
+            "## Artifact 4: Repo Analysis Summary\n\n" + (repo_summary_md or "_No repo analysis summary available._")
+        )
+
+        preamble = (
+            "Here is the current design and related context. Read this fully, "
+            "then ask me clarifying questions as a senior architect before we "
+            "finalize adjustments.\n\n"
+        )
+        self._design_review_context_md = preamble + "\n\n".join(sections)
+
     def run(self) -> Dict[str, Any]:
         """
         Run the conversational interview loop.
@@ -280,29 +378,35 @@ When interview is complete, output a JSON block with extracted data:
             "[dim]Slash commands: /verbose, /help, /done, /quit, /settings, /model, /temp, /tokens[/dim]",
             border_style="blue"
         ))
-        
+
         logger.info("Starting interview conversation")
-        
+
         # Display project summary if analyzing existing repo
         if self.repo_analysis:
             self._print_project_summary()
-        
-        # Start with initial greeting
-        if self.repo_analysis and self.repo_analysis.project_metadata.name:
-            # Use the project name from repository analysis
-            project_name = self.repo_analysis.project_metadata.name
-            initial_response = self._send_to_llm(
-                f"Hi! I'm excited to help you plan your project '{project_name}'. I can see this is a {self.repo_analysis.project_type} project with {self.repo_analysis.code_metrics.total_files} files. What would you like to accomplish with this project?"
-            )
-        else:
-            # Ask for project name as before
-            initial_response = self._send_to_llm(
-                "Hi! I'm excited to help you plan your project. Let's start with the basics - what would you like to name your project?"
-            )
-        # Only display if streaming wasn't already showing it
+
+        # Start with initial greeting, customized by mode
         streaming_enabled = getattr(self.config, 'streaming_enabled', False)
-        if not streaming_enabled:
-            self._display_llm_response(initial_response)
+        if self.mode == "design_review" and self._design_review_context_md:
+            # For design review, first send the consolidated context
+            initial_response = self._send_to_llm(self._design_review_context_md)
+            if not streaming_enabled:
+                self._display_llm_response(initial_response)
+        else:
+            if self.repo_analysis and getattr(self.repo_analysis, "project_metadata", None) and self.repo_analysis.project_metadata.name:
+                # Use the project name from repository analysis
+                project_name = self.repo_analysis.project_metadata.name
+                initial_response = self._send_to_llm(
+                    f"Hi! I'm excited to help you plan your project '{project_name}'. I can see this is a {self.repo_analysis.project_type} project with {self.repo_analysis.code_metrics.total_files} files. What would you like to accomplish with this project?"
+                )
+            else:
+                # Ask for project name as before
+                initial_response = self._send_to_llm(
+                    "Hi! I'm excited to help you plan your project. Let's start with the basics - what would you like to name your project?"
+                )
+            # Only display if streaming wasn't already showing it
+            if not streaming_enabled:
+                self._display_llm_response(initial_response)
         
         # Main conversation loop
         while True:
@@ -362,7 +466,93 @@ When interview is complete, output a JSON block with extracted data:
                     logger.warning("Extracted data incomplete, continuing interview")
         
         logger.info("Interview finished")
+
+        # Best-effort extraction of design review feedback if in that mode
+        if self.mode == "design_review":
+            self._design_review_feedback = self._extract_design_review_feedback()
+
         return self.extracted_data
+
+    def _extract_design_review_feedback(self) -> Dict[str, Any]:
+        """Extract the final design-review JSON summary from the conversation.
+
+        This scans the conversation history (assistant messages) for the last
+        JSON-like block matching the shape described in DESIGN_REVIEW_SYSTEM_PROMPT.
+        """
+        # Walk messages from last to first, looking for assistant content
+        for msg in reversed(self.conversation_history):
+            if msg.get("role") != "assistant":
+                continue
+            content = msg.get("content") or ""
+            data = self._extract_structured_data(content)
+            # _extract_structured_data is tuned for initial mode; for design
+            # review, attempt a lightweight direct JSON parse if that fails.
+            if not data:
+                try:
+                    obj = json.loads(content)
+                except Exception:
+                    continue
+            else:
+                obj = data
+
+            if not isinstance(obj, dict):
+                continue
+
+            # Normalize keys for design-review schema
+            lower = {str(k).strip().lower(): v for k, v in obj.items()}
+            if not {
+                "status",
+                "updated_requirements",
+                "new_constraints",
+                "updated_tech_stack",
+                "integration_risks",
+                "notes",
+            }.issubset(lower.keys()):
+                continue
+
+            feedback: Dict[str, Any] = {
+                "status": str(lower.get("status", "ok")),
+                "updated_requirements": str(lower.get("updated_requirements", "")),
+                "new_constraints": lower.get("new_constraints") or [],
+                "updated_tech_stack": lower.get("updated_tech_stack") or [],
+                "integration_risks": lower.get("integration_risks") or [],
+                "notes": str(lower.get("notes", "")),
+            }
+
+            # Coerce lists
+            for key in ["new_constraints", "updated_tech_stack", "integration_risks"]:
+                val = feedback[key]
+                if isinstance(val, str):
+                    # Allow comma- or newline-separated strings
+                    parts = [p.strip() for p in re.split(r"[,\n]", val) if p.strip()]
+                    feedback[key] = parts
+                elif not isinstance(val, list):
+                    feedback[key] = [str(val)] if val else []
+
+            return feedback
+
+        # No structured feedback found
+        return {
+            "status": "ok",
+            "updated_requirements": "",
+            "new_constraints": [],
+            "updated_tech_stack": [],
+            "integration_risks": [],
+            "notes": "",
+        }
+
+    def to_design_review_feedback(self) -> Dict[str, Any]:
+        """Return normalized design review feedback.
+
+        Should be called after ``run()`` when the manager was created with
+        ``mode="design_review"``. If explicit feedback JSON was not found,
+        returns an object with empty fields and ``status="ok"``.
+        """
+        if self.mode != "design_review":
+            raise ValueError("to_design_review_feedback() is only valid in design_review mode")
+        if not self._design_review_feedback:
+            self._design_review_feedback = self._extract_design_review_feedback()
+        return self._design_review_feedback
 
     def to_generate_design_inputs(self) -> Dict[str, str]:
         """
@@ -550,6 +740,18 @@ When interview is complete, output a JSON block with extracted data:
                 self.extracted_data = direct
                 console.print("\n[green]✓ Interview complete! All required information gathered.[/green]")
                 logger.info("Interview complete via direct finalize prompt")
+                
+                # Save interview summary to markdown
+                if self.markdown_output_manager:
+                    try:
+                        self.markdown_output_manager.save_interview_summary(
+                            conversation_history=self.conversation_history,
+                            extracted_data=self.extracted_data
+                        )
+                        logger.info("Saved interview summary to markdown")
+                    except Exception as e:
+                        logger.warning(f"Failed to save interview summary: {e}")
+                
                 return False
 
             # Build a trimmed transcript for robust extraction attempts
@@ -581,7 +783,10 @@ When interview is complete, output a JSON block with extracted data:
 
             for idx, prompt_text in enumerate(attempts, start=1):
                 response = self._generate_direct(prompt_text)
-                self._display_llm_response(response)
+                # Only display if streaming is NOT enabled to avoid duplication
+                streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+                if not streaming_enabled:
+                    self._display_llm_response(response)
                 self._refresh_token_usage()
 
                 extracted = self._extract_structured_data(response)
@@ -591,12 +796,36 @@ When interview is complete, output a JSON block with extracted data:
                     if self._validate_extracted_data(extracted):
                         console.print("\n[green]✓ Interview complete! All required information gathered.[/green]")
                         logger.info("Interview complete - all required data collected")
+                        
+                        # Save interview summary to markdown
+                        if self.markdown_output_manager:
+                            try:
+                                self.markdown_output_manager.save_interview_summary(
+                                    conversation_history=self.conversation_history,
+                                    extracted_data=self.extracted_data
+                                )
+                                logger.info("Saved interview summary to markdown")
+                            except Exception as e:
+                                logger.warning(f"Failed to save interview summary: {e}")
+                        
                         return False
 
             # Fallback: if we already have validated data from earlier, allow finalize
             if self.extracted_data and self._validate_extracted_data(self.extracted_data):
                 console.print("\n[green]✓ Interview complete using previously collected data.[/green]")
                 logger.info("Interview complete - using previously extracted data")
+                
+                # Save interview summary to markdown
+                if self.markdown_output_manager:
+                    try:
+                        self.markdown_output_manager.save_interview_summary(
+                            conversation_history=self.conversation_history,
+                            extracted_data=self.extracted_data
+                        )
+                        logger.info("Saved interview summary to markdown")
+                    except Exception as e:
+                        logger.warning(f"Failed to save interview summary: {e}")
+                
                 return False
 
             # If no valid extraction, suggest user continue or retry
@@ -720,7 +949,7 @@ When interview is complete, output a JSON block with extracted data:
                 with console.status(status_line, spinner="dots"):
                     response = self.llm_client.generate_completion_sync(conversation_text)
                 
-                # Display response normally
+                # Display response normally (ONLY in non-streaming mode)
                 self._display_llm_response(response)
             
             if self.verbose:
@@ -732,14 +961,27 @@ When interview is complete, output a JSON block with extracted data:
             console.print(f"[red]❌ Error communicating with LLM: {e}[/red]")
             logger.error(f"LLM API error: {e}", exc_info=True)
             response = "I'm having trouble connecting right now. Could you try again?"
-            # Display error response
-            self._display_llm_response(response)
+            # Display error response (ONLY in non-streaming mode to avoid duplication)
+            if not streaming_enabled:
+                self._display_llm_response(response)
         
         # Add LLM response to conversation history
         self.conversation_history.append({
-            "role": "assistant", 
+            "role": "assistant",
             "content": response
         })
+        
+        # Save this Q&A pair to markdown if output manager is configured
+        if self.markdown_output_manager:
+            self.question_counter += 1
+            try:
+                self.markdown_output_manager.save_interview_response(
+                    question_number=self.question_counter,
+                    user_input=user_input,
+                    llm_response=response
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save interview response to markdown: {e}")
         
         # Log full conversation exchange
         logger.info(f"USER: {user_input}")
@@ -846,7 +1088,23 @@ When interview is complete, output a JSON block with extracted data:
                 "Transcript:\n" + transcript
             )
 
-            response = self.llm_client.generate_completion_sync(prompt)
+            # Respect streaming settings - don't display if streaming is enabled to avoid duplication
+            streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+            
+            if streaming_enabled:
+                # Use streaming but don't display (avoid duplication)
+                response_chunks = []
+                def silent_token_callback(token: str) -> None:
+                    response_chunks.append(token)
+                
+                import asyncio
+                response = asyncio.run(self.llm_client.generate_completion_streaming(
+                    prompt, silent_token_callback
+                ))
+            else:
+                # Use non-streaming
+                response = self.llm_client.generate_completion_sync(prompt)
+            
             extracted = self._extract_structured_data(response)
             if extracted and self._validate_extracted_data(extracted):
                 return extracted
@@ -861,7 +1119,24 @@ When interview is complete, output a JSON block with extracted data:
                 console.print("\n[dim]--- Direct Finalize Request ---[/dim]")
                 console.print(f"[dim]Model: {self.config.llm.model}[/dim]")
                 console.print(f"[dim]Prompt length: {len(prompt)} chars[/dim]")
-            response = self.llm_client.generate_completion_sync(prompt)
+            
+            # Respect streaming settings to avoid duplication
+            streaming_enabled = getattr(self.config, 'streaming_enabled', False)
+            
+            if streaming_enabled:
+                # Use streaming but don't display (avoid duplication during /done processing)
+                response_chunks = []
+                def silent_token_callback(token: str) -> None:
+                    response_chunks.append(token)
+                
+                import asyncio
+                response = asyncio.run(self.llm_client.generate_completion_streaming(
+                    prompt, silent_token_callback
+                ))
+            else:
+                # Use non-streaming
+                response = self.llm_client.generate_completion_sync(prompt)
+            
             if self.verbose:
                 console.print(f"[dim]Response length: {len(response)} chars[/dim]")
                 console.print("[dim]--- End Direct Request ---[/dim]\n")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import asyncio
+from dataclasses import dataclass
 from typing import Any, List, Optional, Callable, Dict
 from textwrap import dedent
 
@@ -14,6 +15,15 @@ from ..models import DevPlan, DevPlanPhase, DevPlanStep
 from ..templates import render_template
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class PhaseDetailResult:
+    """Metadata for a generated phase, including the raw response payload."""
+
+    phase: DevPlanPhase
+    raw_response: str
+    response_chars: int
 
 
 class DetailedDevPlanGenerator:
@@ -38,7 +48,7 @@ class DetailedDevPlanGenerator:
         project_name: str,
         tech_stack: List[str] | None = None,
         feedback_manager: Optional[Any] = None,
-        on_phase_complete: Optional[Callable[[DevPlanPhase], None]] = None,
+    on_phase_complete: Optional[Callable[[PhaseDetailResult], None]] = None,
         task_group_size: int = 3,
         repo_analysis: Optional[Any] = None,
         **llm_kwargs: Any,
@@ -59,7 +69,8 @@ class DetailedDevPlanGenerator:
             DevPlan with detailed numbered steps for each phase
         """
         logger.info(
-            f"Generating detailed devplan for {len(basic_devplan.phases)} phases"
+            f"Generating detailed devplan for {len(basic_devplan.phases)} phases",
+            extra={"suppress_console": True},
         )
 
         # Deduplicate phases by canonical number to avoid generating the
@@ -99,11 +110,13 @@ class DetailedDevPlanGenerator:
         ]
 
         detailed_by_number: Dict[int, DevPlanPhase] = {}
+        raw_detailed_responses: Dict[int, str] = {}
         completed = 0
 
         for fut in asyncio.as_completed(tasks):
             phase_result = await fut
-            detailed_by_number[phase_result.number] = phase_result
+            detailed_by_number[phase_result.phase.number] = phase_result.phase
+            raw_detailed_responses[phase_result.phase.number] = phase_result.raw_response
             completed += 1
             if on_phase_complete:
                 try:
@@ -114,10 +127,19 @@ class DetailedDevPlanGenerator:
         # Reassemble phases in canonical order (one entry per phase number)
         detailed_phases = [detailed_by_number[p.number] for p in unique_phases]
 
-        logger.info(f"Successfully generated details for {len(detailed_phases)} phases")
+        logger.info(
+            f"Successfully generated details for {len(detailed_phases)} phases",
+            extra={"suppress_console": True},
+        )
 
         # Create devplan with detailed phases
         devplan = DevPlan(phases=detailed_phases, summary=basic_devplan.summary)
+        if raw_detailed_responses:
+            devplan.raw_detailed_responses = raw_detailed_responses
+        
+        # Preserve the raw LLM response from the basic devplan
+        if hasattr(basic_devplan, 'raw_basic_response'):
+            devplan.raw_basic_response = basic_devplan.raw_basic_response
 
         # Apply manual edits if feedback manager is provided
         if feedback_manager:
@@ -183,8 +205,10 @@ class DetailedDevPlanGenerator:
         response = await self.llm_client.generate_completion(
             prompt, **llm_kwargs
         )
+        response_used = response
         logger.info(
-            f"Received detailed steps for phase {phase.number} ({len(response)} chars)"
+            f"Received detailed steps for phase {phase.number} ({len(response)} chars)",
+            extra={"suppress_console": True},
         )
 
         # Parse the response into steps
@@ -230,6 +254,7 @@ class DetailedDevPlanGenerator:
                         f"Fallback succeeded: parsed {len(steps2)} steps for phase {phase.number}"
                     )
                     steps = steps2
+                    response_used = response2
                 else:
                     logger.warning(
                         f"Fallback still produced no steps for phase {phase.number}; using placeholder"
@@ -258,6 +283,7 @@ class DetailedDevPlanGenerator:
                                 f"Second fallback succeeded: parsed {len(steps3)} steps for phase {phase.number}"
                             )
                             steps = steps3
+                            response_used = response3
                     except Exception:
                         pass
             except Exception as e:
@@ -266,7 +292,12 @@ class DetailedDevPlanGenerator:
                 )
 
         # Return updated phase with steps
-        return DevPlanPhase(number=phase.number, title=phase.title, steps=steps)
+        phase_model = DevPlanPhase(number=phase.number, title=phase.title, steps=steps)
+        return PhaseDetailResult(
+            phase=phase_model,
+            raw_response=response_used,
+            response_chars=len(response_used or ""),
+        )
 
     def _parse_steps(self, response: str, phase_number: int) -> List[DevPlanStep]:
         """Parse numbered steps from the LLM response.

@@ -125,6 +125,10 @@ class ProjectDesignGenerator:
 
         # Parse the response into a ProjectDesign model
         design = self._parse_response(response, project_name)
+        
+        # Store the raw LLM response for full documentation
+        design.raw_llm_response = response
+        
         logger.info("Successfully parsed project design")
 
         return design

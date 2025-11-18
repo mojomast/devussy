@@ -93,6 +93,9 @@ logs/
 *.log
 logs/interviews/
 
+# Local run artifacts
+outputs/
+
 # Web configuration (sensitive)
 web_projects/.config/credentials/
 web_projects/.config/projects/

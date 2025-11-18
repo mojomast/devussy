@@ -22,6 +22,8 @@ from .config import AppConfig, load_config
 from .feedback_manager import FeedbackManager
 from .file_manager import FileManager
 from .logger import get_logger, setup_logging
+from .ui_tokens import render
+from .markdown_output_manager import MarkdownOutputManager
 from .models import DevPlan, ProjectDesign
 from .interview import RepoAnalysis, RepositoryAnalyzer
 from .pipeline.compose import PipelineOrchestrator
@@ -107,7 +109,7 @@ def _render_splash() -> None:
     title = Text("DevPlan Orchestrator", style="bold cyan", justify="center")
     version_line = Text(f"v{__version__}", style="magenta", justify="center")
     credit = Text(
-        "Created by Kyle Durepos (SLOPTIMUS PRIME)", style="bold yellow", justify="center"
+        "Created by Kyle Durepos (with contributions by Dazlarus)", style="bold yellow", justify="center"
     )
     accent = Text("compose. code. conduct.", style="dim", justify="center")
     logo_text = Text(logo, justify="center")
@@ -160,10 +162,10 @@ def _resolve_requesty_api_key(config: AppConfig) -> str:
     if existing_key:
         return existing_key
 
-    typer.echo("\n[WARN] Requesty API key not found in config or environment.")
+    typer.echo(render("\n[WARN] Requesty API key not found in config or environment."))
     if not typer.confirm("Would you like to enter a Requesty API key now?", default=True):
         typer.echo(
-            "[ERROR] Requesty model selection requires an API key. Aborting.",
+            render("[ERROR] Requesty model selection requires an API key. Aborting."),
             err=True,
             color=True,
         )
@@ -226,7 +228,7 @@ def _select_requesty_model_interactively(config: AppConfig) -> str:
     provider = getattr(config.llm, "provider", "openai").lower()
     if provider != "requesty":
         typer.echo(
-            f"\n[INFO] Active provider is '{provider}'. Switching to Requesty for this run."
+            render(f"\n[INFO] Active provider is '{provider}'. Switching to Requesty for this run.")
         )
         config.llm.provider = "requesty"
 
@@ -238,7 +240,7 @@ def _select_requesty_model_interactively(config: AppConfig) -> str:
 
     api_key = _resolve_requesty_api_key(config)
 
-    typer.echo("\n[WAIT] Fetching available Requesty models...\n")
+    typer.echo(render("\n[WAIT] Fetching available Requesty models...\n"))
     try:
         models = asyncio.run(_fetch_requesty_models(api_key, base_url))
     except Exception as exc:  # noqa: BLE001
@@ -292,7 +294,7 @@ def _select_requesty_model_interactively(config: AppConfig) -> str:
             if not getattr(stage_config, "api_key", None):
                 stage_config.api_key = api_key
 
-    typer.echo(f"\n[OK] Selected Requesty model: {selected}\n")
+    typer.echo(render(f"\n[OK] Selected Requesty model: {selected}\n"))
     return selected
 
 
@@ -324,14 +326,16 @@ def _load_app_config(
         config = load_config(config_path)
     except FileNotFoundError:
         typer.echo(
-            "Warning: Config file not found, using defaults", err=True, color=True
+            render("[WARN] Config file not found, using defaults"),
+            err=True,
+            color=True,
         )
         config = AppConfig()
     except ValueError as exc:
         # Config may be invalid due to environment overrides (e.g., bad provider);
         # fall back to a default AppConfig so lightweight CLI commands can still run.
         typer.echo(
-            f"Warning: Invalid config detected, using defaults ({exc})",
+            render(f"[WARN] Invalid config detected, using defaults ({exc})"),
             err=True,
             color=True,
         )
@@ -370,6 +374,7 @@ def _create_orchestrator(
     config: AppConfig,
     repo_analysis: Optional[Any] = None,
     code_samples: Optional[str] = None,
+    markdown_output_manager: Optional[MarkdownOutputManager] = None,
 ) -> PipelineOrchestrator:
     """Create a pipeline orchestrator from config.
 
@@ -377,6 +382,7 @@ def _create_orchestrator(
         config: Application configuration
         repo_analysis: Optional repository analysis for context
         code_samples: Optional formatted code samples string
+        markdown_output_manager: Optional markdown output manager for saving outputs
 
     Returns:
         PipelineOrchestrator: Initialized orchestrator
@@ -410,6 +416,7 @@ def _create_orchestrator(
         progress_reporter=progress_reporter,
         repo_analysis=repo_analysis,
         code_samples=code_samples,
+        markdown_output_manager=markdown_output_manager,
     )
 
     return orchestrator
@@ -1172,8 +1179,25 @@ def run_full_pipeline(
         )
         apis_list = [api.strip() for api in apis.split(",")] if apis else None
 
-        # Create orchestrator
-        orchestrator = _create_orchestrator(config)
+        # Create markdown output manager and initialize run directory
+        markdown_output_mgr = MarkdownOutputManager(base_output_dir="outputs")
+        run_dir = markdown_output_mgr.create_run_directory(project_name)
+        typer.echo(f"\n[NOTE] Saving all outputs to: {run_dir}\n")
+        
+        # Save run metadata
+        markdown_output_mgr.save_run_metadata({
+            "project_name": project_name,
+            "languages": languages_list,
+            "requirements": requirements,
+            "frameworks": frameworks_list,
+            "apis": apis_list,
+            "config_path": config_path,
+            "provider": config.llm.provider,
+            "model": config.llm.model,
+        })
+
+        # Create orchestrator with markdown output manager
+        orchestrator = _create_orchestrator(config, markdown_output_manager=markdown_output_mgr)
 
         # Setup feedback manager if feedback file provided
         feedback_manager = None
@@ -2176,10 +2200,19 @@ Generated by DevPlan Orchestrator.
                 final_repo_analysis = repo_analysis
                 typer.echo(f"[NOTE] Using repository analysis from --repo-dir parameter")
             
+            # Create markdown output manager with initial timestamp-based directory
+            # We'll use a temporary name until we get the actual project name from the interview
+            from datetime import datetime
+            temp_project_name = f"interview_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            temp_markdown_mgr = MarkdownOutputManager(base_output_dir="outputs")
+            run_dir = temp_markdown_mgr.create_run_directory(temp_project_name)
+            typer.echo(f"[NOTE] Interview outputs will be saved to: {run_dir}\n")
+            
             interview_manager = LLMInterviewManager(
                 config,
                 verbose=verbose,
                 repo_analysis=final_repo_analysis,
+                markdown_output_manager=temp_markdown_mgr,
             )
             typer.echo(f"[NOTE] Logging to: {interview_manager.log_file}")
         else:
@@ -2321,17 +2354,38 @@ Generated by DevPlan Orchestrator.
         
         typer.echo(f"[FOLDER] Project folder: {project_folder.resolve()}\n")
         logger.info(f"Created project folder: {project_folder}")
+        
+        # Rename markdown output manager's run directory now that we have project name
+        if use_llm_interview and temp_markdown_mgr:
+            try:
+                run_dir = temp_markdown_mgr.rename_run_directory(inputs['name'])
+                typer.echo(f"[NOTE] Interview and pipeline outputs saved to: {run_dir}\n")
+                
+                # Save run metadata with actual project name
+                temp_markdown_mgr.save_run_metadata({
+                    "project_name": inputs['name'],
+                    "languages": inputs.get('languages', ''),
+                    "requirements": inputs.get('requirements', ''),
+                    "frameworks": inputs.get('frameworks', ''),
+                    "apis": inputs.get('apis', ''),
+                    "provider": config.llm.provider,
+                    "model": config.llm.model,
+                })
+            except Exception as e:
+                logger.warning(f"Failed to rename markdown output directory: {e}")
+                # temp_markdown_mgr is still valid, just with the temporary name
 
         # Extract code samples if available from interview
         code_samples = inputs.get("code_samples")
         if code_samples:
             logger.info(f"Code samples available ({len(code_samples)} chars)")
 
-        # Create orchestrator with repo analysis and code samples
+        # Create orchestrator with repo analysis, code samples, and markdown output manager
         orchestrator = _create_orchestrator(
             config,
             repo_analysis=repo_analysis,
             code_samples=code_samples,
+            markdown_output_manager=temp_markdown_mgr if use_llm_interview else None,
         )
         
         # Add debugging output for repository context
@@ -2391,18 +2445,178 @@ Generated by DevPlan Orchestrator.
                 typer.echo(f"            + {len(design.tech_stack) - 3} more...")
         typer.echo("-" * 40 + "\n")
 
-        # Save output to timestamped project folder
+        # Save output to timestamped project folder - COMPLETE VERSION
         output_file = project_folder / "project_design.md"
 
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(f"# Project Design: {inputs['name']}\n\n")
             f.write(f"## Architecture Overview\n\n{design.architecture_overview}\n\n")
-            f.write("## Tech Stack\n\n")
-            for tech in design.tech_stack:
-                f.write(f"- {tech}\n")
+            
+            f.write("## Objectives\n\n")
+            if design.objectives:
+                for obj in design.objectives:
+                    f.write(f"- {obj}\n")
+            else:
+                f.write("No specific objectives defined.\n")
+            
+            f.write("\n## Tech Stack\n\n")
+            if design.tech_stack:
+                for tech in design.tech_stack:
+                    f.write(f"- {tech}\n")
+            else:
+                f.write("No tech stack specified.\n")
+            
+            f.write("\n## Dependencies\n\n")
+            if design.dependencies:
+                for dep in design.dependencies:
+                    f.write(f"- {dep}\n")
+            else:
+                f.write("No dependencies specified.\n")
+            
+            f.write("\n## Challenges\n\n")
+            if design.challenges:
+                for challenge in design.challenges:
+                    f.write(f"- {challenge}\n")
+            else:
+                f.write("No challenges identified.\n")
+            
+            f.write("\n## Mitigations\n\n")
+            if design.mitigations:
+                for mitigation in design.mitigations:
+                    f.write(f"- {mitigation}\n")
+            else:
+                f.write("No mitigations specified.\n")
 
         typer.echo(f"[OK] Project design generated successfully!")
         typer.echo(f"[FILE] Saved to: {output_file.resolve()}")
+        
+        # Ask if user wants to conduct a design review interview
+        design_review_completed = False
+        if use_llm_interview and sys.stdout.isatty():
+            typer.echo("\n" + "=" * 60)
+            typer.echo("[QUESTION] Design Review Opportunity")
+            typer.echo("=" * 60)
+            typer.echo("\nThe initial project design has been generated.")
+            typer.echo("You can now review it and conduct a second interview to:")
+            typer.echo("  • Refine architectural decisions")
+            typer.echo("  • Add missing requirements or constraints")
+            typer.echo("  • Adjust technology choices")
+            typer.echo("  • Clarify implementation details")
+            
+            try:
+                conduct_design_review = typer.confirm("\nWould you like to conduct a design review interview?", default=False)
+            except Exception:
+                conduct_design_review = False
+            
+            if conduct_design_review:
+                typer.echo("\n[ROBOT] Starting design review interview...")
+                typer.echo("-" * 60)
+                typer.echo("Review the generated design and provide feedback.")
+                typer.echo("Type /done when you're finished with the review.\n")
+                
+                # Create a new interview manager for design review
+                review_manager = LLMInterviewManager(
+                    config=config,
+                    verbose=verbose,
+                    repo_analysis=repo_analysis,
+                    markdown_output_manager=temp_markdown_mgr if use_llm_interview else None,
+                )
+                
+                try:
+                    # Run design review interview
+                    review_answers = review_manager.run()
+                    
+                    if review_answers:
+                        typer.echo("\n[OK] Design review completed!")
+                        
+                        # Get any updated requirements from the review
+                        review_data = review_manager.to_generate_design_inputs()
+                        
+                        # Merge review feedback into design inputs
+                        if review_data.get("requirements"):
+                            # Append review requirements to original
+                            inputs["requirements"] += f"\n\nDesign Review Feedback:\n{review_data['requirements']}"
+                            
+                            # Update languages_list if modified
+                            if review_data.get("languages"):
+                                languages_list = [lang.strip() for lang in review_data["languages"].split(",")]
+                        
+                        # Regenerate design with review feedback
+                        typer.echo("\n[REFRESH] Regenerating design with review feedback...")
+                        
+                        async def _run_review():
+                            design_updated = await orchestrator.project_design_gen.generate(
+                                project_name=inputs["name"],
+                                languages=languages_list,
+                                requirements=inputs["requirements"],
+                                frameworks=frameworks_list,
+                                apis=apis_list,
+                            )
+                            return design_updated
+                        
+                        # Suppress console logs and show spinner
+                        try:
+                            for h in console_handlers:
+                                h.setLevel(logging.WARNING)
+                            with console.status("Regenerating with review feedback...", spinner="dots"):
+                                design = asyncio.run(_run_review())
+                        finally:
+                            for h, lvl in zip(console_handlers, old_levels):
+                                h.setLevel(lvl)
+                        
+                        typer.echo("\n[OK] Updated design generated with review feedback!")
+                        
+                        # Save updated design - COMPLETE VERSION
+                        with open(output_file, "w", encoding="utf-8") as f:
+                            f.write(f"# Project Design: {inputs['name']}\n\n")
+                            f.write(f"## Architecture Overview\n\n{design.architecture_overview}\n\n")
+                            
+                            f.write("## Objectives\n\n")
+                            if design.objectives:
+                                for obj in design.objectives:
+                                    f.write(f"- {obj}\n")
+                            else:
+                                f.write("No specific objectives defined.\n")
+                            
+                            f.write("\n## Tech Stack\n\n")
+                            if design.tech_stack:
+                                for tech in design.tech_stack:
+                                    f.write(f"- {tech}\n")
+                            else:
+                                f.write("No tech stack specified.\n")
+                            
+                            f.write("\n## Dependencies\n\n")
+                            if design.dependencies:
+                                for dep in design.dependencies:
+                                    f.write(f"- {dep}\n")
+                            else:
+                                f.write("No dependencies specified.\n")
+                            
+                            f.write("\n## Challenges\n\n")
+                            if design.challenges:
+                                for challenge in design.challenges:
+                                    f.write(f"- {challenge}\n")
+                            else:
+                                f.write("No challenges identified.\n")
+                            
+                            f.write("\n## Mitigations\n\n")
+                            if design.mitigations:
+                                for mitigation in design.mitigations:
+                                    f.write(f"- {mitigation}\n")
+                            else:
+                                f.write("No mitigations specified.\n")
+                        
+                        typer.echo(f"[FILE] Updated design saved to: {output_file.resolve()}")
+                        design_review_completed = True
+                    else:
+                        typer.echo("\n[NOTE] Design review cancelled, continuing with original design...")
+                        
+                except Exception as e:
+                    logger.warning(f"Design review interview failed: {e}")
+                    typer.echo(f"\n[WARN] Design review failed: {e}", err=True, color=True)
+                    typer.echo("Continuing with original design...")
+            else:
+                typer.echo("\n[OK] Skipping design review, continuing with original design...")
         
         # For LLM interview mode, automatically continue through full pipeline
         if use_llm_interview:
@@ -2465,15 +2679,52 @@ Generated by DevPlan Orchestrator.
                 from .file_manager import FileManager
                 file_mgr = FileManager()
                 
-                # Write project design
+                # Write project design - COMPLETE VERSION
                 design_content = f"# Project Design: {inputs['name']}\n\n"
                 design_content += f"## Architecture Overview\n\n{design_result.architecture_overview}\n\n"
-                design_content += "## Tech Stack\n\n"
-                for tech in design_result.tech_stack:
-                    design_content += f"- {tech}\n"
+                
+                design_content += "## Objectives\n\n"
+                if design_result.objectives:
+                    for obj in design_result.objectives:
+                        design_content += f"- {obj}\n"
+                else:
+                    design_content += "No specific objectives defined.\n"
+                
+                design_content += "\n## Tech Stack\n\n"
+                if design_result.tech_stack:
+                    for tech in design_result.tech_stack:
+                        design_content += f"- {tech}\n"
+                else:
+                    design_content += "No tech stack specified.\n"
+                
+                design_content += "\n## Dependencies\n\n"
+                if design_result.dependencies:
+                    for dep in design_result.dependencies:
+                        design_content += f"- {dep}\n"
+                else:
+                    design_content += "No dependencies specified.\n"
+                
+                design_content += "\n## Challenges\n\n"
+                if design_result.challenges:
+                    for challenge in design_result.challenges:
+                        design_content += f"- {challenge}\n"
+                else:
+                    design_content += "No challenges identified.\n"
+                
+                design_content += "\n## Mitigations\n\n"
+                if design_result.mitigations:
+                    for mitigation in design_result.mitigations:
+                        design_content += f"- {mitigation}\n"
+                else:
+                    design_content += "No mitigations specified.\n"
+                
                 design_content += f"\n## Project Details\n\n"
                 design_content += f"**Languages:** {', '.join(languages_list)}\n\n"
                 design_content += f"**Requirements:** {inputs['requirements']}\n\n"
+                if frameworks_list:
+                    design_content += f"**Frameworks:** {', '.join(frameworks_list)}\n\n"
+                if apis_list:
+                    design_content += f"**APIs:** {', '.join(apis_list)}\n\n"
                 
                 design_path = project_folder / "project_design.md"
                 file_mgr.write_markdown(str(design_path), design_content)
@@ -2488,10 +2739,18 @@ Generated by DevPlan Orchestrator.
                 
                 # Generate individual phase files
                 phase_files = orchestrator._generate_phase_files(devplan_result, str(project_folder))
-                phase_file_names = [Path(f).name for f in phase_files]
-                for phase_file in phase_files:
-                    phase_path = Path(phase_file)
-                    typer.echo(f"  [OK] Wrote {phase_path.name} ({phase_path.stat().st_size} bytes)")
+                phase_paths = [Path(f) for f in phase_files]
+                if phase_paths:
+                    preview = phase_paths[0].name
+                    if len(phase_paths) > 1:
+                        preview = f"{phase_paths[0].name} … {phase_paths[-1].name}"
+                    total_bytes = sum(p.stat().st_size for p in phase_paths if p.exists())
+                    phase_label = "phase file" if len(phase_paths) == 1 else "phase files"
+                    typer.echo(
+                        render(
+                            f"  [OK] Wrote {len(phase_paths)} {phase_label} ({preview}, {total_bytes:,} bytes total)"
+                        )
+                    )
                 
                 # Write handoff prompt
                 handoff_path = project_folder / "handoff_prompt.md"
@@ -3125,18 +3384,32 @@ def interactive(
             print("Running everything in this terminal with real-time streaming...")
             print()
             
+            # Create markdown output manager with initial timestamp-based directory
+            # We'll rename it once we get the actual project name from the interview
+            from datetime import datetime
+            temp_project_name = f"interactive_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            markdown_output_mgr = MarkdownOutputManager(base_output_dir="outputs")
+            run_dir = markdown_output_mgr.create_run_directory(temp_project_name)
+            print(f"[NOTE] All outputs will be saved to: {run_dir}\n")
+            
             # Step 1: Run interview with terminal UI
             print("[LIST] Step 1: Interactive Requirements Gathering")
             print("-" * 40)
             
-            # Analyze current repository if in one
+            # Only analyze repository if repository tools are enabled
             repo_analysis = None
             try:
-                from .interview import RepositoryAnalyzer
-                analyzer = RepositoryAnalyzer(Path.cwd())
-                repo_analysis = analyzer.analyze()
-                if repo_analysis:
-                    print(f"[FOLDER] Analyzed repository: {repo_analysis.project_type}")
+                prefs = load_last_used_preferences()
+                repository_tools_enabled = getattr(prefs, 'repository_tools_enabled', False)
+                
+                if repository_tools_enabled:
+                    from .interview import RepositoryAnalyzer
+                    analyzer = RepositoryAnalyzer(Path.cwd())
+                    repo_analysis = analyzer.analyze()
+                    if repo_analysis:
+                        print(f"[FOLDER] Analyzed repository: {repo_analysis.project_type}")
+                elif verbose:
+                    print("[NOTE] Repository tools disabled - skipping repository analysis")
             except Exception as e:
                 logging.warning(f"Repository analysis failed: {e}")
             
@@ -3150,6 +3423,7 @@ def interactive(
                 config=config,
                 verbose=verbose,
                 repo_analysis=repo_analysis,
+                markdown_output_manager=markdown_output_mgr,
             )
 
             # Run the (blocking) console interview in a background thread so
@@ -3164,6 +3438,25 @@ def interactive(
             interview_data = interview_manager.to_generate_design_inputs()
 
             print("[OK] Interview completed successfully!")
+            
+            # Rename markdown output manager's run directory now that we have project name
+            if interview_data.get("name"):
+                try:
+                    run_dir = markdown_output_mgr.rename_run_directory(interview_data["name"])
+                    print(f"[NOTE] Outputs relocated to: {run_dir}\n")
+                    
+                    # Save run metadata with actual project name
+                    markdown_output_mgr.save_run_metadata({
+                        "project_name": interview_data["name"],
+                        "languages": interview_data.get("languages", ""),
+                        "requirements": interview_data.get("requirements", ""),
+                        "frameworks": interview_data.get("frameworks", ""),
+                        "apis": interview_data.get("apis", ""),
+                        "provider": config.llm.provider,
+                        "model": config.llm.model,
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to rename markdown output directory: {e}")
             
             # Continue with full pipeline automatically
             print("\n" + "=" * 60)
@@ -3184,9 +3477,14 @@ def interactive(
             # Convert to design inputs
             design_inputs = interview_data
             
-            # Create orchestrator with repo analysis and code samples
+            # Create orchestrator with repo analysis, code samples, and markdown output manager
             code_samples = design_inputs.get("code_samples")
-            orchestrator = _create_orchestrator(config, repo_analysis=repo_analysis, code_samples=code_samples)
+            orchestrator = _create_orchestrator(
+                config, 
+                repo_analysis=repo_analysis, 
+                code_samples=code_samples,
+                markdown_output_manager=markdown_output_mgr
+            )
             
             print("[STREAM] Generating project design with real-time streaming...\n")
             design_stream = StreamingHandler.create_console_handler(prefix="[design] ")
@@ -3199,6 +3497,204 @@ def interactive(
                 streaming_handler=design_stream,
             )
             print("\n[OK] Project design generated!")
+            
+            # Save project design to markdown output manager - RAW LLM RESPONSE
+            if design.raw_llm_response:
+                # Save the full raw markdown response from the LLM
+                markdown_output_mgr.save_stage_output("project_design", design.raw_llm_response)
+                logger.info(f"Saved raw LLM design response ({len(design.raw_llm_response)} chars)")
+            else:
+                # Fallback to structured format if raw response not available
+                design_content = f"""## Architecture Overview
+
+{design.architecture_overview}
+
+## Objectives
+
+"""
+                if design.objectives:
+                    for obj in design.objectives:
+                        design_content += f"- {obj}\n"
+                else:
+                    design_content += "No specific objectives defined.\n"
+                
+                design_content += "\n## Tech Stack\n\n"
+                if design.tech_stack:
+                    for tech in design.tech_stack:
+                        design_content += f"- {tech}\n"
+                else:
+                    design_content += "No tech stack specified.\n"
+                
+                design_content += "\n## Dependencies\n\n"
+                if design.dependencies:
+                    for dep in design.dependencies:
+                        design_content += f"- {dep}\n"
+                else:
+                    design_content += "No dependencies specified.\n"
+                
+                design_content += "\n## Challenges\n\n"
+                if design.challenges:
+                    for challenge in design.challenges:
+                        design_content += f"- {challenge}\n"
+                else:
+                    design_content += "No challenges identified.\n"
+                
+                design_content += "\n## Mitigations\n\n"
+                if design.mitigations:
+                    for mitigation in design.mitigations:
+                        design_content += f"- {mitigation}\n"
+                else:
+                    design_content += "No mitigations specified.\n"
+                
+                design_content += f"\n## Project Details\n\n"
+                design_content += f"**Project Name:** {design.project_name}\n\n"
+                design_content += f"**Languages:** {design_inputs['languages']}\n\n"
+                design_content += f"**Requirements:** {design_inputs['requirements']}\n\n"
+                if design_inputs.get("frameworks"):
+                    design_content += f"**Frameworks:** {design_inputs['frameworks']}\n\n"
+                if design_inputs.get("apis"):
+                    design_content += f"**APIs:** {design_inputs['apis']}\n\n"
+                
+                markdown_output_mgr.save_stage_output("project_design", design_content)
+                logger.warning("Raw LLM response not available, saved structured format")
+            
+            # Ask if user wants to conduct a second interview about the project design
+            print("\n" + "=" * 60)
+            print("[QUESTION] Design Review Opportunity")
+            print("=" * 60)
+            print("\nThe initial project design has been generated.")
+            print("You can now review it and conduct a second interview to:")
+            print("  • Refine architectural decisions")
+            print("  • Add missing requirements or constraints")
+            print("  • Adjust technology choices")
+            print("  • Clarify implementation details")
+            print("\nWould you like to conduct a design review interview?")
+            
+            conduct_design_review = input("\nEnter 'yes' to review, or press Enter to continue: ").strip().lower()
+            
+            if conduct_design_review in ['yes', 'y']:
+                print("\n[ROBOT] Starting design review interview...")
+                print("-" * 60)
+                print("Review the generated design and provide feedback.")
+                print("Type /done when you're finished with the review.\n")
+                
+                # Create a new interview manager for design review
+                review_manager = LLMInterviewManager(
+                    config=config,
+                    verbose=verbose,
+                    repo_analysis=repo_analysis,
+                    markdown_output_manager=markdown_output_mgr,
+                )
+                
+                # Provide context about the current design
+                design_context = f"""Current Project Design:
+
+Project: {design_inputs['name']}
+
+Architecture Overview:
+{design.architecture_overview}
+
+Tech Stack:
+{', '.join(design.tech_stack)}
+
+We've just generated this initial design. Please review it and ask any questions or suggest improvements.
+"""
+                
+                try:
+                    # Run design review interview
+                    review_answers = await asyncio.to_thread(review_manager.run)
+                    
+                    if review_answers:
+                        print("\n[OK] Design review completed!")
+                        
+                        # Get any updated requirements from the review
+                        review_data = review_manager.to_generate_design_inputs()
+                        
+                        # Merge review feedback into design inputs
+                        if review_data.get("requirements"):
+                            # Append review requirements to original
+                            design_inputs["requirements"] += f"\n\nDesign Review Feedback:\n{review_data['requirements']}"
+                        
+                        # Regenerate design with review feedback
+                        print("\n[REFRESH] Regenerating design with review feedback...\n")
+                        design_stream = StreamingHandler.create_console_handler(prefix="[design-v2] ")
+                        design = await orchestrator.project_design_gen.generate(
+                            project_name=design_inputs["name"],
+                            languages=design_inputs["languages"].split(","),
+                            requirements=design_inputs["requirements"],
+                            frameworks=design_inputs.get("frameworks", "").split(",") if design_inputs.get("frameworks") else None,
+                            apis=design_inputs.get("apis", "").split(",") if design_inputs.get("apis") else None,
+                            streaming_handler=design_stream,
+                        )
+                        print("\n[OK] Updated design generated with review feedback!")
+                        
+                        # Save updated design - RAW LLM RESPONSE
+                        if design.raw_llm_response:
+                            markdown_output_mgr.save_stage_output("design_review", design.raw_llm_response)
+                            logger.info(f"Saved raw LLM review response ({len(design.raw_llm_response)} chars)")
+                        else:
+                            # Fallback to structured format
+                            design_content = f"""## Architecture Overview
+
+{design.architecture_overview}
+
+## Objectives
+
+"""
+                            if design.objectives:
+                                for obj in design.objectives:
+                                    design_content += f"- {obj}\n"
+                            else:
+                                design_content += "No specific objectives defined.\n"
+                            
+                            design_content += "\n## Tech Stack\n\n"
+                            if design.tech_stack:
+                                for tech in design.tech_stack:
+                                    design_content += f"- {tech}\n"
+                            else:
+                                design_content += "No tech stack specified.\n"
+                            
+                            design_content += "\n## Dependencies\n\n"
+                            if design.dependencies:
+                                for dep in design.dependencies:
+                                    design_content += f"- {dep}\n"
+                            else:
+                                design_content += "No dependencies specified.\n"
+                            
+                            design_content += "\n## Challenges\n\n"
+                            if design.challenges:
+                                for challenge in design.challenges:
+                                    design_content += f"- {challenge}\n"
+                            else:
+                                design_content += "No challenges identified.\n"
+                            
+                            design_content += "\n## Mitigations\n\n"
+                            if design.mitigations:
+                                for mitigation in design.mitigations:
+                                    design_content += f"- {mitigation}\n"
+                            else:
+                                design_content += "No mitigations specified.\n"
+                            
+                            design_content += f"\n## Project Details\n\n"
+                            design_content += f"**Project Name:** {design.project_name}\n\n"
+                            design_content += f"**Languages:** {design_inputs['languages']}\n\n"
+                            design_content += f"**Requirements:** {design_inputs['requirements']}\n\n"
+                            if design_inputs.get("frameworks"):
+                                design_content += f"**Frameworks:** {design_inputs['frameworks']}\n\n"
+                            if design_inputs.get("apis"):
+                                design_content += f"**APIs:** {design_inputs['apis']}\n\n"
+                            
+                            markdown_output_mgr.save_stage_output("design_review", design_content)
+                            logger.warning("Raw LLM response not available, saved structured format")
+                    else:
+                        print("\n[NOTE] Design review cancelled, continuing with original design...")
+                        
+                except Exception as e:
+                    logger.warning(f"Design review interview failed: {e}")
+                    print(f"\n[WARN] Design review failed: {e}")
+                    print("Continuing with original design...")
+            else:
+                print("\n[OK] Skipping design review, continuing with original design...")
             
             # Step 3: Generate devplan with streaming
             print("\n[LIST] Step 3: Development Plan Generation")
@@ -3216,6 +3712,27 @@ def interactive(
             
             print("\n[OK] Development plan generated!")
             
+            # DEBUG: Check if we have raw_basic_response
+            print(f"[DEBUG] detailed_devplan type: {type(detailed_devplan)}")
+            print(f"[DEBUG] Has raw_basic_response: {hasattr(detailed_devplan, 'raw_basic_response')}")
+            if hasattr(detailed_devplan, 'raw_basic_response'):
+                print(f"[DEBUG] raw_basic_response length: {len(detailed_devplan.raw_basic_response) if detailed_devplan.raw_basic_response else 0}")
+            
+            # Save devplan to markdown output manager - RAW LLM RESPONSES
+            if hasattr(detailed_devplan, 'raw_basic_response') and detailed_devplan.raw_basic_response:
+                # Save the basic devplan raw response
+                markdown_output_mgr.save_stage_output("basic_devplan", detailed_devplan.raw_basic_response)
+                print(f"[SAVE] Saved basic devplan to archive ({len(detailed_devplan.raw_basic_response)} chars)")
+                logger.info(f"Saved raw basic devplan response ({len(detailed_devplan.raw_basic_response)} chars)")
+            else:
+                print("[WARN] No raw basic devplan response available")
+            
+            # Save the full detailed devplan markdown (converted from structured model)
+            devplan_content = orchestrator._devplan_to_markdown(detailed_devplan)
+            markdown_output_mgr.save_stage_output("detailed_devplan", devplan_content)
+            print(f"[SAVE] Saved detailed devplan to archive ({len(devplan_content)} chars)")
+            logger.info(f"Saved detailed devplan markdown ({len(devplan_content)} chars)")
+            
             # Step 4: Generate handoff document
             print("\n[SEND] Step 4: Handoff Document Generation")
             print("-" * 40)
@@ -3232,42 +3749,112 @@ def interactive(
             
             print("\n[OK] Handoff document generated!")
             
-            # Save all results to disk
+            # Save handoff to markdown output manager
+            markdown_output_mgr.save_stage_output("handoff_prompt", handoff.content)
+            
+            # Save all results to disk in the generated output folder (NOT project root)
             print("\n" + "=" * 60)
-            print("[SAVE] Saving files to disk...")
+            print("[SAVE] Saving files to output directory...")
             print("=" * 60)
             
-            output_path = Path(output_dir) if output_dir else Path.cwd()
+            # Use the run_dir (generated output folder) instead of current directory
+            output_path = Path(output_dir) if output_dir else Path(run_dir)
+            print(f"[FOLDER] Output directory: {output_path.resolve()}\n")
             
             try:
                 from .file_manager import FileManager
                 file_mgr = FileManager()
                 
-                # Write project design
-                design_content = f"# Project Design: {design_inputs['name']}\n\n"
-                design_content += f"## Architecture Overview\n\n{design.architecture_overview}\n\n"
-                design_content += "## Tech Stack\n\n"
-                for tech in design.tech_stack:
-                    design_content += f"- {tech}\n"
-                design_content += f"\n## Project Details\n\n"
-                design_content += f"**Languages:** {design_inputs['languages']}\n\n"
-                design_content += f"**Requirements:** {design_inputs['requirements']}\n\n"
+                # Write project design - RAW LLM RESPONSE (with fallback to structured)
+                if design.raw_llm_response:
+                    # Use the full raw markdown from LLM
+                    design_content = f"# Project Design: {design_inputs['name']}\n\n{design.raw_llm_response}"
+                else:
+                    # Fallback to structured format
+                    design_content = f"# Project Design: {design_inputs['name']}\n\n"
+                    design_content += f"## Architecture Overview\n\n{design.architecture_overview}\n\n"
+                    
+                    design_content += "## Objectives\n\n"
+                    if design.objectives:
+                        for obj in design.objectives:
+                            design_content += f"- {obj}\n"
+                    else:
+                        design_content += "No specific objectives defined.\n"
+                    
+                    design_content += "\n## Tech Stack\n\n"
+                    if design.tech_stack:
+                        for tech in design.tech_stack:
+                            design_content += f"- {tech}\n"
+                    else:
+                        design_content += "No tech stack specified.\n"
+                    
+                    design_content += "\n## Dependencies\n\n"
+                    if design.dependencies:
+                        for dep in design.dependencies:
+                            design_content += f"- {dep}\n"
+                    else:
+                        design_content += "No dependencies specified.\n"
+                    
+                    design_content += "\n## Challenges\n\n"
+                    if design.challenges:
+                        for challenge in design.challenges:
+                            design_content += f"- {challenge}\n"
+                    else:
+                        design_content += "No challenges identified.\n"
+                    
+                    design_content += "\n## Mitigations\n\n"
+                    if design.mitigations:
+                        for mitigation in design.mitigations:
+                            design_content += f"- {mitigation}\n"
+                    else:
+                        design_content += "No mitigations specified.\n"
+                    
+                    design_content += f"\n## Project Details\n\n"
+                    design_content += f"**Languages:** {design_inputs['languages']}\n\n"
+                    design_content += f"**Requirements:** {design_inputs['requirements']}\n\n"
+                    if design_inputs.get("frameworks"):
+                        design_content += f"**Frameworks:** {design_inputs['frameworks']}\n\n"
+                    if design_inputs.get("apis"):
+                        design_content += f"**APIs:** {design_inputs['apis']}\n\n"
                 
                 design_path = output_path / "project_design.md"
                 file_mgr.write_markdown(str(design_path), design_content)
                 print(f"  [OK] Wrote project_design.md ({design_path.stat().st_size} bytes)")
                 
-                # Write devplan dashboard
+                # Write devplan dashboard (structured with phase pointers)
                 devplan_content = orchestrator._devplan_to_markdown(detailed_devplan)
                 devplan_path = output_path / "devplan.md"
                 file_mgr.write_markdown(str(devplan_path), devplan_content)
                 print(f"  [OK] Wrote devplan.md dashboard ({devplan_path.stat().st_size} bytes)")
                 
-                # Generate individual phase files
+                # Write raw devplan from LLM (full detailed text as it came from the API)
+                # Debug: Check what attributes the devplan has
+                if hasattr(detailed_devplan, 'raw_basic_response'):
+                    if detailed_devplan.raw_basic_response:
+                        raw_devplan_path = output_path / "devplan_raw.md"
+                        file_mgr.write_markdown(str(raw_devplan_path), detailed_devplan.raw_basic_response)
+                        print(f"  [OK] Wrote devplan_raw.md (full LLM response, {raw_devplan_path.stat().st_size} bytes)")
+                    else:
+                        print(f"  [WARN] devplan.raw_basic_response exists but is None or empty")
+                        logger.warning("raw_basic_response attribute exists but has no value")
+                else:
+                    print(f"  [WARN] devplan object does not have raw_basic_response attribute")
+                    logger.warning(f"DevPlan attributes: {[attr for attr in dir(detailed_devplan) if not attr.startswith('_')]}")
+                
+                # Generate individual phase files (also saves to markdown output manager via orchestrator)
                 phase_files = orchestrator._generate_phase_files(detailed_devplan, str(output_path))
-                for phase_file in phase_files:
-                    phase_path = Path(phase_file)
-                    print(f"  [OK] Wrote {phase_path.name} ({phase_path.stat().st_size} bytes)")
+                phase_paths = [Path(f) for f in phase_files]
+                if phase_paths:
+                    preview = phase_paths[0].name
+                    if len(phase_paths) > 1:
+                        preview = f"{phase_paths[0].name} … {phase_paths[-1].name}"
+                    total_bytes = sum(p.stat().st_size for p in phase_paths if p.exists())
+                    phase_label = "phase file" if len(phase_paths) == 1 else "phase files"
+                    print(
+                        render(
+                            f"  [OK] Wrote {len(phase_paths)} {phase_label} ({preview}, {total_bytes:,} bytes total)"
+                        )
+                    )
                 
                 # Write handoff prompt
                 handoff_path = output_path / "handoff_prompt.md"
@@ -3275,10 +3862,11 @@ def interactive(
                 print(f"  [OK] Wrote handoff_prompt.md ({handoff_path.stat().st_size} bytes)")
                 
                 print("\n[OK] All files written successfully!")
-                print(f"\n[FOLDER] Output directory: {output_path.resolve()}")
+                print(f"\n[FOLDER] All outputs saved to: {output_path.resolve()}")
                 
             except Exception as e:
                 print(f"\n[WARN] Error writing files: {e}")
+                logger.error(f"Error writing files: {e}", exc_info=True)
                 # Fallback: save devplan as JSON
                 devplan_file = output_path / "devplan.json"
                 with open(devplan_file, 'w', encoding='utf-8') as f:
@@ -3290,16 +3878,22 @@ def interactive(
             print("=" * 60)
             
             # Summary of generated files
-            print("\n[BOOKMARK] Generated files:")
+            print(f"\n[BOOKMARK] Generated files in: {output_path.resolve()}")
             print(f"\n  [FILE] Project Design: project_design.md")
-            print(f"  [DASHBOARD] Development Plan Dashboard: devplan.md")
+            print(f"  [DASHBOARD] Development Plan Dashboard: devplan.md (structured with phase links)")
+            print(f"  [FILE] Raw DevPlan: devplan_raw.md (full LLM response as generated)")
             print(f"  [ROCKET] Individual Phase Files: phase1.md, phase2.md, etc.")
             print(f"  [SEND] Handoff Document: handoff_prompt.md")
             
+            print(f"\n[FOLDER] Output Directory: {output_path.resolve()}")
+            print("   - All generated files (design, devplan, phases, handoff)")
+            print("   - Ready to review and implement")
+            
             print("\n[IDEA] Next Steps:")
             print("   1. Review the devplan: devplan.md")
-            print("   2. Start implementing Phase 0")
-            print("   3. Use individual phase files for focused implementation")
+            print("   2. Check devplan_raw.md for full LLM details")
+            print("   3. Start implementing Phase 1")
+            print("   4. Use individual phase files for focused work")
             print("=" * 60 + "\n")
             
         except typer.Exit:

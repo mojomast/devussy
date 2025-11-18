@@ -31,7 +31,11 @@ class SessionSettings(BaseModel):
     final_stage_model: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
-    streaming: Optional[bool] = None
+    streaming: Optional[bool] = None  # Global streaming flag (backward compatibility)
+    # Phase-specific streaming options
+    streaming_design_enabled: Optional[bool] = None
+    streaming_devplan_enabled: Optional[bool] = None
+    streaming_handoff_enabled: Optional[bool] = None
     api_key: Optional[str] = None
     base_url: Optional[str] = None  # Primarily used for generic provider endpoint
     # Always treat these as dicts at runtime to avoid Optional/None typing issues in callers.
@@ -74,6 +78,57 @@ class SessionSettings(BaseModel):
     cross_reference_analysis: Optional[bool] = False
 
 
+def get_design_streaming_status(config, session: Optional[SessionSettings]) -> bool:
+    """Determine if streaming is enabled for the Design phase.
+    
+    Priority:
+    1. session.streaming_design_enabled (if explicitly set)
+    2. session.streaming (global fallback)
+    3. config.streaming_enabled (config fallback)
+    4. False (default)
+    """
+    if session and session.streaming_design_enabled is not None:
+        return session.streaming_design_enabled
+    elif session and session.streaming is not None:
+        return session.streaming
+    else:
+        return getattr(config, 'streaming_enabled', False)
+
+
+def get_devplan_streaming_status(config, session: Optional[SessionSettings]) -> bool:
+    """Determine if streaming is enabled for the DevPlan phase.
+    
+    Priority:
+    1. session.streaming_devplan_enabled (if explicitly set)
+    2. session.streaming (global fallback)
+    3. config.streaming_enabled (config fallback)
+    4. False (default)
+    """
+    if session and session.streaming_devplan_enabled is not None:
+        return session.streaming_devplan_enabled
+    elif session and session.streaming is not None:
+        return session.streaming
+    else:
+        return getattr(config, 'streaming_enabled', False)
+
+
+def get_handoff_streaming_status(config, session: Optional[SessionSettings]) -> bool:
+    """Determine if streaming is enabled for the Handoff phase.
+    
+    Priority:
+    1. session.streaming_handoff_enabled (if explicitly set)
+    2. session.streaming (global fallback)
+    3. config.streaming_enabled (config fallback)
+    4. False (default)
+    """
+    if session and session.streaming_handoff_enabled is not None:
+        return session.streaming_handoff_enabled
+    elif session and session.streaming is not None:
+        return session.streaming
+    else:
+        return getattr(config, 'streaming_enabled', False)
+
+
 def _is_tty() -> bool:
     try:
         return sys.stdin.isatty() and sys.stdout.isatty()
@@ -93,7 +148,10 @@ def _current_settings_snapshot(config: AppConfig, session: Optional[SessionSetti
         f"Temperature: {session.temperature if session and session.temperature is not None else llm.temperature}",
         f"Max Tokens: {session.max_tokens if session and session.max_tokens is not None else llm.max_tokens}",
         f"Reasoning (gpt-5): {(session.reasoning_effort if session and session.reasoning_effort else getattr(llm, 'reasoning_effort', None) or '-')}",
-        f"Streaming: {session.streaming if session and session.streaming is not None else getattr(config, 'streaming_enabled', False)}",
+        f"Global Streaming: {session.streaming if session and session.streaming is not None else getattr(config, 'streaming_enabled', False)}",
+        f"Design Streaming: {get_design_streaming_status(config, session)}",
+        f"DevPlan Streaming: {get_devplan_streaming_status(config, session)}",
+        f"Handoff Streaming: {get_handoff_streaming_status(config, session)}",
         f"API Timeout: {session.api_timeout if session and session.api_timeout is not None else llm.api_timeout}s",
         f"Design Timeout: {(session.design_api_timeout if session and session.design_api_timeout is not None else (config.design_llm.api_timeout if config.design_llm and getattr(config.design_llm, 'api_timeout', None) is not None else '-'))}s",
         f"DevPlan Timeout: {(session.devplan_api_timeout if session and session.devplan_api_timeout is not None else (config.devplan_llm.api_timeout if config.devplan_llm and getattr(config.devplan_llm, 'api_timeout', None) is not None else '-'))}s",
@@ -466,6 +524,109 @@ def _submenu_concurrency(config: AppConfig, session: SessionSettings) -> None:
             else:
                 return
 
+def _submenu_streaming_options(config: AppConfig, session: SessionSettings) -> None:
+    """Nested menu for phase-specific streaming configuration."""
+    if _is_tty():
+        while True:
+            pick = (
+                radiolist_dialog(
+                    title="Streaming Options",
+                    text=_current_settings_snapshot(config, session),
+                    values=[
+                        ("design", "Design Phase Streaming"),
+                        ("devplan", "DevPlan Phase Streaming"),
+                        ("handoff", "Handoff Phase Streaming"),
+                        ("global", "Global Streaming (All Phases)"),
+                        ("back", "Back"),
+                    ],
+                ).run()
+                or "back"
+            )
+            if pick == "design":
+                current = get_design_streaming_status(config, session)
+                enabled = yes_no_dialog(
+                    title="Design Phase Streaming",
+                    text=f"Enable streaming for design generation? (current: {current})",
+                    yes_text="Enable",
+                    no_text="Disable",
+                ).run()
+                session.streaming_design_enabled = bool(enabled)
+                continue
+            if pick == "devplan":
+                current = get_devplan_streaming_status(config, session)
+                enabled = yes_no_dialog(
+                    title="DevPlan Phase Streaming",
+                    text=f"Enable streaming for devplan generation? (current: {current})",
+                    yes_text="Enable",
+                    no_text="Disable",
+                ).run()
+                session.streaming_devplan_enabled = bool(enabled)
+                continue
+            if pick == "handoff":
+                current = get_handoff_streaming_status(config, session)
+                enabled = yes_no_dialog(
+                    title="Handoff Phase Streaming",
+                    text=f"Enable streaming for handoff generation? (current: {current})",
+                    yes_text="Enable",
+                    no_text="Disable",
+                ).run()
+                session.streaming_handoff_enabled = bool(enabled)
+                continue
+            if pick == "global":
+                current = session.streaming if session.streaming is not None else getattr(config, 'streaming_enabled', False)
+                enabled = yes_no_dialog(
+                    title="Global Streaming",
+                    text=f"Enable streaming for all phases? (current: {current})",
+                    yes_text="Enable",
+                    no_text="Disable",
+                ).run()
+                session.streaming = bool(enabled)
+                continue
+            if pick == "back":
+                return
+    else:
+        while True:
+            print("\n=== Streaming Options ===")
+            print("  1) Design Phase Streaming")
+            print("  2) DevPlan Phase Streaming")
+            print("  3) Handoff Phase Streaming")
+            print("  4) Global Streaming (All Phases)")
+            print("  5) Back")
+            raw = (input("Enter 1-5 [5]: ").strip() or "5")
+            try:
+                if raw == "1":
+                    current = get_design_streaming_status(config, session)
+                    s = input(f"Enable design streaming? y/n (current: {current}): ").strip().lower()
+                    if s in {"y", "yes"}:
+                        session.streaming_design_enabled = True
+                    elif s in {"n", "no"}:
+                        session.streaming_design_enabled = False
+                elif raw == "2":
+                    current = get_devplan_streaming_status(config, session)
+                    s = input(f"Enable devplan streaming? y/n (current: {current}): ").strip().lower()
+                    if s in {"y", "yes"}:
+                        session.streaming_devplan_enabled = True
+                    elif s in {"n", "no"}:
+                        session.streaming_devplan_enabled = False
+                elif raw == "3":
+                    current = get_handoff_streaming_status(config, session)
+                    s = input(f"Enable handoff streaming? y/n (current: {current}): ").strip().lower()
+                    if s in {"y", "yes"}:
+                        session.streaming_handoff_enabled = True
+                    elif s in {"n", "no"}:
+                        session.streaming_handoff_enabled = False
+                elif raw == "4":
+                    current = session.streaming if session.streaming is not None else getattr(config, 'streaming_enabled', False)
+                    s = input(f"Enable global streaming? y/n (current: {current}): ").strip().lower()
+                    if s in {"y", "yes"}:
+                        session.streaming = True
+                    elif s in {"n", "no"}:
+                        session.streaming = False
+                else:
+                    return
+            except Exception:
+                pass
+
 
 def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force_show: bool = False) -> SessionSettings:
     """Run an interactive settings hub. Returns updated SessionSettings.
@@ -504,7 +665,7 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                             ("temperature", "Temperature"),
                             ("max_tokens", "Max Tokens"),
                             ("reasoning", "Reasoning Effort (gpt-5)"),
-                            ("streaming", "Streaming On/Off"),
+                            ("streaming", "Streaming Options"),
                             ("back", "Exit Options & Save"),
                         ],
                     ).run()
@@ -589,14 +750,8 @@ def run_menu(config: AppConfig, session: Optional[SessionSettings] = None, force
                 apply_settings_to_config(config, session)
                 continue
             if choice == "streaming":
-                streaming_choice = yes_no_dialog(
-                    title="Streaming",
-                    text=f"Enable streaming? (current: {getattr(config, 'streaming_enabled', False)})",
-                    yes_text="Enable",
-                    no_text="Disable",
-                ).run()
-                session.streaming = bool(streaming_choice)
-                # Persist updated streaming flag immediately
+                _submenu_streaming_options(config, session)
+                # Persist updated streaming settings immediately
                 apply_settings_to_config(config, session)
                 continue
             # API creds editing moved into Provider & Models submenu
@@ -767,6 +922,31 @@ def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> App
     if session.streaming is not None:
         config.streaming_enabled = session.streaming
 
+    # Phase-specific streaming settings (with backward compatibility)
+    if session.streaming_design_enabled is not None:
+        if config.design_llm is None:
+            config.design_llm = LLMConfig(streaming_enabled=session.streaming_design_enabled,
+                                        provider=config.llm.provider,
+                                        model=config.llm.model)
+        else:
+            config.design_llm.streaming_enabled = session.streaming_design_enabled
+
+    if session.streaming_devplan_enabled is not None:
+        if config.devplan_llm is None:
+            config.devplan_llm = LLMConfig(streaming_enabled=session.streaming_devplan_enabled,
+                                         provider=config.llm.provider,
+                                         model=config.llm.model)
+        else:
+            config.devplan_llm.streaming_enabled = session.streaming_devplan_enabled
+
+    if session.streaming_handoff_enabled is not None:
+        if config.handoff_llm is None:
+            config.handoff_llm = LLMConfig(streaming_enabled=session.streaming_handoff_enabled,
+                                         provider=config.llm.provider,
+                                         model=config.llm.model)
+        else:
+            config.handoff_llm.streaming_enabled = session.streaming_handoff_enabled
+
     # Reasoning effort (gpt-5)
     if session.reasoning_effort is not None:
         config.llm.reasoning_effort = session.reasoning_effort
@@ -931,6 +1111,14 @@ def apply_settings_to_config(config: AppConfig, session: SessionSettings) -> App
     # Streaming flag
     if session.streaming is not None:
         env_updates["STREAMING_ENABLED"] = "true" if session.streaming else "false"
+
+    # Phase-specific streaming flags
+    if session.streaming_design_enabled is not None:
+        env_updates["STREAMING_DESIGN_ENABLED"] = "true" if session.streaming_design_enabled else "false"
+    if session.streaming_devplan_enabled is not None:
+        env_updates["STREAMING_DEVPLAN_ENABLED"] = "true" if session.streaming_devplan_enabled else "false"
+    if session.streaming_handoff_enabled is not None:
+        env_updates["STREAMING_HANDOFF_ENABLED"] = "true" if session.streaming_handoff_enabled else "false"
 
     # Concurrency: allow overriding via settings (persists as MAX_CONCURRENT_REQUESTS).
     if session.max_concurrent_requests is not None:

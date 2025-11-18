@@ -50,8 +50,17 @@ retry:
   exponential_base: 2  # Exponential backoff base
 
 # Streaming Configuration
-streaming_enabled: false  # Enable/disable token streaming
+streaming_enabled: false  # Enable/disable token streaming (global fallback)
 streaming_callback: null  # Custom streaming callback function
+
+# Phase-Specific Streaming Environment Variables:
+# These can be set via environment variables to override global streaming:
+# STREAMING_DESIGN_ENABLED=true/false    # Design phase streaming
+# STREAMING_DEVPLAN_ENABLED=true/false   # DevPlan phase streaming
+# STREAMING_HANDOFF_ENABLED=true/false   # Handoff phase streaming
+#
+# Priority: phase-specific → global → config → false (default)
+# Phase-specific settings override global streaming setting
 
 # Output Configuration
 output_dir: ./docs  # Directory for generated documentation

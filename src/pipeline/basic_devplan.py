@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any, Optional
 
@@ -88,8 +89,16 @@ class BasicDevPlanGenerator:
                 def token_callback(token: str) -> None:
                     """Sync callback invoked by LLM client for each streamed chunk."""
                     response_chunks.append(token)
-                    # Use the handler's sync API for console output
-                    streaming_handler.on_token(token)
+                    # Call async handler properly like project_design does
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+                    if loop and loop.is_running():
+                        loop.create_task(streaming_handler.on_token_async(token))
+                    else:
+                        # Fallback: best-effort synchronous run
+                        asyncio.run(streaming_handler.on_token_async(token))
 
                 full_response = await self.llm_client.generate_completion_streaming(
                     prompt,
@@ -121,6 +130,10 @@ class BasicDevPlanGenerator:
 
         # Parse the response into a DevPlan model
         devplan = self._parse_response(response, project_design.project_name)
+        
+        # Store the raw LLM response for full documentation
+        devplan.raw_basic_response = response
+        
         logger.info(f"Successfully parsed devplan with {len(devplan.phases)} phases")
 
         return devplan

@@ -7,6 +7,7 @@ including spinners, token counts, and file creation updates.
 from __future__ import annotations
 
 from typing import Any, Optional
+from datetime import datetime
 from contextlib import contextmanager
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -98,7 +99,10 @@ class PipelineProgressReporter:
             f"[bold yellow]Stage {stage_number}/{self.total_stages}:[/bold yellow] "
             f"[cyan]{stage_name}[/cyan]"
         )
-        logger.info(f"Starting stage {stage_number}/{self.total_stages}: {stage_name}")
+        logger.info(
+            f"Starting stage {stage_number}/{self.total_stages}: {stage_name}",
+            extra={"suppress_console": True},
+        )
         self.refresh_status()
         
     def end_stage(self, stage_name: str, success: bool = True) -> None:
@@ -112,7 +116,10 @@ class PipelineProgressReporter:
         status = "✓" if success else "✗"
         color = "green" if success else "red"
         self.console.print(f"[{color}]{status} {stage_name} complete[/{color}]")
-        logger.info(f"Completed stage: {stage_name} (success={success})")
+        logger.info(
+            f"Completed stage: {stage_name} (success={success})",
+            extra={"suppress_console": True},
+        )
         self.refresh_status()
         
     def update_tokens(self, usage_metadata: Optional[dict]) -> None:
@@ -162,7 +169,24 @@ class PipelineProgressReporter:
             f"  [dim]→[/dim] Created [green]{file_type}[/green]: "
             f"[blue]{file_path}[/blue]{token_info}"
         )
-        logger.info(f"Created {file_type}: {file_path} (tokens={token_count})")
+        logger.info(
+            f"Created {file_type}: {file_path} (tokens={token_count})",
+            extra={"suppress_console": True},
+        )
+
+    def report_phase_ready(
+        self,
+        phase_number: int,
+        steps: int,
+        char_count: Optional[int] = None,
+    ) -> None:
+        """Display a compact line when a phase finishes generating."""
+
+        timestamp = datetime.now().strftime("%H:%M")
+        char_info = f"({char_count:,} chars)" if char_count is not None else ""
+        self.console.print(
+            f"  [green]✓[/green] [{timestamp}] Phase {phase_number} ready ({steps} steps){char_info}"
+        )
         
     def show_checkpoint_saved(self, checkpoint_key: str, stage: str) -> None:
         """Display checkpoint save information.
