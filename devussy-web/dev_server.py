@@ -63,6 +63,17 @@ class DevServerHandler(BaseHTTPRequestHandler):
                 import traceback
                 traceback.print_exc()
 
+        # Route: /api/plan/hivemind
+        elif self.path.startswith('/api/plan/hivemind'):
+            try:
+                from api.plan.hivemind import handler
+                handler.do_POST(self)
+            except Exception as e:
+                self.send_error(500, str(e))
+                print(f"Error in /api/plan/hivemind: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Route: /api/handoff
         elif self.path.startswith('/api/handoff'):
             try:

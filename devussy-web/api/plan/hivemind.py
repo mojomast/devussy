@@ -96,7 +96,7 @@ class handler(BaseHTTPRequestHandler):
                         if self.token_count % 50 == 0:
                             print(f"[hivemind.py] {self.drone_id}: Streamed {self.token_count} tokens")
                         data = json.dumps({"type": self.drone_id, "content": token})
-                        self.writer.write(f"data: {data}\\n\\n".encode('utf-8'))
+                        self.writer.write(f"data: {data}\n\n".encode('utf-8'))
                         self.writer.flush()
                     except Exception as e:
                         print(f"[hivemind.py] Error writing {self.drone_id} token: {e}")
@@ -105,7 +105,7 @@ class handler(BaseHTTPRequestHandler):
                     print(f"[hivemind.py] {self.drone_id}: Complete, total tokens: {self.token_count}")
                     # Send completion signal
                     complete_data = json.dumps({"type": f"{self.drone_id}_complete"})
-                    self.writer.write(f"data: {complete_data}\\n\\n".encode('utf-8'))
+                    self.writer.write(f"data: {complete_data}\n\n".encode('utf-8'))
                     self.writer.flush()
 
             try:
@@ -167,7 +167,7 @@ class handler(BaseHTTPRequestHandler):
                 
                 # Send done signal with phase data
                 final_data = json.dumps({"done": True, "phase": detailed_phase})
-                self.wfile.write(f"data: {final_data}\\n\\n".encode('utf-8'))
+                self.wfile.write(f"data: {final_data}\n\n".encode('utf-8'))
                 self.wfile.flush()
                 
             except Exception as e:
@@ -176,7 +176,7 @@ class handler(BaseHTTPRequestHandler):
                 traceback.print_exc()
                 error_data = json.dumps({"error": str(e)})
                 try:
-                    self.wfile.write(f"data: {error_data}\\n\\n".encode('utf-8'))
+                    self.wfile.write(f"data: {error_data}\n\n".encode('utf-8'))
                     self.wfile.flush()
                 except Exception:
                     pass
