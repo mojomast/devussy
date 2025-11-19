@@ -72,11 +72,11 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
                 const phaseNumber = phase.number || phase.phase_number;
                 const phaseTitle = (phase.title || phase.name || `Phase ${phaseNumber}`).replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 const fileName = `phase_${phaseNumber}_${phaseTitle}.md`;
-                
+
                 // Build phase document content
                 let content = `# Phase ${phaseNumber}: ${phase.title || phase.name}\n\n`;
                 content += `## Description\n${phase.description || 'No description'}\n\n`;
-                
+
                 if (phase.steps && phase.steps.length > 0) {
                     content += `## Steps\n\n`;
                     phase.steps.forEach((step: any, idx: number) => {
@@ -96,7 +96,7 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
                         }
                     });
                 }
-                
+
                 phasesFolder?.file(fileName, content);
             });
         }
@@ -118,12 +118,30 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
         setPushResult(null);
 
         try {
-            // In a real implementation, this would call the backend to push code
-            // For now, we'll simulate it or call a placeholder endpoint
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            setPushResult("Successfully created repository and pushed code!");
-        } catch (error) {
-            setPushResult("Failed to push to GitHub.");
+            const response = await fetch('/api/github/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    repoName,
+                    token: githubToken,
+                    design,
+                    plan,
+                    handoffContent
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to create repository');
+            }
+
+            setPushResult(`Success! Repository created at: ${data.data.repoUrl}`);
+            // Optionally open in new tab
+            // window.open(data.data.repoUrl, '_blank');
+        } catch (error: any) {
+            console.error("GitHub push failed:", error);
+            setPushResult(`Failed to push to GitHub: ${error.message}`);
         } finally {
             setIsPushing(false);
         }

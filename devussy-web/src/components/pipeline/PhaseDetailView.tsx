@@ -12,8 +12,13 @@ interface PhaseDetailViewProps {
     plan: any;
     projectName: string;
     modelConfig: ModelConfig;
-    onComplete: () => void;
+    onComplete?: () => void;
     onHiveMindClick?: () => void;  // New callback for Hive Mode
+    // Controlled props
+    status?: 'queued' | 'running' | 'complete' | 'failed';
+    output?: string;
+    error?: string;
+    onStart?: () => void;
 }
 
 export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
@@ -22,15 +27,33 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
     projectName,
     modelConfig,
     onComplete,
-    onHiveMindClick
+    onHiveMindClick,
+    status,
+    output: controlledOutput,
+    error: controlledError,
+    onStart
 }) => {
-    const [output, setOutput] = useState<string>("");
-    const [isExecuting, setIsExecuting] = useState(false);
-    const [isComplete, setIsComplete] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [internalOutput, setInternalOutput] = useState<string>("");
+    const [internalIsExecuting, setInternalIsExecuting] = useState(false);
+    const [internalIsComplete, setInternalIsComplete] = useState(false);
+    const [internalError, setInternalError] = useState<string | null>(null);
+
+    // Derived state (controlled vs uncontrolled)
+    const isControlled = typeof status !== 'undefined';
+    const output = isControlled ? controlledOutput || "" : internalOutput;
+    const isExecuting = isControlled ? status === 'running' : internalIsExecuting;
+    const isComplete = isControlled ? status === 'complete' : internalIsComplete;
+    const error = isControlled ? controlledError || null : internalError;
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const hasStarted = useRef(false);
+
+    // Update hasStarted ref based on status
+    useEffect(() => {
+        if (isExecuting || isComplete || output) {
+            hasStarted.current = true;
+        }
+    }, [isExecuting, isComplete, output]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -40,12 +63,17 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
     }, [output]);
 
     const executePhase = async () => {
+        if (onStart) {
+            onStart();
+            return;
+        }
+
         if (isExecuting || isComplete) return;
 
-        setIsExecuting(true);
-        setError(null);
+        setInternalIsExecuting(true);
+        setInternalError(null);
         hasStarted.current = true;
-        setOutput("");
+        setInternalOutput("");
 
         try {
             const response = await fetch('/api/plan/detail', {
@@ -82,11 +110,11 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
                         try {
                             const data = JSON.parse(dataStr);
                             if (data.content) {
-                                setOutput(prev => prev + data.content);
+                                setInternalOutput(prev => prev + data.content);
                             } else if (data.error) {
                                 throw new Error(data.error);
                             } else if (data.done) {
-                                setIsComplete(true);
+                                setInternalIsComplete(true);
                             }
                         } catch (e) {
                             // If it's not JSON, just append it (fallback)
@@ -98,10 +126,10 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
 
         } catch (err: any) {
             console.error("Phase execution error:", err);
-            setError(err.message || "An error occurred during execution");
-            setOutput(prev => prev + `\n\n[ERROR]: ${err.message}`);
+            setInternalError(err.message || "An error occurred during execution");
+            setInternalOutput(prev => prev + `\n\n[ERROR]: ${err.message}`);
         } finally {
-            setIsExecuting(false);
+            setInternalIsExecuting(false);
         }
     };
 
@@ -134,7 +162,7 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
                             Start Phase
                         </Button>
                     )}
-                    {isComplete && (
+                    {isComplete && onComplete && (
                         <Button
                             size="sm"
                             onClick={onComplete}

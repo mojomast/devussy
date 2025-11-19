@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, Sparkles, ArrowRight } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
+import { PhaseDetailView } from './PhaseDetailView';
 
 interface PhaseStatus {
     number: number;
@@ -438,48 +439,19 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     };
 
     const renderPhaseColumn = (phase: PhaseStatus) => (
-        <Card key={phase.number} className={`flex flex-col h-full ${getStatusColor(phase.status)}`}>
-            <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                    {getStatusIcon(phase.status)}
-                    <span>Phase {phase.number}</span>
-                </CardTitle>
-                <div className="text-xs text-muted-foreground truncate">{phase.title}</div>
-
-                {/* Hive Mode button - available for all phases */}
-                {onSpawnHiveMindWindow && (
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onSpawnHiveMindWindow(phase, plan, projectName)}
-                        className="mt-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
-                    >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        🐝 Hive Mode
-                    </Button>
-                )}
-
-                {phase.status === 'running' && (
-                    <div className="mt-2 h-1 bg-border rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-primary transition-all duration-300"
-                            style={{ width: `${phase.progress}%` }}
-                        />
-                    </div>
-                )}
-            </CardHeader>
-            <CardContent className="flex-1 pt-0 overflow-hidden">
-                <div
-                    ref={el => { if (el) scrollContainerRefs.current.set(phase.number, el); }}
-                    className="h-full overflow-y-auto custom-scrollbar"
-                >
-                    <div className="font-mono text-xs whitespace-pre-wrap text-green-400 bg-black/50 p-3 rounded min-h-full">
-                        {phase.output || 'Waiting to start...'}
-                        {phase.status === 'running' && <span className="animate-pulse">_</span>}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+        <div key={phase.number} className={`h-full ${getStatusColor(phase.status)} rounded-lg overflow-hidden border flex flex-col`}>
+            <PhaseDetailView
+                phase={{ number: phase.number }}
+                plan={plan}
+                projectName={projectName}
+                modelConfig={modelConfig}
+                onHiveMindClick={onSpawnHiveMindWindow ? () => onSpawnHiveMindWindow(phase, plan, projectName) : undefined}
+                status={phase.status}
+                output={phase.output}
+                error={phase.error}
+                onStart={() => executePhase(phase)}
+            />
+        </div>
     );
 
     return (

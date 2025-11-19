@@ -14,6 +14,7 @@ import { HandoffView } from "@/components/pipeline/HandoffView";
 import { InterviewView } from "@/components/pipeline/InterviewView";
 import { HiveMindView } from "@/components/pipeline/HiveMindView";
 import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipeline/ModelSettings";
+import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 
 type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'hivemind';
@@ -79,6 +80,37 @@ export default function Page() {
       case 'handoff': return 'handoff';
       default: return 'global';
     }
+  };
+
+  // Checkpoint Handler
+  const handleLoadCheckpoint = (data: any) => {
+    console.log('[page.tsx] Loading checkpoint:', data.name);
+
+    // Restore project state
+    if (data.projectName) setProjectName(data.projectName);
+    if (data.languages) setLanguages(data.languages);
+    if (data.requirements) setRequirements(data.requirements);
+    if (data.design) setDesign(data.design);
+    if (data.plan) setPlan(data.plan);
+
+    // Restore windows based on stage
+    // We'll clear existing windows and spawn the relevant one
+    setWindows([]);
+
+    setTimeout(() => {
+      if (data.stage === 'execute' && data.plan) {
+        spawnWindow('execute', 'Execution Phase');
+      } else if (data.stage === 'plan' && data.design) {
+        spawnWindow('plan', 'Development Plan');
+      } else if (data.stage === 'design') {
+        spawnWindow('design', 'System Design');
+      } else if (data.stage === 'interview') {
+        spawnWindow('interview', 'Requirements Interview');
+      } else {
+        // Default to init if unknown or incomplete
+        spawnWindow('init', 'Devussy Studio');
+      }
+    }, 100);
   };
 
   // Window Management Functions
@@ -336,7 +368,18 @@ export default function Page() {
   return (
     <main className="flex min-h-screen flex-col relative bg-gradient-to-b from-background to-muted overflow-hidden">
       {/* Global Header / Toolbar (Optional) */}
-      <div className="absolute top-4 right-4 z-50">
+      <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        <CheckpointManager
+          currentState={{
+            projectName,
+            languages,
+            requirements,
+            design,
+            plan,
+            stage: getActiveStage()
+          }}
+          onLoad={handleLoadCheckpoint}
+        />
         <ModelSettings
           configs={modelConfigs}
           onConfigsChange={setModelConfigs}

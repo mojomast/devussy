@@ -106,6 +106,36 @@ class DevServerHandler(BaseHTTPRequestHandler):
                 print(f"Error in /api/interview: {e}")
                 import traceback
                 traceback.print_exc()
+
+        # Route: /api/checkpoints
+        elif self.path.startswith('/api/checkpoints'):
+            try:
+                from api.checkpoints import handler
+                if self.command == 'GET':
+                    handler.do_GET(self)
+                elif self.command == 'POST':
+                    handler.do_POST(self)
+                elif self.command == 'OPTIONS':
+                    handler.do_OPTIONS(self)
+            except Exception as e:
+                self.send_error(500, str(e))
+                print(f"Error in /api/checkpoints: {e}")
+                import traceback
+                traceback.print_exc()
+
+        # Route: /api/github/create
+        elif self.path.startswith('/api/github/create'):
+            try:
+                from api.github.create import handler
+                if self.command == 'POST':
+                    handler.do_POST(self)
+                elif self.command == 'OPTIONS':
+                    handler.do_OPTIONS(self)
+            except Exception as e:
+                self.send_error(500, str(e))
+                print(f"Error in /api/github/create: {e}")
+                import traceback
+                traceback.print_exc()
         
         else:
             self.send_error(404, "Not Found")

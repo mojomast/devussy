@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { Loader2, Check, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Check, Zap, Copy } from "lucide-react";
 import { cn } from '@/utils';
 
 interface HiveMindViewProps {
@@ -35,6 +36,7 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
     const [drone2, setDrone2] = useState<StreamState>({ content: "", isActive: false, isComplete: false });
     const [drone3, setDrone3] = useState<StreamState>({ content: "", isActive: false, isComplete: false });
     const [arbiter, setArbiter] = useState<StreamState>({ content: "", isActive: false, isComplete: false });
+    const [isFinished, setIsFinished] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const drone1Ref = useRef<HTMLDivElement>(null);
@@ -94,6 +96,8 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
                                     setDrone3(prev => ({ ...prev, isComplete: true, isActive: false }));
                                 } else if (data.type === 'arbiter_complete') {
                                     setArbiter(prev => ({ ...prev, isComplete: true, isActive: false }));
+                                } else if (data.done) {
+                                    setIsFinished(true);
                                 } else if (data.error) {
                                     throw new Error(data.error);
                                 }
@@ -171,6 +175,17 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
                         <div className="flex items-center gap-2">
                             <Zap className="h-4 w-4 text-green-400" />
                             <span className="font-semibold text-sm text-green-300">Arbiter (Synthesis)</span>
+                            {isFinished && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 hover:bg-green-500/20 text-green-400"
+                                    onClick={() => navigator.clipboard.writeText(arbiter.content)}
+                                    title="Copy Result"
+                                >
+                                    <Copy className="h-3 w-3" />
+                                </Button>
+                            )}
                         </div>
                         {arbiter.isActive && <Loader2 className="h-3 w-3 animate-spin text-green-400" />}
                         {arbiter.isComplete && <Check className="h-3 w-3 text-green-500" />}
