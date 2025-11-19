@@ -9,7 +9,7 @@ import { ArrowRight, Sparkles, Layers, Code2, GitBranch, MessageSquare } from "l
 import { WindowFrame } from "@/components/window/WindowFrame";
 import { DesignView } from "@/components/pipeline/DesignView";
 import { PlanView } from "@/components/pipeline/PlanView";
-import { PhaseDetailView } from "@/components/pipeline/PhaseDetailView";
+import { ExecutionView } from "@/components/pipeline/ExecutionView";
 import { HandoffView } from "@/components/pipeline/HandoffView";
 import { InterviewView } from "@/components/pipeline/InterviewView";
 import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipeline/ModelSettings";
@@ -48,7 +48,7 @@ export default function Page() {
   // Model Configuration
   const [modelConfigs, setModelConfigs] = useState<ModelConfigs>({
     global: {
-      model: 'gpt-4o',
+      model: 'gpt-5-mini',
       temperature: 0.7,
       reasoning_effort: 'medium'
     },
@@ -267,8 +267,7 @@ export default function Page() {
         );
       case 'execute':
         return (
-          <PhaseDetailView
-            phase={{ number: currentPhaseIndex + 1 }}
+          <ExecutionView
             plan={plan}
             projectName={projectName}
             modelConfig={getEffectiveConfig('execute')}

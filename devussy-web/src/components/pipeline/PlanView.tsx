@@ -3,9 +3,9 @@
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Check, Play, FileText, Loader2 } from "lucide-react";
+import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
+import { PhaseCard, PhaseData } from './PhaseCard';
 
 interface PlanViewProps {
     design: any;
@@ -19,12 +19,29 @@ export const PlanView: React.FC<PlanViewProps> = ({
     onPlanApproved
 }) => {
     const [plan, setPlan] = useState<any>(null);
+    const [planContent, setPlanContent] = useState("");  // Track streaming content
+    const [phases, setPhases] = useState<PhaseData[]>([]);  // Parsed phases
+    const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set());  // Track expanded phases
     const [isLoading, setIsLoading] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);  // For raw text editing
+    const [viewMode, setViewMode] = useState<'cards' | 'raw'>('cards');  // Toggle between card/raw view
     const [error, setError] = useState<string | null>(null);
+
+    // Parse phases from plan data
+    const parsePhasesFromPlan = (planData: any) => {
+        if (!planData || !planData.phases) return [];
+
+        return planData.phases.map((phase: any, index: number) => ({
+            number: phase.number || index + 1,
+            title: phase.title || phase.name || `Phase ${index + 1}`,
+            description: phase.description || ""
+        }));
+    };
 
     const generatePlan = async () => {
         setIsLoading(true);
         setError(null);
+        setPlanContent("");  // Reset content
         try {
             // Bypass Next.js proxy and hit backend directly to avoid buffering
             const backendUrl = `http://${window.location.hostname}:8000/api/plan/basic`;
@@ -63,8 +80,18 @@ export const PlanView: React.FC<PlanViewProps> = ({
                         try {
                             const data = JSON.parse(dataStr);
 
+                            // Display streaming content as it arrives
+                            if (data.content) {
+                                setPlanContent(prev => prev + data.content);
+                            }
+
                             if (data.done && data.plan) {
                                 setPlan(data.plan);
+                                // Parse phases from plan
+                                const parsedPhases = parsePhasesFromPlan(data.plan);
+                                setPhases(parsedPhases);
+                                // Expand all phases by default
+                                setExpandedPhases(new Set(parsedPhases.map(p => p.number)));
                                 return; // Stop reading
                             }
 
@@ -92,6 +119,68 @@ export const PlanView: React.FC<PlanViewProps> = ({
         }
     }, []);
 
+    // Phase management functions
+    const handleUpdatePhase = (index: number, updatedPhase: PhaseData) => {
+        const newPhases = [...phases];
+        newPhases[index] = updatedPhase;
+        setPhases(newPhases);
+    };
+
+    const handleDeletePhase = (index: number) => {
+        const newPhases = phases.filter((_, i) => i !== index);
+        // Renumber phases
+        const renumbered = newPhases.map((p, i) => ({ ...p, number: i + 1 }));
+        setPhases(renumbered);
+    };
+
+    const handleMovePhase = (index: number, direction: 'up' | 'down') => {
+        const newPhases = [...phases];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+        if (targetIndex < 0 || targetIndex >= newPhases.length) return;
+
+        // Swap
+        [newPhases[index], newPhases[targetIndex]] = [newPhases[targetIndex], newPhases[index]];
+
+        // Renumber
+        const renumbered = newPhases.map((p, i) => ({ ...p, number: i + 1 }));
+        setPhases(renumbered);
+    };
+
+    const handleAddPhase = () => {
+        const newPhase: PhaseData = {
+            number: phases.length + 1,
+            title: "New Phase",
+            description: ""
+        };
+        setPhases([...phases, newPhase]);
+        setExpandedPhases(new Set([...expandedPhases, newPhase.number]));
+    };
+
+    const togglePhaseExpanded = (phaseNumber: number) => {
+        const newExpanded = new Set(expandedPhases);
+        if (newExpanded.has(phaseNumber)) {
+            newExpanded.delete(phaseNumber);
+        } else {
+            newExpanded.add(phaseNumber);
+        }
+        setExpandedPhases(newExpanded);
+    };
+
+    const handleApprove = () => {
+        // Reconstruct plan with updated phases
+        const updatedPlan = {
+            ...plan,
+            phases: phases.map(p => ({
+                number: p.number,
+                title: p.title,
+                description: p.description,
+                steps: []  // Steps will be generated in execution phase
+            }))
+        };
+        onPlanApproved(updatedPlan);
+    };
+
     return (
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
@@ -100,6 +189,35 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     Development Plan
                 </h2>
                 <div className="flex gap-2">
+                    {plan && !isLoading && (
+                        <>
+                            {/* View toggle */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setViewMode(viewMode === 'cards' ? 'raw' : 'cards')}
+                            >
+                                {viewMode === 'cards' ? (
+                                    <><FileCode className="h-4 w-4 mr-2" /> Raw Text</>
+                                ) : (
+                                    <><LayoutGrid className="h-4 w-4 mr-2" /> Cards</>
+                                )}
+                            </Button>
+
+                            {/* Edit toggle (only in raw mode) */}
+                            {viewMode === 'raw' && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsEditing(!isEditing)}
+                                >
+                                    <Edit2 className="h-4 w-4 mr-2" />
+                                    {isEditing ? "Preview" : "Edit"}
+                                </Button>
+                            )}
+                        </>
+                    )}
+
                     <Button
                         variant="outline"
                         size="sm"
@@ -108,53 +226,93 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     >
                         Regenerate
                     </Button>
+
                     <Button
                         size="sm"
-                        onClick={() => onPlanApproved(plan)}
-                        disabled={!plan || isLoading}
+                        onClick={handleApprove}
+                        disabled={!plan || isLoading || phases.length === 0}
                     >
                         <Play className="h-4 w-4 mr-2" />
-                        Start Execution
+                        Approve & Start Execution
                     </Button>
                 </div>
             </div>
 
             <ScrollArea className="flex-1 p-6">
                 {isLoading ? (
-                    <div className="flex flex-col items-center justify-center h-64 space-y-4">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <p className="text-muted-foreground">Generating development plan...</p>
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                            <p>Generating development plan...</p>
+                        </div>
+                        {planContent && (
+                            <div className="prose prose-invert max-w-none font-mono text-sm">
+                                <pre className="whitespace-pre-wrap bg-transparent p-0">
+                                    {planContent}
+                                </pre>
+                            </div>
+                        )}
                     </div>
                 ) : error ? (
                     <div className="text-destructive p-4 border border-destructive/20 rounded-lg bg-destructive/10">
                         Error: {error}
                     </div>
                 ) : plan ? (
-                    <div className="space-y-6">
-                        <div className="prose prose-invert max-w-none">
-                            <h3>{plan.summary}</h3>
-                        </div>
+                    viewMode === 'cards' ? (
+                        // Card view - show editable phase cards
+                        <div className="space-y-4">
+                            <div className="prose prose-invert max-w-none">
+                                <h3>{plan.summary}</h3>
+                            </div>
 
-                        <div className="grid gap-4">
-                            {plan.phases?.map((phase: any, idx: number) => (
-                                <Card key={idx} className="bg-card/50">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-base font-medium flex justify-between">
-                                            <span>Phase {phase.number}: {phase.name}</span>
-                                        </CardTitle>
-                                        <CardDescription>{phase.description}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <ul className="list-disc list-inside text-sm text-muted-foreground">
-                                            {phase.steps?.map((step: string, sIdx: number) => (
-                                                <li key={sIdx}>{step}</li>
-                                            ))}
-                                        </ul>
-                                    </CardContent>
-                                </Card>
-                            ))}
+                            <div className="space-y-3">
+                                {phases.map((phase, index) => (
+                                    <PhaseCard
+                                        key={phase.number}
+                                        phase={phase}
+                                        isExpanded={expandedPhases.has(phase.number)}
+                                        canMoveUp={index > 0}
+                                        canMoveDown={index < phases.length - 1}
+                                        onUpdate={(updated) => handleUpdatePhase(index, updated)}
+                                        onDelete={() => handleDeletePhase(index)}
+                                        onMoveUp={() => handleMovePhase(index, 'up')}
+                                        onMoveDown={() => handleMovePhase(index, 'down')}
+                                        onToggle={() => togglePhaseExpanded(phase.number)}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Add Phase Button */}
+                            <Button
+                                variant="outline"
+                                className="w-full border-dashed"
+                                onClick={handleAddPhase}
+                            >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Phase
+                            </Button>
                         </div>
-                    </div>
+                    ) : (
+                        // Raw text view - show full devplan text
+                        <div className="space-y-4">
+                            <div className="prose prose-invert max-w-none">
+                                <h3>{plan.summary}</h3>
+                            </div>
+                            {isEditing ? (
+                                <textarea
+                                    className="w-full h-full min-h-[400px] bg-transparent border border-border rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                                    value={planContent}
+                                    onChange={(e) => setPlanContent(e.target.value)}
+                                />
+                            ) : (
+                                <div className="prose prose-invert max-w-none font-mono text-sm">
+                                    <pre className="whitespace-pre-wrap bg-transparent p-0">
+                                        {planContent}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    )
                 ) : null}
             </ScrollArea>
         </div>

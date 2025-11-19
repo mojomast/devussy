@@ -80,22 +80,60 @@ This plan outlines the steps to build a Next.js-based frontend for Devussy, host
         - User can click "Edit" to modify the markdown directly.
         - User clicks "Approve & Plan" to spawn the Plan window.
 
-11. **Step 3: Basic Plan Generation (Implemented)**
+11. **Step 3: Basic Plan Generation + Phase Editing (Implemented)**
     - **View**: `PlanView` component.
     - **Logic**: Streams `BasicDevPlanGenerator` output using SSE to prevent connection timeouts.
-    - **Status**: **Complete**.
-    - **Streaming Implementation (2025-11-18)**: Switched from blocking JSON response to SSE streaming in `api/plan/basic.py` to keep connection alive during generation. Frontend updated to consume stream with ReadableStream reader.
+    - **Status**: **Complete** with major UX enhancements (2025-11-18 Night).
+    - **Streaming Implementation**: Switched from blocking JSON response to SSE streaming in `api/plan/basic.py`.
+    - **Phase Editing Features (NEW)**:
+        - **PhaseCard Component**: Reusable component for individual phase management
+        - **Card View**: Displays phases as editable cards with expand/collapse
+        - **Raw Text View**: Toggle to edit full devplan text directly
+        - Phases **expand by default** for easy editing
+        - **Add/Edit/Delete/Reorder** phases individually
+        - Changes persist when user clicks "Approve & Start Execution"
+    - **Files**: 
+        - `src/components/pipeline/PlanView.tsx` (MAJOR REFACTOR)
+        - `src/components/pipeline/PhaseCard.tsx` (NEW)
     - **Interaction**:
-        - Stream displays progress.
-        - User can regenerate if needed.
-        - "Start Execution" button triggers the Execution window.
+        - Devplan streams in with real-time text display
+        - After streaming: User sees editable phase cards (or can toggle to raw text)
+        - User can modify, add, remove, and reorder phases
+        - "Approve & Start Execution" button triggers multi-phase execution window
 
-12. **Step 4: Multi-Window Execution (Implemented)**
+12. **Step 4: Multi-Window Execution with Grid View (Implemented)**
     - **Architecture**: `page.tsx` manages a list of `windows` state.
-    - **Logic**: Each phase completion spawns the next logical window.
+    - **Status**: **Implemented** but has lint errors (see Known Issues below).
+    - **View**: `ExecutionView` component (NEW) - Replaces single-phase `PhaseDetailView`
+    - **Features**:
+        - **Grid View** (default): 3-column grid showing all phases simultaneously
+        - **Tabs View** (toggle): Focus on one phase at a time
+        - **Auto-start**: Execution begins automatically when window opens
+        - **Concurrency Control**: Dropdown to select 1, 2, 3, 5, or All concurrent phases (default: 3)
+        - **Pause/Resume**: Control execution flow
+        - **Full Streaming Output**: Real-time terminal output for each phase
+        - **Visual Status Indicators**:
+            - ⟳ Running (blue)
+            - ✓ Complete (green)
+            - ✗ Failed (red)
+            - ⏰ Queued (gray)
+        - **Progress Tracking**: Visual progress bars and completion counter
+    - **Files**:
+        - `src/components/pipeline/ExecutionView.tsx` (NEW)
+        - `src/app/page.tsx` (UPDATED to use ExecutionView)
+        - `api/plan/detail.py` (FIXED - was incomplete)
+    - **Known Issues**: ⚠️ Lint errors need fixing before testing:
+        - ExecutionView has syntax errors (missing return, incorrect ref callback, Select component import)
+        - page.tsx has corrupted execute case (needs reconstruction)
+        - See `handoff.md` "Known Issues" section for full details
     - **Visual**:
-        - Windows stack with z-index management (click to focus).
-        - Previous windows (Interview, Design) remain accessible.
+        - Windows stack with z-index management (click to focus)
+        - Previous windows (Interview, Design, Plan) remain accessible
+        - Grid layout provides at-a-glance view of all phase progress
+
+## Global Changes (2025-11-18 Night)
+- **Default Model**: Changed from `gpt-4o` to `gpt-5-mini` in `src/app/page.tsx`
+- **API Fixes**: Fixed `/api/plan/detail.py` (had undefined variables, now properly initializes generator)
 
 ## Phase 4: Finalization & Export
 

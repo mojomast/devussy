@@ -7,10 +7,11 @@ from ..utils import setup_path
 setup_path()
 
 from src.config import load_config
-from src.llm_client import LLMClient
-from src.concurrency import ConcurrencyManager
+from src.clients.factory import create_llm_client
 from src.pipeline.detailed_devplan import DetailedDevPlanGenerator
 from src.models import DevPlan, DevPlanPhase
+from src.streaming import StreamingHandler
+from src.concurrency import ConcurrencyManager
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -18,55 +19,123 @@ class handler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)
         data = json.loads(post_data.decode('utf-8'))
 
-        plan_data = data.get('plan')
+        # Accept both 'plan' and 'basicPlan' for compatibility
+        plan_data = data.get('plan') or data.get('basicPlan')
         phase_number = data.get('phaseNumber')
         project_name = data.get('projectName')
         
         if not plan_data or phase_number is None or not project_name:
             self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({"error": "Missing required data"}).encode('utf-8'))
+            error_msg = {
+                "error": "Missing required data",
+                "received": {
+                    "has_plan": bool(plan_data),
+                    "has_phaseNumber": phase_number is not None,
+                    "has_projectName": bool(project_name)
+                }
+            }
+            self.wfile.write(json.dumps(error_msg).encode('utf-8'))
+            print(f"ERROR: Missing required data. Received: {error_msg}")
             return
 
+        # Load config and create client
+        config = load_config()
+        
+        # Apply model config overrides if present
+        if 'modelConfig' in data:
+            model_config = data['modelConfig']
+            if model_config.get('model'):
+                config.llm.model = model_config['model']
+            if model_config.get('temperature') is not None:
+                config.llm.temperature = float(model_config['temperature'])
+
+        # Force streaming enabled
+        config.llm.streaming_enabled = True
+        config.streaming_enabled = True
+
+        llm_client = create_llm_client(config)
+
+        # Send response headers for SSE
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Connection', 'keep-alive')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
 
         async def generate_stream():
+            class APIStreamingHandler(StreamingHandler):
+                def __init__(self, writer):
+                    super().__init__(enable_console=False)
+                    self.writer = writer
+
+                async def on_token_async(self, token: str):
+                    try:
+                        data = json.dumps({"content": token})
+                        self.writer.write(f"data: {data}\\n\\n".encode('utf-8'))
+                        self.writer.flush()
+                    except Exception as e:
+                        print(f"Error writing token: {e}")
+
+                async def on_completion_async(self, full_response: str):
+                    pass
+
+            streaming_handler = APIStreamingHandler(self.wfile)
+
             try:
-                # We need to stream the raw tokens or steps. 
-                # The DetailedDevPlanGenerator doesn't expose a simple token callback for a single phase 
-                # in the same way ProjectDesignGenerator does, but it uses LLMClient.
-                # We can pass a custom streaming handler via llm_kwargs if the underlying LLMClient supports it.
-                # However, DetailedDevPlanGenerator._generate_phase_details calls generate_completion, not generate_completion_streaming.
-                # For now, we will simulate streaming by sending the final result, or we'd need to modify the generator to support streaming.
-                # Given the constraints, we'll wait for the generation and then send the result.
-                # Ideally, we would refactor the generator to support streaming, but that's out of scope for this integration task.
+                # Parse the plan object
+                dev_plan = DevPlan(**plan_data)
                 
-                # To provide *some* feedback, we can send a "start" message.
-                self.wfile.write(f"data: {json.dumps({'content': 'Generating details...'})}\n\n".encode('utf-8'))
+                # Find the requested phase
+                target_phase = None
+                for phase in dev_plan.phases:
+                    if phase.number == phase_number:
+                        target_phase = phase
+                        break
+                
+                if not target_phase:
+                    raise ValueError(f"Phase {phase_number} not found in plan")
+
+                # Create concurrency manager
+                concurrency_manager = ConcurrencyManager(config)
+                
+                # Create the generator
+                generator = DetailedDevPlanGenerator(llm_client, concurrency_manager)
+                
+                # Send start message
+                self.wfile.write(f"data: {json.dumps({'content': f'Starting phase {phase_number} generation...\\n\\n'})}\\n\\n".encode('utf-8'))
                 self.wfile.flush()
 
-                # Generate details for the single phase
-                # We use the internal _generate_phase_details method to target just one phase
-                # This is a bit of a hack to reuse the logic without running the full plan generation
+                # Generate detailed steps for this phase
+                # Note: _generate_phase_details is internal, but we're using it for single-phase generation
                 detailed_phase = await generator._generate_phase_details(
                     phase=target_phase,
                     project_name=project_name,
-                    tech_stack=[], # We might need to pass this if available
-                    task_group_size=3
+                    tech_stack=[],  # Could extract from plan if available
+                    task_group_size=3,
+                    streaming_handler=streaming_handler
                 )
                 
-                # Send the steps as "content" to simulate the streaming log effect
-                for step in detailed_phase.steps:
-                    log_message = f"Generated Step {step.number}: {step.description}\n"
-                    self.wfile.write(f"data: {json.dumps({'content': log_message})}\n\n".encode('utf-8'))
-                    self.wfile.flush()
+                # Send the steps as content
+                self.wfile.write(f"data: {json.dumps({'content': f'\\n\\nGenerated {len(detailed_phase.steps)} steps for Phase {phase_number}\\n'})}\\n\\n".encode('utf-8'))
+                self.wfile.flush()
 
                 # Send completion event
                 final_data = json.dumps({"done": True, "phase": detailed_phase.model_dump()})
-                self.wfile.write(f"data: {final_data}\n\n".encode('utf-8'))
+                self.wfile.write(f"data: {final_data}\\n\\n".encode('utf-8'))
+                self.wfile.flush()
                 
             except Exception as e:
+                print(f"Error generating phase details: {e}")
+                import traceback
+                traceback.print_exc()
                 error_data = json.dumps({"error": str(e)})
-                self.wfile.write(f"data: {error_data}\n\n".encode('utf-8'))
+                try:
+                    self.wfile.write(f"data: {error_data}\\n\\n".encode('utf-8'))
+                    self.wfile.flush()
+                except Exception:
+                    pass
 
         asyncio.run(generate_stream())
