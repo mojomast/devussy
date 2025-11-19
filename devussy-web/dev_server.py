@@ -30,8 +30,19 @@ class DevServerHandler(BaseHTTPRequestHandler):
         thread_id = threading.current_thread().ident
         print(f"[dev_server] Thread {thread_id}: Received POST request to {self.path}")
         
+        # Route: /api/design/hivemind
+        if self.path.startswith('/api/design/hivemind'):
+            try:
+                from api.design_hivemind import handler
+                handler.do_POST(self)
+            except Exception as e:
+                self.send_error(500, str(e))
+                print(f"Error in /api/design/hivemind: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Route: /api/design
-        if self.path.startswith('/api/design'):
+        elif self.path.startswith('/api/design'):
             try:
                 from api.design import handler
                 handler.do_POST(self)

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, Sparkles } from "lucide-react";
+import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, Sparkles, ArrowRight } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 
 interface PhaseStatus {
@@ -40,6 +40,26 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     const [isExecuting, setIsExecuting] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [completedCount, setCompletedCount] = useState(0);
+
+    const buildDetailedPlan = () => {
+        if (!plan || !plan.phases) return plan;
+
+        return {
+            ...plan,
+            phases: plan.phases.map((originalPhase: any) => {
+                const executedPhase = phases.find(p => p.number === originalPhase.number);
+                if (executedPhase && executedPhase.detailedPhase) {
+                    return executedPhase.detailedPhase;
+                }
+                return originalPhase;
+            })
+        };
+    };
+
+    const handleManualComplete = () => {
+        const detailedPlan = buildDetailedPlan();
+        onComplete(detailedPlan);
+    };
 
     // Update concurrency when modelConfig changes
     useEffect(() => {
@@ -376,26 +396,12 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         // Check if all phases completed successfully - use effect to avoid setState during render
         const allComplete = phases.every(p => p.status === 'complete');
         console.log('[ExecutionView] All complete?', allComplete);
-        if (allComplete && onComplete) {
-            // Build detailed plan with completed phases including steps
-            const detailedPlan = {
-                ...plan,
-                phases: plan.phases.map((originalPhase: any) => {
-                    const executedPhase = phases.find(p => p.number === originalPhase.number);
-                    if (executedPhase && executedPhase.detailedPhase) {
-                        // Use the detailed phase data from backend which includes steps
-                        console.log(`[ExecutionView] Phase ${executedPhase.number} has ${executedPhase.detailedPhase.steps?.length || 0} steps`);
-                        return executedPhase.detailedPhase;
-                    }
-                    return originalPhase;
-                })
-            };
 
-            console.log('[ExecutionView] Built detailed plan with', detailedPlan.phases.length, 'phases');
-
-            // Call onComplete in next tick to avoid setState during render
-            setTimeout(() => onComplete(detailedPlan), 0);
-        }
+        // We disable auto-advance to allow user to review output and manually proceed
+        // if (allComplete && onComplete) {
+        //     const detailedPlan = buildDetailedPlan();
+        //     setTimeout(() => onComplete(detailedPlan), 0);
+        // }
     };
 
     const togglePause = () => {
@@ -489,6 +495,16 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 </h2>
 
                 <div className="flex items-center gap-3">
+                    {/* Proceed to Handoff */}
+                    <Button
+                        size="sm"
+                        onClick={handleManualComplete}
+                        disabled={isExecuting}
+                        className={completedCount === phases.length ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                    >
+                        Proceed to Handoff <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+
                     {/* Concurrency Control */}
                     <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Concurrency:</span>
@@ -543,8 +559,8 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             <div className="flex-1 overflow-hidden">
                 {viewMode === 'grid' ? (
                     <div className={`grid gap-4 p-4 h-full auto-rows-fr ${phases.length <= 3 ? 'grid-cols-3' :
-                            phases.length <= 6 ? 'grid-cols-3' :
-                                'grid-cols-4'
+                        phases.length <= 6 ? 'grid-cols-3' :
+                            'grid-cols-4'
                         }`}>
                         {phases.map(phase => renderPhaseColumn(phase))}
                     </div>

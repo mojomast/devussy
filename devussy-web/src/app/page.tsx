@@ -186,6 +186,15 @@ export default function Page() {
     });
   };
 
+  const handleSpawnDesignHiveMind = () => {
+    spawnWindow('hivemind', 'HiveMind: Design', {
+      type: 'design',
+      projectName,
+      requirements,
+      languages: languages.split(',').map(l => l.trim()).filter(Boolean)
+    });
+  };
+
   // Render Content based on Window Type
   const renderWindowContent = (window: WindowState) => {
     switch (window.type) {
@@ -278,6 +287,7 @@ export default function Page() {
             languages={languages.split(',').map(l => l.trim()).filter(Boolean)}
             modelConfig={getEffectiveConfig('design')}
             onDesignComplete={handleDesignComplete}
+            onSpawnHiveMindWindow={handleSpawnDesignHiveMind}
           />
         );
       case 'plan':
@@ -312,6 +322,9 @@ export default function Page() {
             phase={window.props?.phase}
             plan={window.props?.plan}
             projectName={window.props?.projectName}
+            type={window.props?.type}
+            requirements={window.props?.requirements}
+            languages={window.props?.languages}
             modelConfig={getEffectiveConfig('execute')}
           />
         );

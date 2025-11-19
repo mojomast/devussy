@@ -69,20 +69,6 @@ Devussy turns a short project idea into a complete, actionable development plan.
 - Git-friendly: Write artifacts deterministically to docs/, optionally commit with your own workflow
 
 ## Frontend Web UI (Next.js) 🆕
-
-Devussy now includes a **Next.js-based web frontend** (`devussy-web/`) that provides a multi-window streaming interface for the entire pipeline.
-
-### Features
-- **Multi-Window Architecture**: Each pipeline phase spawns its own draggable, minimizable window
-- **Real-Time Streaming**: Design and Plan generation stream in real-time using Server-Sent Events (SSE)
-- **🐝 HiveMind Mode**: Multi-agent swarm generation for any phase with 4-pane streaming (3 drones + arbiter)
-- **Premium UI**: Built with Tailwind CSS, Shadcn UI components, and Framer Motion animations
-- **Model Configuration**: Per-stage model selection with global defaults
-- **Direct Backend Integration**: Bypasses Next.js proxy for optimal streaming performance
-
-### Quick Start
-```bash
-# Terminal 1: Start Python backend
 cd devussy-testing
 python devussy-web/dev_server.py
 

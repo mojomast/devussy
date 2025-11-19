@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, Edit2, RefreshCw } from "lucide-react";
+import { Check, Edit2, RefreshCw, Sparkles } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 
 interface DesignViewProps {
@@ -12,6 +12,7 @@ interface DesignViewProps {
     languages: string[];
     modelConfig: ModelConfig;
     onDesignComplete: (design: any) => void;
+    onSpawnHiveMindWindow?: () => void;
 }
 
 export const DesignView: React.FC<DesignViewProps> = ({
@@ -19,7 +20,8 @@ export const DesignView: React.FC<DesignViewProps> = ({
     requirements,
     languages,
     modelConfig,
-    onDesignComplete
+    onDesignComplete,
+    onSpawnHiveMindWindow
 }) => {
     const [designContent, setDesignContent] = useState("");
     const [isGenerating, setIsGenerating] = useState(true);
@@ -146,6 +148,17 @@ export const DesignView: React.FC<DesignViewProps> = ({
                         <Edit2 className="h-4 w-4 mr-2" />
                         {isEditing ? "Preview" : "Edit"}
                     </Button>
+                    {onSpawnHiveMindWindow && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onSpawnHiveMindWindow}
+                            className="border-yellow-500/50 hover:bg-yellow-500/10 hover:border-yellow-500"
+                        >
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            🐝 Hive Mode
+                        </Button>
+                    )}
                     <Button
                         size="sm"
                         onClick={() => onDesignComplete(designData || { raw_response: designContent, project_name: projectName })}

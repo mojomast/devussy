@@ -7,10 +7,13 @@ import { Loader2, Check, Zap } from "lucide-react";
 import { cn } from '@/utils';
 
 interface HiveMindViewProps {
-    phase: { number: number; title: string };
-    plan: any;
+    phase?: { number: number; title: string };
+    plan?: any;
     projectName: string;
     modelConfig: any;
+    type?: 'phase' | 'design';
+    requirements?: string;
+    languages?: string[];
 }
 
 interface StreamState {
@@ -23,7 +26,10 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
     phase,
     plan,
     projectName,
-    modelConfig
+    modelConfig,
+    type = 'phase',
+    requirements,
+    languages
 }) => {
     const [drone1, setDrone1] = useState<StreamState>({ content: "", isActive: false, isComplete: false });
     const [drone2, setDrone2] = useState<StreamState>({ content: "", isActive: false, isComplete: false });
@@ -39,15 +45,15 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
     useEffect(() => {
         const executeHiveMind = async () => {
             try {
-                const response = await fetch('/api/plan/hivemind', {
+                const endpoint = type === 'design' ? '/api/design/hivemind' : '/api/plan/hivemind';
+                const body = type === 'design'
+                    ? { projectName, requirements, languages, modelConfig }
+                    : { plan, phaseNumber: phase?.number, projectName, modelConfig };
+
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        plan,
-                        phaseNumber: phase.number,
-                        projectName,
-                        modelConfig
-                    })
+                    body: JSON.stringify(body)
                 });
 
                 if (!response.ok) throw new Error('Failed to start HiveMind execution');
@@ -144,9 +150,9 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
         <div className="flex flex-col h-full p-4 gap-4">
             <div className="text-center">
                 <h2 className="text-xl font-bold flex items-center justify-center gap-2">
-                    🐝 HiveMind: Phase {phase.number}
+                    🐝 HiveMind: {type === 'design' ? 'Design Phase' : `Phase ${phase?.number}`}
                 </h2>
-                <p className="text-sm text-muted-foreground">{phase.title}</p>
+                <p className="text-sm text-muted-foreground">{type === 'design' ? projectName : phase?.title}</p>
             </div>
 
             {error && (
