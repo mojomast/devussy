@@ -1,0 +1,7 @@
+# Vercel Python Runtime
+openai
+pydantic
+jinja2
+pyyaml
+python-dotenv
+aiohttp

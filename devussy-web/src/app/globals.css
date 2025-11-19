@@ -79,13 +79,16 @@
 }
 
 .dark {
-  --background: oklch(0.10 0.05 260); /* Deep dark blue/black */
+  --background: oklch(0.10 0.05 260);
+  /* Deep dark blue/black */
   --foreground: oklch(0.98 0.02 260);
-  --card: oklch(0.15 0.06 260); /* Slightly lighter dark blue */
+  --card: oklch(0.15 0.06 260);
+  /* Slightly lighter dark blue */
   --card-foreground: oklch(0.98 0.02 260);
   --popover: oklch(0.15 0.06 260);
   --popover-foreground: oklch(0.98 0.02 260);
-  --primary: oklch(0.65 0.25 265); /* Neon Blue/Purple */
+  --primary: oklch(0.65 0.25 265);
+  /* Neon Blue/Purple */
   --primary-foreground: oklch(0.10 0.05 260);
   --secondary: oklch(0.25 0.10 260);
   --secondary-foreground: oklch(0.98 0.02 260);
@@ -114,9 +117,59 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.30 0.10 260);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.65 0.25 265);
+}
+
+/* CRT Scanline Effect */
+.scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  background: linear-gradient(to bottom,
+      rgba(255, 255, 255, 0),
+      rgba(255, 255, 255, 0) 50%,
+      rgba(0, 0, 0, 0.1) 50%,
+      rgba(0, 0, 0, 0.1));
+  background-size: 100% 4px;
+  animation: scanline 10s linear infinite;
+  opacity: 0.3;
+}
+
+@keyframes scanline {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 0 100%;
   }
 }

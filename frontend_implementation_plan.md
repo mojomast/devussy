@@ -64,33 +64,38 @@ This plan outlines the steps to build a Next.js-based frontend for Devussy, host
 
 ## Phase 3: Core Pipeline UI Implementation
 
-9.  **Step 1: Input & Interview**
-    - Create a landing page with a "terminal-like" input form.
-    - Fields: Project Name, Languages, Requirements (Textarea).
-    - "Start" button triggers transition to Design phase.
+9.  **Step 1: Interactive Interview (Implemented)**
+    - **View**: `InterviewView` component.
+    - **Logic**: Chat interface using `/api/interview`.
+    - **Transition**: On completion, spawns the Design window while keeping the Interview window open for reference.
 
-10. **Step 2: Design Generation & Review**
-    - View: A central streaming window showing the Architecture/Tech Stack.
+10. **Step 2: Design Generation & Review (Implemented)**
+    - **View**: `DesignView` component.
+    - **Logic**: Streams `ProjectDesignGenerator` output using SSE.
+    - **Status**: **Complete**.
+    - **Streaming Fix**: Uses direct connection to backend (port 8000) to bypass Next.js proxy buffering. `RequestyClient` updated to handle async callbacks correctly.
+    - **Button Fix (2025-11-18)**: Added explicit `return` statement in stream handler when `done` message is received to ensure `isGenerating` is set to false immediately, enabling the "Approve & Plan" button.
     - **Interaction**:
-        - Stream finishes.
+        - Stream finishes and "Approve & Plan" button is enabled.
         - User can click "Edit" to modify the markdown directly.
-        - User clicks "Approve & Plan" to proceed.
+        - User clicks "Approve & Plan" to spawn the Plan window.
 
-11. **Step 3: Basic Plan Generation**
-    - View: Displays the list of generated phases.
+11. **Step 3: Basic Plan Generation (Implemented)**
+    - **View**: `PlanView` component.
+    - **Logic**: Streams `BasicDevPlanGenerator` output using SSE to prevent connection timeouts.
+    - **Status**: **Complete**.
+    - **Streaming Implementation (2025-11-18)**: Switched from blocking JSON response to SSE streaming in `api/plan/basic.py` to keep connection alive during generation. Frontend updated to consume stream with ReadableStream reader.
     - **Interaction**:
-        - User can add/remove/rename phases before "Detailed Generation".
-        - "Generate Details" button triggers the multi-window view.
+        - Stream displays progress.
+        - User can regenerate if needed.
+        - "Start Execution" button triggers the Execution window.
 
-12. **Step 4: Multi-Window Detailed Generation**
-    - **Logic**: Iterate through phases. For each phase, spawn a `WindowFrame` and trigger a `fetch` to `/api/plan/detail`.
+12. **Step 4: Multi-Window Execution (Implemented)**
+    - **Architecture**: `page.tsx` manages a list of `windows` state.
+    - **Logic**: Each phase completion spawns the next logical window.
     - **Visual**:
-        - Grid of windows appears, one for each phase.
-        - All windows stream content simultaneously (matrix style).
-        - User can maximize a specific phase to read details.
-        - User can minimize completed phases.
-    - **Refinement**:
-        - Add a "Regenerate" button on each window to re-run just that phase with new instructions (Re-interview).
+        - Windows stack with z-index management (click to focus).
+        - Previous windows (Interview, Design) remain accessible.
 
 ## Phase 4: Finalization & Export
 

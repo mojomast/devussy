@@ -115,15 +115,10 @@ class OpenAIClient(LLMClient):
         self, prompt: str, callback: Callable[[str], Any], **kwargs: Any
     ) -> str:
         """Internal streaming chat completion method."""
+        print("DEBUG: OpenAIClient._chat_completion_streaming called")
         model = kwargs.get("model", self._model)
-        temperature = kwargs.get(
-            "temperature", getattr(self._config, "temperature", 0.7)
-        )
-        max_tokens = kwargs.get(
-            "max_tokens", getattr(self._config, "max_tokens", 4096)
-        )
-        top_p = kwargs.get("top_p", None)
-
+        # ... (rest of method) ...
+        
         stream = await self._client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
@@ -132,6 +127,7 @@ class OpenAIClient(LLMClient):
             stream=True,
             **({"top_p": top_p} if top_p is not None else {}),
         )
+        print("DEBUG: OpenAI stream created, starting iteration")
 
         full_content = ""
         async for chunk in stream:
@@ -139,12 +135,14 @@ class OpenAIClient(LLMClient):
                 delta = chunk.choices[0].delta
                 if hasattr(delta, "content") and delta.content:
                     token = delta.content
+                    # print(f"DEBUG: OpenAI token: {token[:5]}")
                     full_content += token
                     if asyncio.iscoroutinefunction(callback):
                         await callback(token)
                     else:
                         callback(token)
-
+        
+        print(f"DEBUG: OpenAI stream finished. Total chars: {len(full_content)}")
         return full_content
 
     async def generate_completion_streaming(

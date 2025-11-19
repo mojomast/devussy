@@ -258,15 +258,18 @@ class RequestyClient(LLMClient):
 
     async def _post_chat_streaming(self, prompt: str, callback: callable, **kwargs: Any) -> str:
         """Post to OpenAI-compatible chat completions endpoint with streaming."""
+        print("DEBUG: RequestyClient._post_chat_streaming called")
         import json
         import logging
         
         logger = logging.getLogger(__name__)
         
         model = kwargs.get("model", self._model)
+        # ... (rest of setup) ...
         
         # VALIDATE MODEL FORMAT - Requesty requires provider/model format
         if "/" not in model:
+            # ... (error handling) ...
             error_msg = (
                 f"Invalid model format for Requesty: '{model}'. "
                 f"Must use provider/model format (e.g., 'openai/gpt-4o', 'anthropic/claude-3-5-sonnet'). "
@@ -338,11 +341,13 @@ class RequestyClient(LLMClient):
         
         collected_content = []
         
+        print(f"DEBUG: Requesty connecting to {self._endpoint}")
         try:
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(
                     self._endpoint, json=payload, headers=headers
                 ) as resp:
+                    print(f"DEBUG: Requesty connected. Status: {resp.status}")
                     # IMPROVED ERROR HANDLING - Capture Requesty's error details
                     if resp.status >= 400:
                         error_body = await resp.text()
@@ -366,6 +371,7 @@ class RequestyClient(LLMClient):
                             
                             # Skip heartbeat and empty messages
                             if data_str == '[DONE]' or not data_str:
+                                print("DEBUG: Requesty received [DONE]")
                                 continue
                             
                             try:
@@ -380,7 +386,11 @@ class RequestyClient(LLMClient):
                                     # Call the callback with each token/chunk
                                     if callback:
                                         try:
-                                            callback(content)
+                                            # print(f"DEBUG: Requesty token: {content[:5]}")
+                                            if asyncio.iscoroutinefunction(callback):
+                                                await callback(content)
+                                            else:
+                                                callback(content)
                                         except Exception as callback_error:
                                             logger.warning(f"[REQUESTY] Callback error: {callback_error}")
                                     
@@ -412,6 +422,7 @@ class RequestyClient(LLMClient):
                         print("="*80 + "\n")
                     logger.info(f"[REQUESTY] Streaming success: {len(collected_content)} chunks")
                     
+                    print(f"DEBUG: Requesty stream finished. Total chars: {len(collected_content)}")
                     # Return the complete response
                     return "".join(collected_content)
                     
@@ -455,6 +466,7 @@ class RequestyClient(LLMClient):
         Returns:
             The complete generated response as a string.
         """
+        print("DEBUG: RequestyClient.generate_completion_streaming called")
         async for attempt in AsyncRetrying(
             reraise=True,
             stop=stop_after_attempt(self._max_attempts),

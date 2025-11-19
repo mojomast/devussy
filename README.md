@@ -68,6 +68,35 @@ Devussy turns a short project idea into a complete, actionable development plan.
 - **Phase-Specific Streaming**: Control streaming per phase (Design, DevPlan, Handoff) with intelligent fallback behavior
 - Git-friendly: Write artifacts deterministically to docs/, optionally commit with your own workflow
 
+## Frontend Web UI (Next.js) 🆕
+
+Devussy now includes a **Next.js-based web frontend** (`devussy-web/`) that provides a multi-window streaming interface for the entire pipeline.
+
+### Features
+- **Multi-Window Architecture**: Each pipeline phase spawns its own draggable, minimizable window
+- **Real-Time Streaming**: Design and Plan generation stream in real-time using Server-Sent Events (SSE)
+- **Premium UI**: Built with Tailwind CSS, Shadcn UI components, and Framer Motion animations
+- **Model Configuration**: Per-stage model selection with global defaults
+- **Direct Backend Integration**: Bypasses Next.js proxy for optimal streaming performance
+
+### Quick Start
+```bash
+# Terminal 1: Start Python backend
+cd devussy-testing
+python devussy-web/dev_server.py
+
+# Terminal 2: Start Next.js frontend
+cd devussy-web
+npm run dev
+```
+Then visit `http://localhost:3000` to access the web interface.
+
+### Recent Updates (2025-11-18)
+- ✅ Fixed "Approve & Plan" button enablement after Design generation
+- ✅ Implemented SSE streaming for Plan generation to prevent connection timeouts
+- ✅ Direct backend connection (port 8000) bypasses Next.js buffering
+- 📋 See `devussy-web/handoff.md` for detailed status and next steps
+
 ## Install (from GitHub)
 
 Option A: clone + editable install

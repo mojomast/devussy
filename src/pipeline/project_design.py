@@ -70,24 +70,20 @@ class ProjectDesignGenerator:
         streaming_enabled = hasattr(self.llm_client, "streaming_enabled") and getattr(
             self.llm_client, "streaming_enabled", False
         )
+        print(f"DEBUG: Generator streaming_enabled={streaming_enabled}, handler_present={streaming_handler is not None}")
 
         if streaming_enabled and streaming_handler is not None:
+            print("DEBUG: Entering streaming block")
             # Use streaming with console/token handler
             async with streaming_handler:
                 response_chunks: list[str] = []
 
-                def token_callback(token: str) -> None:
-                    """Sync callback invoked by LLM client for each streamed chunk."""
+                async def token_callback(token: str) -> None:
+                    """Async callback invoked by LLM client for each streamed chunk."""
+                    # print(f"DEBUG: Token received: {token[:10]}...") 
                     response_chunks.append(token)
-                    try:
-                        loop = asyncio.get_running_loop()
-                    except RuntimeError:
-                        loop = None
-                    if loop and loop.is_running():
-                        loop.create_task(streaming_handler.on_token_async(token))
-                    else:
-                        # Fallback: best-effort synchronous run
-                        asyncio.run(streaming_handler.on_token_async(token))
+                    # Await the handler to ensure backpressure and completion
+                    await streaming_handler.on_token_async(token)
 
                 full_response = await self.llm_client.generate_completion_streaming(
                     prompt,

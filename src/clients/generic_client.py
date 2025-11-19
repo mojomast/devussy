@@ -191,9 +191,11 @@ class GenericOpenAIClient(LLMClient):
         self, prompt: str, callback: Callable[[str], Any], **kwargs: Any
     ) -> str:
         """Internal streaming chat method for generic OpenAI-compatible endpoints."""
+        print("DEBUG: GenericOpenAIClient._post_chat_streaming called")
         import json
         
         model = kwargs.get("model", self._model)
+        # ... (rest of setup) ...
         temperature = kwargs.get("temperature", self._temperature)
         max_tokens = kwargs.get("max_tokens", self._max_tokens)
         top_p = kwargs.get("top_p", None)
@@ -218,11 +220,13 @@ class GenericOpenAIClient(LLMClient):
         )
 
         full_content = ""
+        print(f"DEBUG: Generic client connecting to {self._endpoint}")
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(
                 self._endpoint, json=payload, headers=headers
             ) as resp:
                 resp.raise_for_status()
+                print(f"DEBUG: Generic client connected. Status: {resp.status}")
 
                 # Handle Server-Sent Events (SSE) streaming
                 async for line in resp.content:
@@ -231,6 +235,7 @@ class GenericOpenAIClient(LLMClient):
                         data_str = line_str[6:]  # Remove "data: " prefix
 
                         if data_str == "[DONE]":
+                            print("DEBUG: Generic client received [DONE]")
                             break
 
                         try:
@@ -239,6 +244,7 @@ class GenericOpenAIClient(LLMClient):
                                 delta = data["choices"][0].get("delta", {})
                                 content = delta.get("content")
                                 if content:
+                                    # print(f"DEBUG: Generic token: {content[:5]}")
                                     full_content += content
                                     if asyncio.iscoroutinefunction(callback):
                                         await callback(content)
@@ -247,13 +253,15 @@ class GenericOpenAIClient(LLMClient):
                         except json.JSONDecodeError:
                             # Skip malformed JSON chunks
                             continue
-
+        
+        print(f"DEBUG: Generic stream finished. Total chars: {len(full_content)}")
         return full_content
 
     async def generate_completion_streaming(
         self, prompt: str, callback: Callable[[str], Any], **kwargs: Any
     ) -> str:
         """Generate completion with streaming for generic OpenAI-compatible APIs."""
+        print("DEBUG: GenericOpenAIClient.generate_completion_streaming called")
         async for attempt in AsyncRetrying(
             reraise=True,
             stop=stop_after_attempt(self._max_attempts),

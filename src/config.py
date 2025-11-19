@@ -42,7 +42,7 @@ class LLMConfig(BaseModel):
         default=4096, ge=1, description="Maximum tokens to generate"
     )
     api_timeout: int = Field(
-        default=300, ge=1, description="API request timeout in seconds"
+        default=600, ge=1, description="API request timeout in seconds"
     )
     reasoning_effort: Optional[str] = Field(
         default=None,
@@ -274,11 +274,23 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
 
     # Determine config file path
     if config_path is None:
-        config_path = os.getenv("CONFIG_PATH", "config/config.yaml")
+        env_path = os.getenv("CONFIG_PATH")
+        if env_path:
+            config_path = env_path
+        else:
+            # Default to project_root/config/config.yaml
+            # src/config.py -> project_root is parent of parent
+            project_root = Path(__file__).resolve().parent.parent
+            config_path = str(project_root / "config" / "config.yaml")
 
     config_file = Path(config_path)
     if not config_file.exists():
-        raise FileNotFoundError(f"Configuration file not found: {config_file}")
+        # Fallback: try relative to CWD if absolute resolve failed or wasn't used
+        if not config_file.is_absolute():
+             config_file = Path.cwd() / config_path
+        
+        if not config_file.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_file}")
 
     # Load YAML configuration
     try:
