@@ -128,6 +128,11 @@ class handler(BaseHTTPRequestHandler):
 
         print(f"Received design request for project: {project_name}")
         
-        # Run the async generator
-        asyncio.run(generate_stream())
+        # Run the async generator with a new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(generate_stream())
+        finally:
+            loop.close()
         print("Design request handler finished.")

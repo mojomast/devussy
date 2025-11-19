@@ -7,6 +7,7 @@ export interface ModelConfig {
     model: string;
     temperature: number;
     reasoning_effort: 'low' | 'medium' | 'high' | null;
+    concurrency?: number; // Number of concurrent phase executions (1-10 or 'all')
 }
 
 export type PipelineStage = 'global' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff';
@@ -300,6 +301,32 @@ export const ModelSettings: React.FC<ModelSettingsProps> = ({ configs, onConfigs
                                                 Only supported on reasoning models (e.g. o1, gpt-5-preview).
                                             </p>
                                         </div>
+
+                                        {/* Concurrency (only show for execute stage) */}
+                                        {selectedTab === 'execute' && (
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <label className="text-xs font-mono text-white/50 uppercase tracking-wider">Concurrent Phases</label>
+                                                    <span className="text-xs font-mono text-green-400">{currentConfig.concurrency || 3}</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="1"
+                                                    max="10"
+                                                    step="1"
+                                                    value={currentConfig.concurrency || 3}
+                                                    onChange={(e) => handleConfigUpdate({ ...currentConfig, concurrency: parseInt(e.target.value) })}
+                                                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-green-500"
+                                                />
+                                                <div className="flex justify-between text-[10px] text-white/30 font-mono">
+                                                    <span>Sequential</span>
+                                                    <span>Max Parallel</span>
+                                                </div>
+                                                <p className="text-[10px] text-white/30">
+                                                    Number of phases to generate simultaneously during execution.
+                                                </p>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </div>

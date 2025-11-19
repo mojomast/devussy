@@ -201,11 +201,43 @@ class DetailedDevPlanGenerator:
 
         logger.debug(f"Rendered prompt for phase {phase.number}")
 
-        # Primary call uses configured defaults (provider/model-specific)
-        response = await self.llm_client.generate_completion(
-            prompt, **llm_kwargs
+        # Check if streaming is enabled and handler is provided
+        streaming_handler = llm_kwargs.pop("streaming_handler", None)
+        streaming_enabled = hasattr(self.llm_client, "streaming_enabled") and getattr(
+            self.llm_client, "streaming_enabled", False
         )
-        response_used = response
+
+        # Primary call uses configured defaults (provider/model-specific)
+        if streaming_enabled and streaming_handler is not None:
+            print(f"[detailed_devplan] Using streaming for phase {phase.number}")
+            # Use streaming with handler
+            response_chunks: list[str] = []
+
+            def token_callback(token: str) -> None:
+                """Sync callback invoked by LLM client for each streamed chunk."""
+                response_chunks.append(token)
+                # Call async handler
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                if loop and loop.is_running():
+                    loop.create_task(streaming_handler.on_token_async(token))
+
+            response = await self.llm_client.generate_completion_streaming(
+                prompt,
+                callback=token_callback,
+                **llm_kwargs,
+            )
+            response_used = response
+            print(f"[detailed_devplan] Streaming complete for phase {phase.number}, got {len(response)} chars")
+        else:
+            print(f"[detailed_devplan] Using non-streaming for phase {phase.number}")
+            response = await self.llm_client.generate_completion(
+                prompt, **llm_kwargs
+            )
+            response_used = response
+        
         logger.info(
             f"Received detailed steps for phase {phase.number} ({len(response)} chars)",
             extra={"suppress_console": True},

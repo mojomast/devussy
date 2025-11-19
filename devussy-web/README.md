@@ -1,36 +1,335 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Devussy Web Frontend
 
-## Getting Started
+A Next.js-based web interface for Devussy, featuring real-time streaming, multi-window execution, and concurrent phase generation.
 
-First, run the development server:
+## 🎉 Status: Production Ready
 
+All core features are implemented and fully functional:
+- ✅ Interactive interview with streaming
+- ✅ Design generation with real-time output
+- ✅ Development plan with editable phase cards
+- ✅ **Concurrent multi-phase execution** with live streaming
+- ✅ Complete artifact download with phase documents
+- ✅ Window management and taskbar
+- ✅ Per-stage model configuration
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.9+
+- Node.js 16+
+- npm or yarn
+
+### Installation
+
+1. **Install Python dependencies** (from project root):
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pip install -e .
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. **Install frontend dependencies**:
+```bash
+cd devussy-web
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Running the Application
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Start the backend server** (port 8000):
+```bash
+# From devussy-web directory
+python dev_server.py
+```
 
-## Learn More
+2. **Start the frontend** (port 3000):
+```bash
+# From devussy-web directory
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+3. **Open browser**:
+```
+http://localhost:3000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📋 Features
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Interview Phase
+- Interactive questionnaire with LLM-driven questions
+- Real-time streaming responses
+- Repository analysis for existing projects
+- Context-aware question generation
 
-## Deploy on Vercel
+### Design Phase
+- Streaming design document generation
+- Editable markdown output
+- Approve/regenerate functionality
+- Saves design for next phase
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Plan Phase
+- Streaming development plan generation
+- **Editable phase cards** with full content
+- Add, edit, delete, and reorder phases
+- Toggle between card view and raw text
+- Phase descriptions with all components
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Execution Phase ⚡ NEW
+- **All phases generate concurrently** (no queueing)
+- **Real-time streaming terminal output** for each phase
+- Browser automatically manages connection pooling (~6 concurrent)
+- Grid view (3-4 column) or tabs view
+- Visual status indicators (running, complete, failed, queued)
+- Live progress tracking and token counting
+- Auto-scrolling terminal output
+- Proper connection cleanup for phases 7+
+
+### Handoff Phase
+- Automatic handoff documentation generation
+- **Complete artifact download** including:
+  - Project design document
+  - Development plan JSON
+  - Handoff instructions
+  - **Individual phase documents** with detailed steps
+- GitHub integration (optional)
+
+### Window Management
+- Multiple windows for each phase
+- Draggable and minimizable windows
+- Z-index management (click to focus)
+- Taskbar for quick window switching
+- Persistent window state
+
+### Model Configuration
+- Global settings with per-stage overrides
+- Temperature control (0.0 - 2.0)
+- Reasoning effort (low/medium/high)
+- Concurrency control for execution
+- Multiple LLM provider support
+
+## 🏗️ Architecture
+
+### Tech Stack
+- **Framework**: Next.js 15 with App Router
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS + Shadcn UI
+- **Icons**: Lucide React
+- **Backend**: Python with ThreadingHTTPServer
+- **Streaming**: Server-Sent Events (SSE)
+- **Concurrency**: Async event loops per thread
+
+### Project Structure
+```
+devussy-web/
+├── src/
+│   ├── app/
+│   │   └── page.tsx              # Main app with window management
+│   ├── components/
+│   │   ├── pipeline/
+│   │   │   ├── InterviewView.tsx # Interview phase
+│   │   │   ├── DesignView.tsx    # Design generation
+│   │   │   ├── PlanView.tsx      # Plan with editable cards
+│   │   │   ├── ExecutionView.tsx # Concurrent execution
+│   │   │   ├── HandoffView.tsx   # Artifact download
+│   │   │   └── ModelSettings.tsx # Configuration UI
+│   │   ├── window/
+│   │   │   ├── WindowFrame.tsx   # Window wrapper
+│   │   │   └── Taskbar.tsx       # Window taskbar
+│   │   └── ui/                   # Shadcn UI components
+│   └── lib/
+│       └── utils.ts              # Utility functions
+├── api/
+│   ├── design.py                 # Design generation
+│   ├── plan/
+│   │   ├── basic.py             # Plan structure
+│   │   └── detail.py            # Phase details
+│   ├── handoff.py               # Handoff generation
+│   ├── interview.py             # Interview flow
+│   └── models.py                # Available models
+├── dev_server.py                 # Local Python server
+└── public/                       # Static assets
+```
+
+### Backend Integration
+- ThreadingHTTPServer for concurrent requests
+- Per-thread async event loops (no conflicts)
+- SSE streaming with proper connection cleanup
+- CORS handling for all endpoints
+
+## 🔧 Configuration
+
+### Backend Configuration
+Edit `config/config.yaml`:
+```yaml
+llm:
+  provider: requesty  # or openai, aether, etc.
+  model: gpt-5-mini
+  temperature: 0.7
+  streaming_enabled: true
+```
+
+### Frontend Configuration
+Model settings available in UI:
+- Global defaults
+- Per-stage overrides (Interview, Design, Plan, Execute, Handoff)
+- Temperature, reasoning effort, concurrency
+
+## 🐛 Troubleshooting
+
+### Phases Stall After 3
+**Solution**: Restart Python backend
+```bash
+# Kill existing process
+# Restart
+python dev_server.py
+```
+
+### Empty Phase Documents
+**Solution**: Ensure backend restarted after code changes
+- Phase data flows: ExecutionView → Parent → HandoffView
+- Check browser console for phase completion logs
+
+### Backend Not Responding
+```bash
+# Check if backend is running
+curl http://localhost:8000/api/models
+
+# Restart backend
+python dev_server.py
+```
+
+### Streaming Not Working
+1. Check browser console for errors
+2. Verify backend logs show streaming
+3. Check Network tab for SSE messages
+4. Ensure proper newlines in SSE format (`\n\n`)
+
+## 📚 Key Technical Fixes
+
+### Backend
+- ✅ Fixed asyncio event loop conflicts (per-thread loops)
+- ✅ Proper SSE connection cleanup with `reader.cancel()`
+- ✅ ThreadingHTTPServer for concurrent handling
+- ✅ Event loop creation/cleanup in finally blocks
+
+### Frontend
+- ✅ Removed concurrency queueing - start all phases
+- ✅ Fixed React setState during render
+- ✅ Proper phase data flow with detailed steps
+- ✅ Auto-scrolling terminal output
+- ✅ Debounced UI updates (50ms)
+- ✅ Connection cleanup to free browser slots
+
+## 🧪 Testing
+
+### Manual Testing Flow
+1. Start both servers
+2. Complete pipeline: Interview → Design → Plan → Execute → Handoff
+3. Verify all phases stream concurrently
+4. Download artifacts and check phase documents
+5. Verify phase docs contain detailed steps
+
+### Expected Behavior
+- **Interview**: Questions stream in real-time
+- **Design**: Design document streams progressively
+- **Plan**: Plan streams, shows editable cards
+- **Execute**: All phases start immediately, stream concurrently
+- **Handoff**: Downloads zip with all artifacts including phase docs
+
+## 🎯 Known Issues
+
+None critical - all major functionality working.
+
+### Minor Notes
+- Browser connection limit (~6) naturally throttles concurrent phases
+- Phases 7+ start automatically as earlier phases complete
+- React dev mode may show double renders (normal)
+
+## 🚀 Future Enhancements
+
+### Short Term
+- [ ] Save/load project state
+- [ ] Export to different formats
+- [ ] Enhanced error recovery UI
+- [ ] Phase dependency visualization
+
+### Long Term
+- [ ] Template library
+- [ ] Collaborative editing
+- [ ] Real-time collaboration
+- [ ] Advanced GitHub integration
+
+## 📝 Development Notes
+
+### Key Implementation Details
+
+1. **Async Event Loops**: Each thread gets its own loop
+   ```python
+   loop = asyncio.new_event_loop()
+   asyncio.set_event_loop(loop)
+   try:
+       loop.run_until_complete(generate_stream())
+   finally:
+       loop.close()
+   ```
+
+2. **Connection Cleanup**: Always cancel readers
+   ```typescript
+   try {
+       reader.cancel();
+   } catch (e) {
+       // Already closed
+   }
+   ```
+
+3. **Phase Data Flow**: ExecutionView stores detailed phases
+   ```typescript
+   detailedPhase: data.phase  // From backend
+   ```
+
+4. **SSE Format**: Actual newlines required
+   ```python
+   self.wfile.write(f"data: {data}\n\n".encode('utf-8'))
+   ```
+
+### Debugging
+
+Enable verbose logging:
+```typescript
+// Frontend
+console.log('[ExecutionView] ...');
+
+// Backend
+print(f"[detail.py] ...")
+```
+
+Check logs in:
+- Browser console (F12)
+- Backend terminal
+- Network tab (SSE events)
+
+## 🤝 Contributing
+
+1. Follow existing code style
+2. Add comprehensive logging
+3. Test streaming thoroughly
+4. Update documentation
+5. Verify end-to-end flow
+
+## 📄 License
+
+Same as parent Devussy project.
+
+## 🙏 Acknowledgments
+
+Built with:
+- Next.js 15
+- Shadcn UI
+- Tailwind CSS
+- Lucide Icons
+- Python backend with asyncio
+
+---
+
+**Status**: Production-ready ✅  
+**Last Updated**: 2025-11-19  
+**Version**: 1.0.0

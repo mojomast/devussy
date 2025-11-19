@@ -65,6 +65,42 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
         zip.file("development_plan.md", JSON.stringify(plan, null, 2));
         zip.file("handoff_instructions.md", handoffContent);
 
+        // Add individual phase documents
+        if (plan && plan.phases) {
+            const phasesFolder = zip.folder("phases");
+            plan.phases.forEach((phase: any) => {
+                const phaseNumber = phase.number || phase.phase_number;
+                const phaseTitle = (phase.title || phase.name || `Phase ${phaseNumber}`).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                const fileName = `phase_${phaseNumber}_${phaseTitle}.md`;
+                
+                // Build phase document content
+                let content = `# Phase ${phaseNumber}: ${phase.title || phase.name}\n\n`;
+                content += `## Description\n${phase.description || 'No description'}\n\n`;
+                
+                if (phase.steps && phase.steps.length > 0) {
+                    content += `## Steps\n\n`;
+                    phase.steps.forEach((step: any, idx: number) => {
+                        content += `### ${idx + 1}. ${step.title || step.name || `Step ${idx + 1}`}\n\n`;
+                        if (step.description) {
+                            content += `${step.description}\n\n`;
+                        }
+                        if (step.details) {
+                            content += `**Details:**\n${step.details}\n\n`;
+                        }
+                        if (step.acceptance_criteria && step.acceptance_criteria.length > 0) {
+                            content += `**Acceptance Criteria:**\n`;
+                            step.acceptance_criteria.forEach((criteria: string) => {
+                                content += `- ${criteria}\n`;
+                            });
+                            content += `\n`;
+                        }
+                    });
+                }
+                
+                phasesFolder?.file(fileName, content);
+            });
+        }
+
         // Generate blob and download
         const content = await zip.generateAsync({ type: "blob" });
         const url = window.URL.createObjectURL(content);

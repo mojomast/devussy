@@ -61,7 +61,13 @@ class handler(BaseHTTPRequestHandler):
                 raise e
 
         try:
-            models = asyncio.run(fetch_models())
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                models = loop.run_until_complete(fetch_models())
+            finally:
+                loop.close()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()

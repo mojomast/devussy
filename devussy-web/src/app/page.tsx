@@ -50,7 +50,8 @@ export default function Page() {
     global: {
       model: 'gpt-5-mini',
       temperature: 0.7,
-      reasoning_effort: 'medium'
+      reasoning_effort: 'medium',
+      concurrency: 3
     },
     interview: null,
     design: null,
@@ -155,11 +156,24 @@ export default function Page() {
   };
 
   const handlePlanApproved = (planData: any) => {
+    console.log('[page.tsx] Plan approved with', planData?.phases?.length, 'phases');
+    if (planData?.phases) {
+      planData.phases.forEach((p: any, i: number) => {
+        if (i < 5) { // Only log first 5
+          console.log(`  Phase ${p.number}: ${p.title}`);
+        }
+      });
+    }
     setPlan(planData);
     spawnWindow('execute', 'Execution Phase');
   };
 
-  const handlePhaseComplete = () => {
+  const handlePhaseComplete = (detailedPlan?: any) => {
+    // Update plan with detailed phases if provided
+    if (detailedPlan) {
+      console.log('[page.tsx] Updating plan with detailed phases');
+      setPlan(detailedPlan);
+    }
     spawnWindow('handoff', 'Project Handoff');
   };
 

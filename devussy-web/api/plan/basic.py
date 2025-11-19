@@ -96,6 +96,12 @@ class handler(BaseHTTPRequestHandler):
 
                     dev_plan = await generation_task
                     
+                    # Debug: Log the parsed plan
+                    print(f"DEBUG: Parsed {len(dev_plan.phases)} phases")
+                    for phase in dev_plan.phases:
+                        print(f"  Phase {phase.number}: {phase.title}")
+                        print(f"    Description: {phase.description}")
+                    
                     # Send completion event
                     final_data = json.dumps({"done": True, "plan": dev_plan.model_dump()})
                     self.wfile.write(f"data: {final_data}\n\n".encode('utf-8'))
@@ -108,7 +114,13 @@ class handler(BaseHTTPRequestHandler):
                     except Exception:
                         pass
 
-            asyncio.run(generate_stream())
+            # Create a new event loop for this thread to avoid conflicts
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(generate_stream())
+            finally:
+                loop.close()
 
         except Exception as e:
             print(f"Error in handler: {e}")

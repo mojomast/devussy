@@ -15,13 +15,14 @@ interface PhaseStatus {
     output: string;
     progress: number;  // 0-100
     error?: string;
+    detailedPhase?: any;  // The detailed phase data with steps from backend
 }
 
 interface ExecutionViewProps {
     plan: any;
     projectName: string;
     modelConfig: ModelConfig;
-    onComplete: () => void;
+    onComplete: (detailedPlan?: any) => void;
 }
 
 export const ExecutionView: React.FC<ExecutionViewProps> = ({
@@ -31,15 +32,25 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     onComplete
 }) => {
     const [viewMode, setViewMode] = useState<'grid' | 'tabs'>('grid');
-    const [concurrency, setConcurrency] = useState<number>(3);
+    const [concurrency, setConcurrency] = useState<number>(modelConfig.concurrency || 3);
     const [selectedTab, setSelectedTab] = useState<number>(1);
     const [phases, setPhases] = useState<PhaseStatus[]>([]);
     const [isExecuting, setIsExecuting] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [completedCount, setCompletedCount] = useState(0);
 
+    // Update concurrency when modelConfig changes
+    useEffect(() => {
+        if (modelConfig.concurrency && !isExecuting) {
+            setConcurrency(modelConfig.concurrency);
+        }
+    }, [modelConfig.concurrency, isExecuting]);
+
     const scrollRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+    const scrollContainerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
     const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
+    const phaseOutputBuffers = useRef<Map<number, string>>(new Map());
+    const updateTimers = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
     // Initialize phases from plan
     useEffect(() => {
@@ -51,16 +62,20 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 output: '',
                 progress: 0
             }));
+            console.log('[ExecutionView] Initialized phases:', initialPhases.map(p => ({ number: p.number, title: p.title })));
             setPhases(initialPhases);
         }
     }, [plan]);
 
-    // Auto-scroll for each phase
+    // Auto-scroll for each phase - scroll to bottom when content updates
     useEffect(() => {
         phases.forEach(phase => {
-            const scrollRef = scrollRefs.current.get(phase.number);
-            if (scrollRef && phase.status === 'running') {
-                scrollRef.scrollIntoView({ behavior: 'smooth' });
+            if (phase.status === 'running') {
+                const scrollContainer = scrollContainerRefs.current.get(phase.number);
+                if (scrollContainer) {
+                    // Scroll to bottom smoothly
+                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                }
             }
         });
     }, [phases]);
@@ -72,104 +87,264 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         }
     }, [phases.length]);
 
-    const updatePhaseStatus = (phaseNumber: number, update: Partial<PhaseStatus>) => {
-        setPhases(prev => prev.map(p =>
-            p.number === phaseNumber ? { ...p, ...update } : p
-        ));
-    };
+
 
     const executePhase = async (phase: PhaseStatus) => {
-        if (isPaused) return;
+        console.log('[executePhase] ========== Starting phase', phase.number, phase.title, '==========');
+        if (isPaused) {
+            console.log('[executePhase] Skipping phase', phase.number, '- execution is paused');
+            return;
+        }
 
         const controller = new AbortController();
         abortControllersRef.current.set(phase.number, controller);
 
-        updatePhaseStatus(phase.number, { status: 'running', output: `Starting Phase ${phase.number}: ${phase.title}...\n\n` });
+        console.log('[executePhase] Setting phase', phase.number, 'to running state');
+        
+        // Initialize output buffer for this phase
+        const initialOutput = `Starting Phase ${phase.number}: ${phase.title}...\n\n`;
+        phaseOutputBuffers.current.set(phase.number, initialOutput);
+        
+        setPhases(prev => {
+            const updated = prev.map(p =>
+                p.number === phase.number
+                    ? { ...p, status: 'running' as const, output: initialOutput }
+                    : p
+            );
+            console.log('[executePhase] Updated phases:', updated.map(p => ({ number: p.number, status: p.status })));
+            return updated;
+        });
 
         try {
             const backendUrl = `http://${window.location.hostname}:8000/api/plan/detail`;
+            console.log('[executePhase] Fetching from', backendUrl, 'for phase', phase.number);
+
+            const requestBody = {
+                plan: plan,
+                phaseNumber: phase.number,
+                projectName,
+                modelConfig
+            };
+            console.log('[executePhase] Request body:', {
+                phaseNumber: phase.number,
+                projectName,
+                planPhasesCount: plan?.phases?.length,
+                firstPhase: plan?.phases?.[0]
+            });
+
+            // Add timeout to detect hanging requests
+            const fetchTimeout = setTimeout(() => {
+                console.warn('[executePhase] Fetch taking longer than 10s for phase', phase.number);
+            }, 10000);
 
             const response = await fetch(backendUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    plan: plan,
-                    phaseNumber: phase.number,
-                    projectName,
-                    modelConfig
-                }),
+                body: JSON.stringify(requestBody),
                 signal: controller.signal
             });
 
+            clearTimeout(fetchTimeout);
+
+            console.log('[executePhase] Response status:', response.status);
+            console.log('[executePhase] Response headers:', {
+                contentType: response.headers.get('content-type'),
+                cacheControl: response.headers.get('cache-control')
+            });
+
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: Failed to start phase execution`);
+                const errorText = await response.text();
+                console.error('[executePhase] Error response:', errorText);
+                throw new Error(`HTTP ${response.status}: ${errorText || 'Failed to start phase execution'}`);
             }
 
             const reader = response.body?.getReader();
             if (!reader) {
+                console.error('[executePhase] No response body!');
                 throw new Error('No response body');
             }
+            
+            console.log('[executePhase] Got reader, starting to read stream for phase', phase.number);
 
             const decoder = new TextDecoder();
             let buffer = "";
+            let chunkCount = 0;
+            let contentCount = 0;
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+            console.log('[executePhase] Starting to read stream for phase', phase.number);
 
-                const chunk = decoder.decode(value, { stream: true });
-                buffer += chunk;
+            let phaseCompleted = false;
 
-                const parts = buffer.split('\n\n');
-                buffer = parts.pop() || "";
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        console.log('[executePhase] Stream done for phase', phase.number);
+                        break;
+                    }
 
-                for (const part of parts) {
-                    const line = part.trim();
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.slice(6);
-                        try {
-                            const data = JSON.parse(dataStr);
+                    chunkCount++;
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
 
-                            if (data.content) {
-                                updatePhaseStatus(phase.number, {
-                                    output: phases.find(p => p.number === phase.number)!.output + data.content
-                                });
-                            }
+                    if (chunkCount % 10 === 0) {
+                        console.log(`[executePhase] Phase ${phase.number}: Received ${chunkCount} chunks, ${contentCount} content messages`);
+                    }
 
-                            if (data.error) {
-                                throw new Error(data.error);
-                            }
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop() || "";
 
-                            if (data.done) {
-                                updatePhaseStatus(phase.number, {
-                                    status: 'complete',
-                                    progress: 100
-                                });
-                                setCompletedCount(prev => prev + 1);
-                                return;
-                            }
-                        } catch (e: any) {
-                            if (e.message && !e.message.includes('Unexpected token')) {
-                                throw e;
+                    for (const part of parts) {
+                        const line = part.trim();
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            try {
+                                const data = JSON.parse(dataStr);
+
+                                if (data.content) {
+                                    contentCount++;
+                                    if (contentCount <= 5 || contentCount % 50 === 0) {
+                                        console.log(`[executePhase] Phase ${phase.number}: Content #${contentCount}:`, data.content.substring(0, 50));
+                                    }
+                                    
+                                    // Accumulate content in buffer
+                                    const currentBuffer = phaseOutputBuffers.current.get(phase.number) || '';
+                                    phaseOutputBuffers.current.set(phase.number, currentBuffer + data.content);
+                                    
+                                    // Debounce state updates to avoid overwhelming React
+                                    const existingTimer = updateTimers.current.get(phase.number);
+                                    if (existingTimer) {
+                                        clearTimeout(existingTimer);
+                                    }
+                                    
+                                    const timer = setTimeout(() => {
+                                        const bufferedContent = phaseOutputBuffers.current.get(phase.number) || '';
+                                        setPhases(prev => prev.map(p =>
+                                            p.number === phase.number
+                                                ? { ...p, output: bufferedContent }
+                                                : p
+                                        ));
+                                        
+                                        // Auto-scroll to bottom after update
+                                        requestAnimationFrame(() => {
+                                            const scrollContainer = scrollContainerRefs.current.get(phase.number);
+                                            if (scrollContainer) {
+                                                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+                                            }
+                                        });
+                                        
+                                        updateTimers.current.delete(phase.number);
+                                    }, 50); // Update every 50ms max
+                                    
+                                    updateTimers.current.set(phase.number, timer);
+                                }
+
+                                if (data.error) {
+                                    console.error('[executePhase] Phase', phase.number, 'error:', data.error);
+                                    throw new Error(data.error);
+                                }
+
+                                if (data.done) {
+                                    console.log('[executePhase] Phase', phase.number, 'done signal received');
+                                    phaseCompleted = true;
+                                    
+                                    // Flush any pending updates
+                                    const existingTimer = updateTimers.current.get(phase.number);
+                                    if (existingTimer) {
+                                        clearTimeout(existingTimer);
+                                        updateTimers.current.delete(phase.number);
+                                    }
+                                    
+                                    // Final state update with buffered content AND detailed phase data
+                                    const finalOutput = phaseOutputBuffers.current.get(phase.number) || '';
+                                    setPhases(prev => prev.map(p =>
+                                        p.number === phase.number
+                                            ? { 
+                                                ...p, 
+                                                status: 'complete', 
+                                                progress: 100, 
+                                                output: finalOutput,
+                                                detailedPhase: data.phase // Store the detailed phase with steps
+                                            }
+                                            : p
+                                    ));
+                                    setCompletedCount(prev => prev + 1);
+                                    
+                                    // Clean up buffer
+                                    phaseOutputBuffers.current.delete(phase.number);
+                                    
+                                    // Close reader to release connection
+                                    reader.cancel();
+                                    console.log('[executePhase] Phase', phase.number, 'reader closed');
+                                    return;
+                                }
+                            } catch (e: any) {
+                                if (e.message && !e.message.includes('Unexpected token')) {
+                                    console.error('[executePhase] Parse error:', e);
+                                    throw e;
+                                }
                             }
                         }
                     }
                 }
+
+                // If stream ended without explicit done signal, mark as complete anyway
+                if (!phaseCompleted) {
+                    console.log('[executePhase] Stream ended without done signal for phase', phase.number, '- marking complete');
+                    
+                    // Flush any pending updates
+                    const existingTimer = updateTimers.current.get(phase.number);
+                    if (existingTimer) {
+                        clearTimeout(existingTimer);
+                        updateTimers.current.delete(phase.number);
+                    }
+                    
+                    // Final state update with buffered content
+                    const finalOutput = phaseOutputBuffers.current.get(phase.number) || '';
+                    setPhases(prev => prev.map(p =>
+                        p.number === phase.number
+                            ? { ...p, status: 'complete', progress: 100, output: finalOutput }
+                            : p
+                    ));
+                    setCompletedCount(prev => prev + 1);
+                    
+                    // Clean up buffer
+                    phaseOutputBuffers.current.delete(phase.number);
+                }
+            } finally {
+                // Always close the reader to release the connection
+                try {
+                    reader.cancel();
+                    console.log('[executePhase] Phase', phase.number, 'reader closed in finally block');
+                } catch (e) {
+                    console.log('[executePhase] Phase', phase.number, 'reader already closed');
+                }
             }
 
         } catch (err: any) {
+            // Clean up timers and buffers
+            const existingTimer = updateTimers.current.get(phase.number);
+            if (existingTimer) {
+                clearTimeout(existingTimer);
+                updateTimers.current.delete(phase.number);
+            }
+            
+            const currentOutput = phaseOutputBuffers.current.get(phase.number) || '';
+            phaseOutputBuffers.current.delete(phase.number);
+            
             if (err.name === 'AbortError') {
-                updatePhaseStatus(phase.number, {
-                    status: 'queued',
-                    output: phases.find(p => p.number === phase.number)!.output + '\n[Paused]'
-                });
+                setPhases(prev => prev.map(p =>
+                    p.number === phase.number
+                        ? { ...p, status: 'queued' as const, output: currentOutput + '\n[Paused]' }
+                        : p
+                ));
             } else {
                 console.error(`Phase ${phase.number} execution error:`, err);
-                updatePhaseStatus(phase.number, {
-                    status: 'failed',
-                    error: err.message || 'Unknown error',
-                    output: phases.find(p => p.number === phase.number)!.output + `\n\n[ERROR]: ${err.message}`
-                });
+                setPhases(prev => prev.map(p =>
+                    p.number === phase.number
+                        ? { ...p, status: 'failed' as const, error: err.message || 'Unknown error', output: currentOutput + `\n\n[ERROR]: ${err.message}` }
+                        : p
+                ));
             }
         } finally {
             abortControllersRef.current.delete(phase.number);
@@ -177,46 +352,47 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     };
 
     const startExecution = async () => {
+        console.log('[ExecutionView] Starting execution with', phases.length, 'phases - STARTING ALL AT ONCE');
         setIsExecuting(true);
         setIsPaused(false);
 
-        // Execute phases with concurrency control
-        const queue = [...phases];
-        const running: Promise<void>[] = [];
+        // Start ALL phases immediately
+        const promises = phases.map(phase => {
+            console.log('[ExecutionView] Starting phase', phase.number);
+            return executePhase(phase).catch(err => {
+                console.error('[ExecutionView] Phase', phase.number, 'failed:', err);
+            });
+        });
 
-        while (queue.length > 0 || running.length > 0) {
-            if (isPaused) {
-                // Abort all running phases
-                for (const controller of abortControllersRef.current.values()) {
-                    controller.abort();
-                }
-                break;
-            }
+        // Wait for all to complete
+        console.log('[ExecutionView] Waiting for all', promises.length, 'phases to complete...');
+        await Promise.all(promises);
 
-            // Start new phases up to concurrency limit
-            while (running.length < concurrency && queue.length > 0) {
-                const phase = queue.shift()!;
-                const promise = executePhase(phase);
-                running.push(promise);
-            }
-
-            // Wait for at least one phase to complete
-            if (running.length > 0) {
-                await Promise.race(running);
-                // Remove completed promises
-                const stillRunning = running.filter(p => {
-                    // This is a simplified check - in reality we'd track promise states
-                    return true; // Keep for now, will be filtered naturally as they resolve
-                });
-            }
-        }
-
+        console.log('[ExecutionView] All phases completed');
         setIsExecuting(false);
 
-        // Check if all phases completed successfully
+        // Check if all phases completed successfully - use effect to avoid setState during render
         const allComplete = phases.every(p => p.status === 'complete');
+        console.log('[ExecutionView] All complete?', allComplete);
         if (allComplete && onComplete) {
-            onComplete();
+            // Build detailed plan with completed phases including steps
+            const detailedPlan = {
+                ...plan,
+                phases: plan.phases.map((originalPhase: any) => {
+                    const executedPhase = phases.find(p => p.number === originalPhase.number);
+                    if (executedPhase && executedPhase.detailedPhase) {
+                        // Use the detailed phase data from backend which includes steps
+                        console.log(`[ExecutionView] Phase ${executedPhase.number} has ${executedPhase.detailedPhase.steps?.length || 0} steps`);
+                        return executedPhase.detailedPhase;
+                    }
+                    return originalPhase;
+                })
+            };
+            
+            console.log('[ExecutionView] Built detailed plan with', detailedPlan.phases.length, 'phases');
+            
+            // Call onComplete in next tick to avoid setState during render
+            setTimeout(() => onComplete(detailedPlan), 0);
         }
     };
 
@@ -271,13 +447,15 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 )}
             </CardHeader>
             <CardContent className="flex-1 pt-0 overflow-hidden">
-                <ScrollArea className="h-full">
-                    <div className="font-mono text-xs whitespace-pre-wrap text-green-400 bg-black/50 p-3 rounded">
+                <div 
+                    ref={el => { if (el) scrollContainerRefs.current.set(phase.number, el); }}
+                    className="h-full overflow-y-auto custom-scrollbar"
+                >
+                    <div className="font-mono text-xs whitespace-pre-wrap text-green-400 bg-black/50 p-3 rounded min-h-full">
                         {phase.output || 'Waiting to start...'}
                         {phase.status === 'running' && <span className="animate-pulse">_</span>}
-                        <div ref={el => { if (el) scrollRefs.current.set(phase.number, el); }} />
                     </div>
-                </ScrollArea>
+                </div>
             </CardContent>
         </Card>
     );
@@ -348,7 +526,11 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             {/* Content */}
             <div className="flex-1 overflow-hidden">
                 {viewMode === 'grid' ? (
-                    <div className="grid grid-cols-3 gap-4 p-4 h-full auto-rows-fr">
+                    <div className={`grid gap-4 p-4 h-full auto-rows-fr ${
+                        phases.length <= 3 ? 'grid-cols-3' : 
+                        phases.length <= 6 ? 'grid-cols-3' : 
+                        'grid-cols-4'
+                    }`}>
                         {phases.map(phase => renderPhaseColumn(phase))}
                     </div>
                 ) : (

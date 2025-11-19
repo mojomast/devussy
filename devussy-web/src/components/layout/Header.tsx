@@ -8,7 +8,7 @@ export function Header() {
         <div className="mr-4 flex items-center space-x-2">
           <Terminal className="h-6 w-6 text-primary" />
           <span className="hidden font-bold sm:inline-block text-lg tracking-tight">
-            DEVUSSY
+            DEVUSSY STUDIO
           </span>
         </div>
         <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">

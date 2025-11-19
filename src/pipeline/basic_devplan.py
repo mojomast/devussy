@@ -127,6 +127,14 @@ class BasicDevPlanGenerator:
             
         logger.info(f"Received LLM response ({len(response)} chars)")
         logger.debug(f"Devplan response preview: {response[:800]}...")
+        
+        # Save full response for debugging
+        import os
+        debug_dir = ".devussy_state"
+        if not os.path.exists(debug_dir):
+            os.makedirs(debug_dir)
+        with open(os.path.join(debug_dir, "last_devplan_response.txt"), "w", encoding="utf-8") as f:
+            f.write(response)
 
         # Parse the response into a DevPlan model
         devplan = self._parse_response(response, project_design.project_name)
@@ -151,6 +159,7 @@ class BasicDevPlanGenerator:
         phases = []
         current_phase = None
         current_items = []
+        current_description = ""  # Track description text
         # Assign canonical phase numbers sequentially in order of appearance,
         # regardless of what the model wrote in the heading.
         next_phase_number = 1
@@ -158,15 +167,34 @@ class BasicDevPlanGenerator:
         lines = response.split("\n")
 
         # Try multiple patterns for phase headers to handle varied LLM formats
-        # 1) Strict 'Phase N: Title' with optional heading level and bold
         phase_patterns = [
+            # 1) N. **Phase N: Title** (numbered with bold phase)
             re.compile(
-                r"^(?:#{1,6}\s*)?\*{0,2}\s*Phase\s+0*(\d+)\s*[:\-–—]?\s*(.+?)(?:\*{0,2})?$",
+                r"^\d+\.\s*\*\*\s*Phase\s+0*(\d+)\s*[:\-–—]\s*(.+?)\s*\*\*\s*$",
                 re.IGNORECASE,
             ),
-            # 2) Generic numbered headings like '1. Title' or '1) Title'
-            re.compile(r"^(?:#{1,6}\s*)?(\d+)\s*[\.)]\s*(.+)$", re.IGNORECASE),
+            # 2) **Phase N: Title** (bold with asterisks)
+            re.compile(
+                r"^\*\*\s*Phase\s+0*(\d+)\s*[:\-–—]\s*(.+?)\s*\*\*\s*$",
+                re.IGNORECASE,
+            ),
+            # 3) Phase N: Title (plain text)
+            re.compile(
+                r"^Phase\s+0*(\d+)\s*[:\-–—]\s*(.+)$",
+                re.IGNORECASE,
+            ),
+            # 4) ## Phase N: Title (markdown header)
+            re.compile(
+                r"^#{1,6}\s*Phase\s+0*(\d+)\s*[:\-–—]\s*(.+)$",
+                re.IGNORECASE,
+            ),
+            # 5) N. Title or N) Title (generic numbered)
+            re.compile(r"^(\d+)\s*[\.)]\s*(.+)$", re.IGNORECASE),
         ]
+        
+        logger.info(f"Parsing response with {len(lines)} lines")
+        non_empty = [l for l in lines[:30] if l.strip()][:15]
+        logger.info(f"First 15 non-empty lines: {non_empty}")
 
         for line in lines:
             stripped = line.strip()
@@ -188,12 +216,19 @@ class BasicDevPlanGenerator:
                     break
 
             if phase_match:
+                logger.debug(f"Matched phase header: '{stripped}' -> Phase {next_phase_number}: {match_title}")
                 # Save previous phase if it exists
                 if current_phase is not None:
+                    # Clean up description: strip whitespace and markdown formatting
+                    description = current_description.strip()
+                    # Remove markdown bold/italic markers
+                    description = re.sub(r'\*+', '', description)
+                    
                     phases.append(
                         DevPlanPhase(
                             number=current_phase["number"],
                             title=current_phase["title"],
+                            description=description if description else None,
                             steps=[],  # Steps will be added in detailed phase
                         )
                     )
@@ -210,6 +245,7 @@ class BasicDevPlanGenerator:
 
                 current_phase = {"number": phase_num, "title": phase_title}
                 current_items = []
+                current_description = ""  # Reset description for new phase
                 if model_phase_num is not None and model_phase_num != phase_num:
                     logger.debug(
                         f"Found phase heading '{phase_title}' with model number {model_phase_num}; "
@@ -219,24 +255,50 @@ class BasicDevPlanGenerator:
                     logger.debug(f"Found phase {phase_num}: {phase_title}")
 
             elif stripped.startswith("-") and current_phase:
-                # This is a component/item for the current phase
-                item = stripped[1:].strip()
-                if item:
-                    current_items.append(item)
+                # Check if this is a "Summary:" line
+                if stripped.startswith("- Summary:") or stripped.startswith("- summary:"):
+                    # Extract the summary text after "Summary:"
+                    summary_text = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
+                    if summary_text:
+                        current_description = summary_text
+                else:
+                    # This is a component/item for the current phase
+                    item = stripped[1:].strip()
+                    if item and not item.lower().startswith("summary:") and not item.lower().startswith("major components:"):
+                        current_items.append(item)
+
+            elif stripped and not stripped.startswith("#") and current_phase and not current_items and not current_description:
+                # This is description text (appears after header, before first bullet)
+                # Concatenate non-empty lines that aren't headers or bullets
+                if current_description:
+                    current_description += " " + stripped
+                else:
+                    current_description = stripped
 
         # Don't forget the last phase
         if current_phase is not None:
+            # Clean up description for last phase
+            description = current_description.strip()
+            description = re.sub(r'\*+', '', description)
+            
             phases.append(
                 DevPlanPhase(
                     number=current_phase["number"],
                     title=current_phase["title"],
+                    description=description if description else None,
                     steps=[],  # Steps will be added in detailed phase
                 )
             )
 
         # If no phases were parsed, create a default one
         if not phases:
-            logger.warning("No phases parsed from response, creating default phase")
+            print("=" * 80)
+            print("WARNING: No phases parsed from response, creating default phase")
+            print(f"Response preview (first 800 chars):\n{response[:800]}")
+            print("=" * 80)
+            potential_headers = [l for l in lines if 'phase' in l.lower() or re.match(r'^\d+[\.)]\s', l)][:10]
+            print(f"Lines that might be phase headers: {potential_headers}")
+            print("=" * 80)
             phases.append(
                 DevPlanPhase(
                     number=1,

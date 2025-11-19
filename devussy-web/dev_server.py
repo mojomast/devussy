@@ -20,10 +20,16 @@ class DevServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
                 print(f"Error in /api/models: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             self.send_error(404, "Not Found")
 
     def do_POST(self):
+        import threading
+        thread_id = threading.current_thread().ident
+        print(f"[dev_server] Thread {thread_id}: Received POST request to {self.path}")
+        
         # Route: /api/design
         if self.path.startswith('/api/design'):
             try:
@@ -32,6 +38,8 @@ class DevServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
                 print(f"Error in /api/design: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Route: /api/plan/basic
         elif self.path.startswith('/api/plan/basic'):
@@ -41,6 +49,8 @@ class DevServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
                 print(f"Error in /api/plan/basic: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Route: /api/plan/detail
         elif self.path.startswith('/api/plan/detail'):
@@ -50,6 +60,8 @@ class DevServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
                 print(f"Error in /api/plan/detail: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Route: /api/handoff
         elif self.path.startswith('/api/handoff'):
@@ -59,6 +71,8 @@ class DevServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
                 print(f"Error in /api/handoff: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Route: /api/interview
         elif self.path.startswith('/api/interview'):
@@ -68,6 +82,8 @@ class DevServerHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_error(500, str(e))
                 print(f"Error in /api/interview: {e}")
+                import traceback
+                traceback.print_exc()
         
         else:
             self.send_error(404, "Not Found")
@@ -84,7 +100,16 @@ def run(server_class=ThreadingHTTPServer, handler_class=DevServerHandler, port=8
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     print(f"Starting Python API server on port {port}...")
-    httpd.serve_forever()
+    print(f"Server will handle requests with threading support")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
+        httpd.shutdown()
+    except Exception as e:
+        print(f"Server error: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     run()

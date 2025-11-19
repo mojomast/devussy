@@ -27,7 +27,79 @@ export const PlanView: React.FC<PlanViewProps> = ({
     const [viewMode, setViewMode] = useState<'cards' | 'raw'>('cards');  // Toggle between card/raw view
     const [error, setError] = useState<string | null>(null);
 
-    // Parse phases from plan data
+    // Parse phases from raw text content
+    const parsePhasesFromText = (text: string): PhaseData[] => {
+        const phases: PhaseData[] = [];
+        const lines = text.split('\n');
+        
+        let currentPhase: PhaseData | null = null;
+        let collectingContent = false;
+        let contentLines: string[] = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            
+            // Match phase headers like "1. **Phase 1: Title**"
+            const phaseMatch = trimmed.match(/^(\d+)\.\s*\*\*\s*Phase\s+\d+:\s*(.+?)\s*\*\*\s*$/i);
+            
+            if (phaseMatch) {
+                // Save previous phase with collected content
+                if (currentPhase && contentLines.length > 0) {
+                    currentPhase.description = contentLines.join('\n').trim();
+                    phases.push(currentPhase);
+                }
+                
+                // Start new phase
+                const phaseNum = parseInt(phaseMatch[1]);
+                const title = phaseMatch[2].trim();
+                currentPhase = {
+                    number: phaseNum,
+                    title: title,
+                    description: ''
+                };
+                contentLines = [];
+                collectingContent = true;
+            }
+            // Collect all content lines until next phase
+            else if (collectingContent && currentPhase) {
+                // Check if this is a "Brief:" line (not indented)
+                if (trimmed.startsWith('Brief:')) {
+                    const brief = trimmed.substring(6).trim();
+                    if (brief) contentLines.push(brief);
+                    contentLines.push(''); // Add blank line after brief
+                }
+                // Bullet points (components)
+                else if (trimmed.startsWith('- ')) {
+                    contentLines.push(trimmed);
+                }
+                // Indented content (sub-bullets or continuation)
+                else if (trimmed && (line.startsWith('   ') || line.startsWith('\t'))) {
+                    contentLines.push('  ' + trimmed); // Preserve some indentation
+                }
+                // Empty lines between sections
+                else if (!trimmed && contentLines.length > 0) {
+                    // Don't add multiple consecutive blank lines
+                    if (contentLines[contentLines.length - 1] !== '') {
+                        contentLines.push('');
+                    }
+                }
+            }
+        }
+        
+        // Don't forget the last phase
+        if (currentPhase && contentLines.length > 0) {
+            currentPhase.description = contentLines.join('\n').trim();
+            phases.push(currentPhase);
+        }
+        
+        console.log('[PlanView] Parsed', phases.length, 'phases from text');
+        phases.forEach(p => console.log(`  Phase ${p.number}: ${p.title} (${p.description?.length || 0} chars)`));
+        
+        return phases;
+    };
+
+    // Parse phases from plan data (fallback)
     const parsePhasesFromPlan = (planData: any) => {
         if (!planData || !planData.phases) return [];
 
@@ -87,11 +159,16 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
                             if (data.done && data.plan) {
                                 setPlan(data.plan);
-                                // Parse phases from plan
-                                const parsedPhases = parsePhasesFromPlan(data.plan);
-                                setPhases(parsedPhases);
+                                console.log('[PlanView] Plan received, parsing phases from text...');
+                                console.log('[PlanView] Plan content length:', planContent.length);
+                                // Parse phases from the raw text content (more complete)
+                                const parsedPhases = parsePhasesFromText(planContent);
+                                // Fallback to plan data if text parsing fails
+                                const finalPhases = parsedPhases.length > 0 ? parsedPhases : parsePhasesFromPlan(data.plan);
+                                console.log('[PlanView] Using', finalPhases.length, 'phases');
+                                setPhases(finalPhases);
                                 // Expand all phases by default
-                                setExpandedPhases(new Set(parsedPhases.map(p => p.number)));
+                                setExpandedPhases(new Set(finalPhases.map(p => p.number)));
                                 return; // Stop reading
                             }
 
@@ -178,6 +255,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 steps: []  // Steps will be generated in execution phase
             }))
         };
+        console.log('[PlanView] Approving plan with', updatedPlan.phases.length, 'phases');
+        updatedPlan.phases.forEach((p: any) => {
+            console.log(`  Phase ${p.number}: ${p.title} (desc: ${p.description?.substring(0, 50)}...)`);
+        });
         onPlanApproved(updatedPlan);
     };
 
