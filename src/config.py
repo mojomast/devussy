@@ -181,6 +181,23 @@ class DetourConfig(BaseModel):
     )
 
 
+class HiveMindConfig(BaseModel):
+    """HiveMind orchestration configuration."""
+
+    enabled: bool = Field(
+        default=False, description="Enable HiveMind swarm generation"
+    )
+    drone_count: int = Field(
+        default=3, ge=1, description="Number of parallel drone calls"
+    )
+    temperature_jitter: bool = Field(
+        default=True, description="Vary temperature across drones"
+    )
+    recursive_mode: bool = Field(
+        default=False, description="Enable recursive self-correction (future)"
+    )
+
+
 class AppConfig(BaseModel):
     """Main application configuration."""
 
@@ -190,6 +207,7 @@ class AppConfig(BaseModel):
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     detour: DetourConfig = Field(default_factory=DetourConfig)
+    hivemind: HiveMindConfig = Field(default_factory=HiveMindConfig)
 
     # Per-stage LLM configurations (optional overrides)
     design_llm: Optional[LLMConfig] = Field(
@@ -571,6 +589,19 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     if os.getenv("DETOUR_METADATA_LOGGING_ENABLED"):
         env_overrides.setdefault("detour", {})["metadata_logging_enabled"] = (
             os.getenv("DETOUR_METADATA_LOGGING_ENABLED").lower() == "true"
+        )
+
+    # HiveMind configuration
+    if "hivemind" in config_data:
+        env_overrides["hivemind"] = config_data["hivemind"]
+
+    if os.getenv("HIVEMIND_ENABLED"):
+        env_overrides.setdefault("hivemind", {})["enabled"] = (
+            os.getenv("HIVEMIND_ENABLED").lower() == "true"
+        )
+    if os.getenv("HIVEMIND_DRONE_COUNT"):
+        env_overrides.setdefault("hivemind", {})["drone_count"] = int(
+            os.getenv("HIVEMIND_DRONE_COUNT")
         )
 
     if os.getenv("ENABLE_CHECKPOINTS"):

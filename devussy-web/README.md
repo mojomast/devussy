@@ -76,6 +76,11 @@ http://localhost:3000
 ### Execution Phase ⚡ NEW
 - **All phases generate concurrently** (no queueing)
 - **Real-time streaming terminal output** for each phase
+- **🐝 HiveMind Mode**: Multi-agent swarm generation for any phase
+  - 4-pane real-time streaming (3 drones + 1 arbiter)
+  - Available for all phase statuses (queued, running, complete, failed)
+  - Diverse perspectives with temperature variation
+  - Consensus-driven synthesis by arbiter LLM
 - Browser automatically manages connection pooling (~6 concurrent)
 - Grid view (3-4 column) or tabs view
 - Visual status indicators (running, complete, failed, queued)
@@ -106,6 +111,38 @@ http://localhost:3000
 - Concurrency control for execution
 - Multiple LLM provider support
 
+### HiveMind Mode 🐝 NEW
+A multi-agent swarm generation system that provides diverse perspectives on any phase:
+
+**How It Works:**
+- Click "🐝 Hive Mode" on any phase card (available for all statuses)
+- Opens a 4-pane real-time streaming window:
+  - **Drone 1** (Cyan): Temperature-varied analysis
+  - **Drone 2** (Purple): Alternative perspective  
+  - **Drone 3** (Orange): Third viewpoint
+  - **Arbiter** (Green): Synthesizes consensus from all drones
+
+**Use Cases:**
+- Generate multiple approaches for complex phases
+- Re-evaluate completed phases with swarm intelligence
+- Compare single-agent vs multi-agent results
+- Refine phases before or after standard generation
+
+**Technical Details:**
+- Streams all 4 agents simultaneously via Server-Sent Events (SSE)
+- Drones execute sequentially with temperature jitter (0.5-1.0)
+- Arbiter synthesizes consensus using specialized prompt template
+- Backward compatible with existing pipeline (optional feature)
+
+**Configuration:**
+Backend: `src/config.py` → `HiveMindConfig`
+```yaml
+hivemind:
+  enabled: true
+  drone_count: 3
+  temperature_jitter: true
+```
+
 ## 🏗️ Architecture
 
 ### Tech Stack
@@ -129,6 +166,7 @@ devussy-web/
 │   │   │   ├── DesignView.tsx    # Design generation
 │   │   │   ├── PlanView.tsx      # Plan with editable cards
 │   │   │   ├── ExecutionView.tsx # Concurrent execution
+│   │   │   ├── HiveMindView.tsx  # Multi-agent swarm (4-pane)
 │   │   │   ├── HandoffView.tsx   # Artifact download
 │   │   │   └── ModelSettings.tsx # Configuration UI
 │   │   ├── window/
@@ -141,7 +179,8 @@ devussy-web/
 │   ├── design.py                 # Design generation
 │   ├── plan/
 │   │   ├── basic.py             # Plan structure
-│   │   └── detail.py            # Phase details
+│   │   ├── detail.py            # Phase details
+│   │   └── hivemind.py          # HiveMind multi-stream SSE
 │   ├── handoff.py               # Handoff generation
 │   ├── interview.py             # Interview flow
 │   └── models.py                # Available models

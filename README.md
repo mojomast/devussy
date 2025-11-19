@@ -75,6 +75,7 @@ Devussy now includes a **Next.js-based web frontend** (`devussy-web/`) that prov
 ### Features
 - **Multi-Window Architecture**: Each pipeline phase spawns its own draggable, minimizable window
 - **Real-Time Streaming**: Design and Plan generation stream in real-time using Server-Sent Events (SSE)
+- **🐝 HiveMind Mode**: Multi-agent swarm generation for any phase with 4-pane streaming (3 drones + arbiter)
 - **Premium UI**: Built with Tailwind CSS, Shadcn UI components, and Framer Motion animations
 - **Model Configuration**: Per-stage model selection with global defaults
 - **Direct Backend Integration**: Bypasses Next.js proxy for optimal streaming performance
@@ -91,7 +92,8 @@ npm run dev
 ```
 Then visit `http://localhost:3000` to access the web interface.
 
-### Recent Updates (2025-11-18)
+### Recent Updates (2025-11-19)
+- ✅ HiveMind UI streaming integration complete (multi-agent swarm generation)
 - ✅ Fixed "Approve & Plan" button enablement after Design generation
 - ✅ Implemented SSE streaming for Plan generation to prevent connection timeouts
 - ✅ Direct backend connection (port 8000) bypasses Next.js buffering

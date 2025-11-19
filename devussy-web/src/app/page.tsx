@@ -12,10 +12,11 @@ import { PlanView } from "@/components/pipeline/PlanView";
 import { ExecutionView } from "@/components/pipeline/ExecutionView";
 import { HandoffView } from "@/components/pipeline/HandoffView";
 import { InterviewView } from "@/components/pipeline/InterviewView";
+import { HiveMindView } from "@/components/pipeline/HiveMindView";
 import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipeline/ModelSettings";
 import { Taskbar } from "@/components/window/Taskbar";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'hivemind';
 
 interface WindowState {
   id: string;
@@ -177,6 +178,14 @@ export default function Page() {
     spawnWindow('handoff', 'Project Handoff');
   };
 
+  const handleSpawnHiveMind = (phase: any, plan: any, projectName: string) => {
+    spawnWindow('hivemind', `HiveMind: Phase ${phase.number}`, {
+      phase,
+      plan,
+      projectName
+    });
+  };
+
   // Render Content based on Window Type
   const renderWindowContent = (window: WindowState) => {
     switch (window.type) {
@@ -286,6 +295,7 @@ export default function Page() {
             projectName={projectName}
             modelConfig={getEffectiveConfig('execute')}
             onComplete={handlePhaseComplete}
+            onSpawnHiveMindWindow={handleSpawnHiveMind}
           />
         );
       case 'handoff':
@@ -294,6 +304,15 @@ export default function Page() {
             design={design}
             plan={plan}
             modelConfig={getEffectiveConfig('handoff')}
+          />
+        );
+      case 'hivemind':
+        return (
+          <HiveMindView
+            phase={window.props?.phase}
+            plan={window.props?.plan}
+            projectName={window.props?.projectName}
+            modelConfig={getEffectiveConfig('execute')}
           />
         );
       default:

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play } from "lucide-react";
+import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, Sparkles } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 
 interface PhaseStatus {
@@ -23,13 +23,15 @@ interface ExecutionViewProps {
     projectName: string;
     modelConfig: ModelConfig;
     onComplete: (detailedPlan?: any) => void;
+    onSpawnHiveMindWindow?: (phase: PhaseStatus, plan: any, projectName: string) => void;
 }
 
 export const ExecutionView: React.FC<ExecutionViewProps> = ({
     plan,
     projectName,
     modelConfig,
-    onComplete
+    onComplete,
+    onSpawnHiveMindWindow
 }) => {
     const [viewMode, setViewMode] = useState<'grid' | 'tabs'>('grid');
     const [concurrency, setConcurrency] = useState<number>(modelConfig.concurrency || 3);
@@ -100,11 +102,11 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         abortControllersRef.current.set(phase.number, controller);
 
         console.log('[executePhase] Setting phase', phase.number, 'to running state');
-        
+
         // Initialize output buffer for this phase
         const initialOutput = `Starting Phase ${phase.number}: ${phase.title}...\n\n`;
         phaseOutputBuffers.current.set(phase.number, initialOutput);
-        
+
         setPhases(prev => {
             const updated = prev.map(p =>
                 p.number === phase.number
@@ -163,7 +165,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 console.error('[executePhase] No response body!');
                 throw new Error('No response body');
             }
-            
+
             console.log('[executePhase] Got reader, starting to read stream for phase', phase.number);
 
             const decoder = new TextDecoder();
@@ -206,17 +208,17 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                                     if (contentCount <= 5 || contentCount % 50 === 0) {
                                         console.log(`[executePhase] Phase ${phase.number}: Content #${contentCount}:`, data.content.substring(0, 50));
                                     }
-                                    
+
                                     // Accumulate content in buffer
                                     const currentBuffer = phaseOutputBuffers.current.get(phase.number) || '';
                                     phaseOutputBuffers.current.set(phase.number, currentBuffer + data.content);
-                                    
+
                                     // Debounce state updates to avoid overwhelming React
                                     const existingTimer = updateTimers.current.get(phase.number);
                                     if (existingTimer) {
                                         clearTimeout(existingTimer);
                                     }
-                                    
+
                                     const timer = setTimeout(() => {
                                         const bufferedContent = phaseOutputBuffers.current.get(phase.number) || '';
                                         setPhases(prev => prev.map(p =>
@@ -224,7 +226,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                                                 ? { ...p, output: bufferedContent }
                                                 : p
                                         ));
-                                        
+
                                         // Auto-scroll to bottom after update
                                         requestAnimationFrame(() => {
                                             const scrollContainer = scrollContainerRefs.current.get(phase.number);
@@ -232,10 +234,10 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                                                 scrollContainer.scrollTop = scrollContainer.scrollHeight;
                                             }
                                         });
-                                        
+
                                         updateTimers.current.delete(phase.number);
                                     }, 50); // Update every 50ms max
-                                    
+
                                     updateTimers.current.set(phase.number, timer);
                                 }
 
@@ -247,32 +249,32 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                                 if (data.done) {
                                     console.log('[executePhase] Phase', phase.number, 'done signal received');
                                     phaseCompleted = true;
-                                    
+
                                     // Flush any pending updates
                                     const existingTimer = updateTimers.current.get(phase.number);
                                     if (existingTimer) {
                                         clearTimeout(existingTimer);
                                         updateTimers.current.delete(phase.number);
                                     }
-                                    
+
                                     // Final state update with buffered content AND detailed phase data
                                     const finalOutput = phaseOutputBuffers.current.get(phase.number) || '';
                                     setPhases(prev => prev.map(p =>
                                         p.number === phase.number
-                                            ? { 
-                                                ...p, 
-                                                status: 'complete', 
-                                                progress: 100, 
+                                            ? {
+                                                ...p,
+                                                status: 'complete',
+                                                progress: 100,
                                                 output: finalOutput,
                                                 detailedPhase: data.phase // Store the detailed phase with steps
                                             }
                                             : p
                                     ));
                                     setCompletedCount(prev => prev + 1);
-                                    
+
                                     // Clean up buffer
                                     phaseOutputBuffers.current.delete(phase.number);
-                                    
+
                                     // Close reader to release connection
                                     reader.cancel();
                                     console.log('[executePhase] Phase', phase.number, 'reader closed');
@@ -291,14 +293,14 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 // If stream ended without explicit done signal, mark as complete anyway
                 if (!phaseCompleted) {
                     console.log('[executePhase] Stream ended without done signal for phase', phase.number, '- marking complete');
-                    
+
                     // Flush any pending updates
                     const existingTimer = updateTimers.current.get(phase.number);
                     if (existingTimer) {
                         clearTimeout(existingTimer);
                         updateTimers.current.delete(phase.number);
                     }
-                    
+
                     // Final state update with buffered content
                     const finalOutput = phaseOutputBuffers.current.get(phase.number) || '';
                     setPhases(prev => prev.map(p =>
@@ -307,7 +309,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                             : p
                     ));
                     setCompletedCount(prev => prev + 1);
-                    
+
                     // Clean up buffer
                     phaseOutputBuffers.current.delete(phase.number);
                 }
@@ -328,10 +330,10 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 clearTimeout(existingTimer);
                 updateTimers.current.delete(phase.number);
             }
-            
+
             const currentOutput = phaseOutputBuffers.current.get(phase.number) || '';
             phaseOutputBuffers.current.delete(phase.number);
-            
+
             if (err.name === 'AbortError') {
                 setPhases(prev => prev.map(p =>
                     p.number === phase.number
@@ -388,9 +390,9 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                     return originalPhase;
                 })
             };
-            
+
             console.log('[ExecutionView] Built detailed plan with', detailedPlan.phases.length, 'phases');
-            
+
             // Call onComplete in next tick to avoid setState during render
             setTimeout(() => onComplete(detailedPlan), 0);
         }
@@ -437,6 +439,20 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                     <span>Phase {phase.number}</span>
                 </CardTitle>
                 <div className="text-xs text-muted-foreground truncate">{phase.title}</div>
+
+                {/* Hive Mode button - available for all phases */}
+                {onSpawnHiveMindWindow && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onSpawnHiveMindWindow(phase, plan, projectName)}
+                        className="mt-2 border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
+                    >
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        🐝 Hive Mode
+                    </Button>
+                )}
+
                 {phase.status === 'running' && (
                     <div className="mt-2 h-1 bg-border rounded-full overflow-hidden">
                         <div
@@ -447,7 +463,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                 )}
             </CardHeader>
             <CardContent className="flex-1 pt-0 overflow-hidden">
-                <div 
+                <div
                     ref={el => { if (el) scrollContainerRefs.current.set(phase.number, el); }}
                     className="h-full overflow-y-auto custom-scrollbar"
                 >
@@ -526,11 +542,10 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             {/* Content */}
             <div className="flex-1 overflow-hidden">
                 {viewMode === 'grid' ? (
-                    <div className={`grid gap-4 p-4 h-full auto-rows-fr ${
-                        phases.length <= 3 ? 'grid-cols-3' : 
-                        phases.length <= 6 ? 'grid-cols-3' : 
-                        'grid-cols-4'
-                    }`}>
+                    <div className={`grid gap-4 p-4 h-full auto-rows-fr ${phases.length <= 3 ? 'grid-cols-3' :
+                            phases.length <= 6 ? 'grid-cols-3' :
+                                'grid-cols-4'
+                        }`}>
                         {phases.map(phase => renderPhaseColumn(phase))}
                     </div>
                 ) : (

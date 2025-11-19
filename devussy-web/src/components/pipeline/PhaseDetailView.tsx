@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Check, Terminal, Play, Loader2, AlertCircle } from "lucide-react";
+import { Check, Terminal, Play, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 
 interface PhaseDetailViewProps {
@@ -13,6 +13,7 @@ interface PhaseDetailViewProps {
     projectName: string;
     modelConfig: ModelConfig;
     onComplete: () => void;
+    onHiveMindClick?: () => void;  // New callback for Hive Mode
 }
 
 export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
@@ -20,7 +21,8 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
     plan,
     projectName,
     modelConfig,
-    onComplete
+    onComplete,
+    onHiveMindClick
 }) => {
     const [output, setOutput] = useState<string>("");
     const [isExecuting, setIsExecuting] = useState(false);
@@ -111,6 +113,17 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
                     Phase {phase.number} Execution
                 </h2>
                 <div className="flex gap-2">
+                    {!hasStarted.current && onHiveMindClick && (
+                        <Button
+                            size="sm"
+                            onClick={onHiveMindClick}
+                            variant="outline"
+                            className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
+                        >
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            🐝 Hive Mode
+                        </Button>
+                    )}
                     {!hasStarted.current && (
                         <Button
                             size="sm"

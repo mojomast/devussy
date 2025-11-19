@@ -13,6 +13,8 @@ from ..llm_client import LLMClient
 from ..logger import get_logger
 from ..models import DevPlan, DevPlanPhase, DevPlanStep
 from ..templates import render_template
+from .hivemind import HiveMindManager
+from ..config import load_config
 
 logger = get_logger(__name__)
 
@@ -41,6 +43,7 @@ class DetailedDevPlanGenerator:
         """
         self.llm_client = llm_client
         self.concurrency_manager = concurrency_manager
+        self.hivemind = HiveMindManager(llm_client)
 
     async def generate(
         self,
@@ -207,8 +210,26 @@ class DetailedDevPlanGenerator:
             self.llm_client, "streaming_enabled", False
         )
 
+        # Check HiveMind config
+        config = load_config()
+
         # Primary call uses configured defaults (provider/model-specific)
-        if streaming_enabled and streaming_handler is not None:
+        if config.hivemind.enabled:
+            logger.info(f"HiveMind enabled for phase {phase.number}")
+            # Pass streaming handler if available (HiveMind handles it for Arbiter)
+            if streaming_handler:
+                llm_kwargs["streaming_handler"] = streaming_handler
+            
+            response = await self.hivemind.run_swarm(
+                prompt,
+                count=config.hivemind.drone_count,
+                temperature_jitter=config.hivemind.temperature_jitter,
+                **llm_kwargs
+            )
+            response_used = response
+            print(f"[detailed_devplan] HiveMind complete for phase {phase.number}, got {len(response)} chars")
+
+        elif streaming_enabled and streaming_handler is not None:
             print(f"[detailed_devplan] Using streaming for phase {phase.number}")
             # Use streaming with handler
             response_chunks: list[str] = []
