@@ -161,7 +161,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         });
 
         try {
-            const backendUrl = `http://${window.location.hostname}:8000/api/plan/detail`;
+            const backendUrl = `/api/plan/detail`;
             console.log('[executePhase] Fetching from', backendUrl, 'for phase', phase.number);
 
             const requestBody = {

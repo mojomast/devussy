@@ -42,7 +42,7 @@ export const DesignView: React.FC<DesignViewProps> = ({
                 console.log("Starting design generation request...");
                 try {
                     // Bypass Next.js proxy and hit backend directly to avoid buffering
-                    const backendUrl = `http://${window.location.hostname}:8000/api/design`;
+                    const backendUrl = `/api/design`;
                     console.log("Fetching from:", backendUrl);
 
                     const response = await fetch(backendUrl, {

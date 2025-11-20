@@ -128,7 +128,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
         try {
             // Bypass Next.js proxy and hit backend directly to avoid buffering
-            const backendUrl = `http://${window.location.hostname}:8000/api/plan/basic`;
+            const backendUrl = `/api/plan/basic`;
 
             const response = await fetch(backendUrl, {
                 method: 'POST',

@@ -28,7 +28,7 @@ export const CheckpointManager: React.FC<CheckpointManagerProps> = ({ currentSta
     const fetchCheckpoints = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`http://${window.location.hostname}:8000/api/checkpoints`);
+            const res = await fetch(`/api/checkpoints`);
             const data = await res.json();
             if (data.checkpoints) {
                 setCheckpoints(data.checkpoints);
@@ -56,7 +56,7 @@ export const CheckpointManager: React.FC<CheckpointManagerProps> = ({ currentSta
                 timestamp: Date.now() / 1000
             };
 
-            await fetch(`http://${window.location.hostname}:8000/api/checkpoints`, {
+            await fetch(`/api/checkpoints`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -74,7 +74,7 @@ export const CheckpointManager: React.FC<CheckpointManagerProps> = ({ currentSta
     const handleLoad = async (id: string) => {
         setIsLoading(true);
         try {
-            const res = await fetch(`http://${window.location.hostname}:8000/api/checkpoints?id=${id}`);
+            const res = await fetch(`/api/checkpoints?id=${id}`);
             const data = await res.json();
             onLoad(data);
             setIsOpen(false);
