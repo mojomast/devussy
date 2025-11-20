@@ -1,0 +1,44 @@
+version: "3.8"
+services:
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app:delegated
+    command: sh -lc "npm ci && npm run build && npm run start"
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - USE_LOCAL_API=${USE_LOCAL_API:-false}
+    depends_on:
+      - streaming-server
+
+  streaming-server:
+    build:
+      context: .
+      dockerfile: streaming_server/Dockerfile
+    working_dir: /app
+    volumes:
+      - ./:/app:delegated
+    command: sh -lc "uvicorn streaming_server.app:app --host 0.0.0.0 --port 8000 --workers 1 --reload"
+    ports:
+      - "8000:8000"
+    environment:
+      - REQUESTY_API_KEY=${REQUESTY_API_KEY}
+      - STREAMING_SECRET=${STREAMING_SECRET}
+      - LLM_PROVIDER=requesty
+
+  nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - streaming-server
+
+# Note: this is a minimal template. For production, build optimized images and avoid mounting the whole source tree.

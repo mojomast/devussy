@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/next" },
+    { "src": "api/**/*.py", "use": "@vercel/python" }
+  ],
+  "routes": [
+    { "src": "/api/design(?:/(.*))?", "dest": "/api/vercel_design$1" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ],
+  "env": {
+    "REQUESTY_API_KEY": "REPLACE_WITH_YOUR_REQUESTY_API_KEY",
+    "LLM_PROVIDER": "requesty"
+  }
+}

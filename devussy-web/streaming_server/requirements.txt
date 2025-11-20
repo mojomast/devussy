@@ -1,0 +1,3 @@
+fastapi>=0.101.0
+uvicorn[standard]>=0.22.0
+# Existing dependencies are referenced at the repo root: openai, pydantic, jinja2, pyyaml, python-dotenv, aiohttp
