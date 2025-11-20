@@ -28,6 +28,11 @@ This guide explains how to deploy the Devussy application on a VPS using Docker.
     ```bash
     docker-compose -f docker-compose.prod.yml up --build -d
     ```
+     Note: If you obtained an SSL certificate with Certbot on the VPS, ensure the `nginx` service can access the certs by mounting the host `/etc/letsencrypt` directory into the container (the provided compose file already includes this mount). After updating certificates, restart the nginx service:
+
+     ```bash
+     sudo docker-compose -f docker-compose.prod.yml restart nginx
+     ```
 
 4.  **Verify Deployment:**
     - Check logs: `docker-compose -f docker-compose.prod.yml logs -f`

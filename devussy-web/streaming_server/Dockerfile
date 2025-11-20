@@ -19,6 +19,8 @@ COPY templates /app/templates
 RUN pip install --upgrade pip
 # Install dependencies used by the streaming server (uses root requirements)
 RUN pip install -r requirements.txt
+# Install streaming server specific dependencies (fastapi, uvicorn)
+RUN pip install -r streaming_server/requirements.txt
 # Install this package so 'src' is available as an installed package (src namespace)
 RUN pip install -e .
 

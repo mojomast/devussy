@@ -33,6 +33,8 @@ services:
     image: nginx:stable-alpine
     volumes:
       - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      # mount the host's Let's Encrypt certs into the container so nginx can use them
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       # REMOVED: ./nginx/conf.d mount as it does not exist
     ports:
       - "80:80"
