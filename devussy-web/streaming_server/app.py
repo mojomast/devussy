@@ -9,6 +9,10 @@ starting point and will need additional validation and tests.
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 import json
+import tempfile
+import shutil
+import requests
+from src.git_manager import GitManager
 import os
 import asyncio
 
@@ -18,6 +22,7 @@ from src.pipeline.project_design import ProjectDesignGenerator
 from src.pipeline.basic_devplan import BasicDevPlanGenerator
 from src.pipeline.detailed_devplan import DetailedDevPlanGenerator
 from src.pipeline.handoff_prompt import HandoffPromptGenerator
+from src.pipeline.hivemind import HiveMindManager
 from src.models import ProjectDesign, DevPlan
 import os
 import glob
@@ -127,6 +132,76 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
 async def design_stream_alias(request: Request, x_streaming_proxy_key: str | None = Header(None)):
     """Alias for `/api/design/stream` kept for backwards compatibility with the frontend which hits `/api/design` for SSE streaming."""
     return await design_stream(request, x_streaming_proxy_key)
+
+@app.post("/api/design/hivemind")
+async def design_hivemind(request: Request):
+    data = await request.json()
+    project_name = data.get('projectName')
+    requirements = data.get('requirements')
+    languages = data.get('languages', [])
+    if not project_name or not requirements:
+        raise HTTPException(status_code=400, detail='Missing required data')
+
+    model_config = data.get('modelConfig', {})
+    config = load_config()
+    if model_config.get('model'):
+        config.llm.model = model_config.get('model')
+    if model_config.get('temperature') is not None:
+        config.llm.temperature = float(model_config.get('temperature'))
+
+    async def event_generator():
+        llm_client = create_llm_client(config)
+        hivemind = HiveMindManager(llm_client)
+        queue: asyncio.Queue = asyncio.Queue()
+
+        class DroneHandler:
+            def __init__(self, drone_id: str):
+                self.drone_id = drone_id
+            async def on_token_async(self, token: str):
+                await queue.put({'type': self.drone_id, 'content': token})
+            async def on_completion_async(self, full_response: str):
+                await queue.put({'type': f'{self.drone_id}_complete'})
+
+        try:
+            prompt_context = {
+                'project_name': project_name,
+                'languages': languages,
+                'frameworks': [],
+                'apis': [],
+                'requirements': requirements,
+            }
+            from src.templates import render_template
+            prompt = render_template('project_design.jinja', prompt_context)
+
+            drone_handlers = [DroneHandler('drone1'), DroneHandler('drone2'), DroneHandler('drone3')]
+            arbiter_handler = DroneHandler('arbiter')
+
+            async def run_swarm():
+                final_response = await hivemind.run_swarm(
+                    prompt=prompt,
+                    count=3,
+                    temperature_jitter=True,
+                    drone_callbacks=drone_handlers,
+                    arbiter_callback=arbiter_handler,
+                )
+                await queue.put({'done': True, 'design': {'project_name': project_name, 'raw_response': final_response}})
+
+            task = asyncio.create_task(run_swarm())
+
+            while True:
+                item = await queue.get()
+                if item.get('content'):
+                    # drone or arbiter token
+                    yield f"data: {json.dumps({'type': item['type'], 'content': item['content']})}\n\n"
+                elif item.get('type') and item['type'].endswith('_complete'):
+                    yield f"data: {json.dumps({'type': item['type']})}\n\n"
+                elif item.get('done'):
+                    yield f"data: {json.dumps({'done': True, 'design': item.get('design')})}\n\n"
+                    break
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
 
 
 @app.post("/api/interview")
@@ -247,6 +322,88 @@ async def handoff_endpoint(request: Request):
         loop = asyncio.get_running_loop()
         handoff = await loop.run_in_executor(None, generator.generate, plan, design.project_name, design.architecture_overview or "", str(design.tech_stack) if design.tech_stack else "")
         return JSONResponse(status_code=200, content=handoff.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/github/create")
+async def github_create(request: Request):
+    data = await request.json()
+    repo_name = data.get('repoName')
+    token = data.get('token')
+    design = data.get('design', {})
+    plan = data.get('plan', {})
+    handoff_content = data.get('handoffContent', '')
+
+    if not repo_name or not token:
+        raise HTTPException(status_code=400, detail="Missing repoName or token")
+
+    headers = {
+        'Authorization': f'token {token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    api_url = 'https://api.github.com/user/repos'
+    payload = {
+        'name': repo_name,
+        'private': True,
+        'description': f"Generated by Devussy: {design.get('project_name', 'Project')}"
+    }
+    try:
+        response = requests.post(api_url, headers=headers, json=payload)
+        if response.status_code not in [200, 201]:
+            err_msg = response.json().get('message', 'Unknown error')
+            raise HTTPException(status_code=400, detail=f"GitHub API Error: {err_msg}")
+        repo_data = response.json()
+        clone_url = repo_data['clone_url']
+        auth_clone_url = clone_url.replace('https://', f'https://{token}@')
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            # Write README, design, plan, handoff
+            with open(temp_path / 'README.md', 'w', encoding='utf-8') as f:
+                f.write(f"# {design.get('project_name', 'Devussy Project')}\n\n")
+                f.write(f"Generated by Devussy.\n\n")
+                f.write(f"## Description\n{design.get('description', 'No description provided.')}\n")
+            with open(temp_path / 'project_design.md', 'w', encoding='utf-8') as f:
+                f.write(design.get('raw_response') or json.dumps(design, indent=2))
+            with open(temp_path / 'development_plan.md', 'w', encoding='utf-8') as f:
+                f.write(json.dumps(plan, indent=2))
+            if handoff_content:
+                with open(temp_path / 'handoff_instructions.md', 'w', encoding='utf-8') as f:
+                    f.write(handoff_content)
+            phases_dir = temp_path / 'phases'
+            phases_dir.mkdir(exist_ok=True)
+            if plan and 'phases' in plan:
+                for phase in plan['phases']:
+                    p_num = phase.get('number', 0)
+                    p_title = phase.get('title', f'Phase {p_num}').replace(' ', '_').lower()
+                    p_filename = f"phase_{p_num}_{p_title}.md"
+                    content = f"# Phase {p_num}: {phase.get('title', 'Untitled')}\n\n"
+                    content += f"## Description\n{phase.get('description', '')}\n\n"
+                    if 'steps' in phase:
+                        content += "## Steps\n"
+                        for idx, step in enumerate(phase['steps']):
+                            content += f"### {idx+1}. {step.get('title', 'Step')}\n"
+                            content += f"{step.get('description', '')}\n\n"
+                    with open(phases_dir / p_filename, 'w', encoding='utf-8') as f:
+                        f.write(content)
+
+            # Git operations
+            try:
+                git = GitManager(temp_path)
+                git.init_repository()
+                git.add_remote('origin', auth_clone_url)
+                git.commit_changes('Initial commit by Devussy')
+                try:
+                    git.push('origin', 'master')
+                except Exception:
+                    git.push('origin', 'main')
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+        return JSONResponse(status_code=200, content={'status': 'success', 'data': {'repoUrl': repo_data['html_url'], 'message': 'Repository created and code pushed successfully!'}})
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
