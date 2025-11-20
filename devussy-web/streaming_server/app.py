@@ -7,12 +7,13 @@ starting point and will need additional validation and tests.
 """
 
 from fastapi import FastAPI, Request, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 import json
 import os
 import asyncio
 
 from src.config import load_config
+import aiohttp
 from src.clients.factory import create_llm_client
 from src.pipeline.project_design import ProjectDesignGenerator
 
@@ -110,3 +111,53 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
             return
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/api/models")
+async def get_models():
+    """Fetch available models from the configured LLM provider (Requesty router by default).
+
+    This mirrors the helper handler in the repository's dev_server and allows the
+    frontend to query models in production via the streaming server.
+    """
+    # Load config and API key
+    config = load_config()
+    api_key = getattr(config.llm, "api_key", None) or os.environ.get("REQUESTY_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Requesty API key not configured")
+
+    base_url = getattr(config.llm, "base_url", None) or "https://router.requesty.ai/v1"
+    endpoint = f"{base_url.rstrip('/')}/models"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(endpoint, headers=headers) as resp:
+                if resp.status >= 400:
+                    error_text = await resp.text()
+                    raise HTTPException(status_code=502, detail=f"Requesty API error {resp.status}: {error_text}")
+                data = await resp.json()
+
+        # Normalize model shapes into: id, name, description, context_window
+        models = data.get("data", data.get("models", []))
+        sanitized = []
+        for raw in models:
+            model_id = raw.get("id") or raw.get("name")
+            if not model_id:
+                continue
+            sanitized.append({
+                "id": model_id,
+                "name": raw.get("name", model_id),
+                "description": raw.get("description", ""),
+                "context_window": raw.get("context_window", raw.get("max_tokens")),
+            })
+
+        return JSONResponse(status_code=200, content={"models": sanitized})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
