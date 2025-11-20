@@ -13,6 +13,16 @@ import os
 import asyncio
 
 from src.config import load_config
+from src.clients.factory import create_llm_client
+from src.pipeline.project_design import ProjectDesignGenerator
+from src.pipeline.basic_devplan import BasicDevPlanGenerator
+from src.pipeline.detailed_devplan import DetailedDevPlanGenerator
+from src.pipeline.handoff_prompt import HandoffPromptGenerator
+from src.models import ProjectDesign, DevPlan
+import os
+import glob
+import time
+from pathlib import Path
 import aiohttp
 from src.clients.factory import create_llm_client
 from src.pipeline.project_design import ProjectDesignGenerator
@@ -111,6 +121,276 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
             return
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.post("/api/design")
+async def design_stream_alias(request: Request, x_streaming_proxy_key: str | None = Header(None)):
+    """Alias for `/api/design/stream` kept for backwards compatibility with the frontend which hits `/api/design` for SSE streaming."""
+    return await design_stream(request, x_streaming_proxy_key)
+
+
+@app.post("/api/interview")
+async def interview_endpoint(request: Request):
+    data = await request.json()
+    user_input = data.get("userInput")
+    history = data.get("history", [])
+    model_config = data.get("modelConfig", {})
+
+    if not user_input:
+        raise HTTPException(status_code=400, detail="Missing userInput")
+
+    config = load_config()
+    # Apply model overrides
+    if model_config.get("model"):
+        config.llm.model = model_config.get("model")
+    if model_config.get("temperature") is not None:
+        config.llm.temperature = float(model_config.get("temperature"))
+    if model_config.get("reasoning_effort"):
+        config.llm.reasoning_effort = model_config.get("reasoning_effort")
+
+    # Use LLMInterviewManager but call in executor to avoid blocking
+    manager = None
+    try:
+        from src.llm_interview import LLMInterviewManager
+        manager = LLMInterviewManager(config, verbose=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to initialize interview manager: {e}")
+
+    if history:
+        try:
+            manager.conversation_history.extend(history)
+        except Exception:
+            pass
+
+    loop = asyncio.get_running_loop()
+    try:
+        response_text = await loop.run_in_executor(None, manager._send_to_llm, user_input)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    extracted = manager._extract_structured_data(response_text)
+    is_complete = manager._validate_extracted_data(extracted) if extracted else False
+    return JSONResponse(status_code=200, content={"response": response_text, "extractedData": extracted, "isComplete": is_complete})
+
+
+@app.get("/api/checkpoints")
+async def checkpoints_get(id: str | None = None):
+    CHECKPOINT_DIR = ".checkpoints"
+    if not os.path.exists(CHECKPOINT_DIR):
+        os.makedirs(CHECKPOINT_DIR)
+
+    if id:
+        filepath = os.path.join(CHECKPOINT_DIR, f"{id}.json")
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="Checkpoint not found")
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return JSONResponse(status_code=200, content=data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    else:
+        files = glob.glob(os.path.join(CHECKPOINT_DIR, "*.json"))
+        files.sort(key=os.path.getmtime, reverse=True)
+        checkpoints = []
+        for filepath in files:
+            filename = os.path.basename(filepath)
+            checkpoint_id = filename.replace('.json', '')
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    checkpoints.append({
+                        "id": checkpoint_id,
+                        "name": data.get("name", checkpoint_id),
+                        "timestamp": data.get("timestamp", os.path.getmtime(filepath)),
+                        "projectName": data.get("projectName", "Unknown Project"),
+                        "stage": data.get("stage", "unknown")
+                    })
+            except Exception:
+                continue
+        return JSONResponse(status_code=200, content={"checkpoints": checkpoints})
+
+
+@app.post("/api/checkpoints")
+async def checkpoints_post(request: Request):
+    data = await request.json()
+    CHECKPOINT_DIR = ".checkpoints"
+    if not os.path.exists(CHECKPOINT_DIR):
+        os.makedirs(CHECKPOINT_DIR)
+    timestamp = int(time.time())
+    name = data.get("name", "checkpoint").replace(' ', '_')
+    checkpoint_id = f"{timestamp}_{name}"
+    data["timestamp"] = timestamp
+    data["id"] = checkpoint_id
+    filepath = os.path.join(CHECKPOINT_DIR, f"{checkpoint_id}.json")
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        return JSONResponse(status_code=200, content={"success": True, "id": checkpoint_id})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/handoff")
+async def handoff_endpoint(request: Request):
+    data = await request.json()
+    design_data = data.get('design')
+    plan_data = data.get('plan')
+    if not design_data or not plan_data:
+        raise HTTPException(status_code=400, detail="Missing design or plan data")
+
+    try:
+        design = ProjectDesign(**design_data)
+        plan = DevPlan(**plan_data)
+        generator = HandoffPromptGenerator()
+        # Handoff generator may be synchronous; run in executor
+        loop = asyncio.get_running_loop()
+        handoff = await loop.run_in_executor(None, generator.generate, plan, design.project_name, design.architecture_overview or "", str(design.tech_stack) if design.tech_stack else "")
+        return JSONResponse(status_code=200, content=handoff.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/plan/basic")
+async def plan_basic(request: Request):
+    data = await request.json()
+    design_data = data.get('design')
+    if not design_data:
+        raise HTTPException(status_code=400, detail="Missing design data")
+
+    try:
+        design = ProjectDesign(**design_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Optional overrides
+    model_config = data.get('modelConfig', {})
+    config = load_config()
+    if model_config.get('model'):
+        config.llm.model = model_config.get('model')
+    if model_config.get('temperature') is not None:
+        config.llm.temperature = float(model_config.get('temperature'))
+
+    # Stream as SSE
+    async def event_generator():
+        llm_client = create_llm_client(config)
+        generator = BasicDevPlanGenerator(llm_client)
+
+        class StreamHandler:
+            def __init__(self):
+                pass
+
+            async def on_token_async(self, token: str):
+                yield_token = f"data: {json.dumps({'content': token})}\n\n"
+                yield yield_token
+
+            async def on_completion_async(self, full_response: str):
+                return
+
+        # Streaming via async call
+        try:
+            # We will emulate an async streaming handler by writing to queue
+            queue: asyncio.Queue = asyncio.Queue()
+
+            class APIHandler:
+                async def on_token_async(self, token: str):
+                    await queue.put({'content': token})
+
+                async def on_completion_async(self, full_response: str):
+                    await queue.put({'done': True, 'plan': full_response})
+
+            api_handler = APIHandler()
+
+            async def run_generation():
+                result = await generator.generate(project_design=design, streaming_handler=api_handler)
+                # Put final plan data
+                await queue.put({'done': True, 'plan': result.model_dump()})
+
+            task = asyncio.create_task(run_generation())
+
+            while True:
+                item = await queue.get()
+                if 'content' in item:
+                    yield f"data: {json.dumps({'content': item['content']})}\n\n"
+                elif item.get('done'):
+                    yield f"data: {json.dumps({'done': True, 'plan': item.get('plan')})}\n\n"
+                    break
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.post("/api/plan/detail")
+async def plan_detail(request: Request):
+    data = await request.json()
+    plan_data = data.get('plan') or data.get('basicPlan')
+    phase_number = data.get('phaseNumber')
+    project_name = data.get('projectName')
+
+    if not plan_data or phase_number is None or not project_name:
+        raise HTTPException(status_code=400, detail="Missing required data")
+
+    try:
+        dev_plan = DevPlan(**plan_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Find phase
+    target_phase = None
+    for p in dev_plan.phases:
+        if p.number == phase_number:
+            target_phase = p
+            break
+    if not target_phase:
+        raise HTTPException(status_code=400, detail=f"Phase {phase_number} not found")
+
+    model_config = data.get('modelConfig', {})
+    config = load_config()
+    if model_config.get('model'):
+        config.llm.model = model_config.get('model')
+    if model_config.get('temperature') is not None:
+        config.llm.temperature = float(model_config.get('temperature'))
+
+    async def event_generator():
+        llm_client = create_llm_client(config)
+        generator = DetailedDevPlanGenerator(llm_client)
+        queue: asyncio.Queue = asyncio.Queue()
+
+        class APIHandler:
+            async def on_token_async(self, token: str):
+                await queue.put({'content': token})
+
+            async def on_completion_async(self, full_response: str):
+                await queue.put({'done': True, 'phase': full_response})
+
+        api_handler = APIHandler()
+
+        async def run_gen():
+            detailed_phase = await generator._generate_phase_details(
+                phase=target_phase,
+                project_name=project_name,
+                tech_stack=[],
+                task_group_size=3,
+                streaming_handler=api_handler,
+            )
+            await queue.put({'done': True, 'phase': detailed_phase.phase.model_dump()})
+
+        task = asyncio.create_task(run_gen())
+
+        try:
+            while True:
+                item = await queue.get()
+                if 'content' in item:
+                    yield f"data: {json.dumps({'content': item['content']})}\n\n"
+                elif item.get('done'):
+                    yield f"data: {json.dumps({'done': True, 'phase': item.get('phase')})}\n\n"
+                    break
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
 
 
 @app.get("/api/models")
