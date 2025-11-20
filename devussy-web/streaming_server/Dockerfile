@@ -4,6 +4,7 @@ WORKDIR /app
 # Install required system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only what's needed from the repo to keep the image lean and predictable.
