@@ -25,6 +25,20 @@ I have successfully implemented the **HiveMind Design Mode** and fixed the **Exe
   - Disabled auto-advance to allow users to review execution outputs before proceeding.
   - Added helper logic to build the detailed plan for handoff.
 
+### 3. Critical Bug Fixes 🐛
+- **Handoff Generation**:
+  - Fixed `TypeError: HandoffPromptGenerator() takes no arguments`.
+  - Fixed `AttributeError: 'ProjectDesign' object has no attribute 'phases'` (argument mismatch).
+  - Fixed `AttributeError: 'ProjectDesign' object has no attribute 'architecture'` (field name mismatch).
+  - Fixed `TypeError: object HandoffPrompt can't be used in 'await' expression` (async fix).
+  - Ensured `project_design.md` in zip contains full content by using `raw_llm_response`.
+- **Window Management**:
+  - Implemented auto-open for "New Project" window.
+  - Improved default window sizes.
+  - Added Help system with single-instance window logic.
+- **Checkpoints**:
+  - Fixed loading logic to correctly restore the "Handoff" window from a checkpoint.
+
 ## 🧪 Verification
 - **HiveMind**: Verified that clicking the Hive Mode button in Design phase opens the 4-pane window and streams content from the backend.
 - **Execution**: Verified that the "Proceed to Handoff" button appears and is enabled after execution stops.

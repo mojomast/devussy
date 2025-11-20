@@ -1,7 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import asyncio
-from ..utils import setup_path
+from .utils import setup_path
 
 # Add project root to sys.path
 setup_path()
@@ -37,9 +37,16 @@ class handler(BaseHTTPRequestHandler):
             llm_client = create_llm_client(config)
             
             # Generate handoff
+            # Generate handoff
+            # Generate handoff
             async def generate_handoff():
-                generator = HandoffPromptGenerator(llm_client)
-                handoff = await generator.generate(design, plan)
+                generator = HandoffPromptGenerator()
+                handoff = generator.generate(
+                    devplan=plan,
+                    project_name=design.project_name,
+                    architecture_notes=design.architecture_overview or "",
+                    dependencies_notes=str(design.tech_stack) if design.tech_stack else ""
+                )
                 return handoff
             
             # Create a new event loop for this thread

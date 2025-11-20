@@ -103,6 +103,9 @@ Then visit `http://localhost:3000` to access the web interface.
 - ✅ Fixed "Approve & Plan" button enablement after Design generation
 - ✅ Implemented SSE streaming for Plan generation to prevent connection timeouts
 - ✅ Direct backend connection (port 8000) bypasses Next.js buffering
+- ✅ **Window Management**: Auto-open New Project, improved default sizes, Help system integration
+- ✅ **Handoff Fixes**: Resolved 500 errors, fixed async/await issues, ensured full design content in zip
+- ✅ **Checkpoint Loading**: Fixed issue where loading 'handoff' stage reset to start screen
 - 📋 See `devussy-web/handoff.md` for detailed status and next steps
 
 ## Install (from GitHub)

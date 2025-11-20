@@ -161,7 +161,7 @@ export const DesignView: React.FC<DesignViewProps> = ({
                     )}
                     <Button
                         size="sm"
-                        onClick={() => onDesignComplete(designData || { raw_response: designContent, project_name: projectName })}
+                        onClick={() => onDesignComplete(designData || { raw_llm_response: designContent, project_name: projectName })}
                         disabled={isGenerating}
                     >
                         <Check className="h-4 w-4 mr-2" />

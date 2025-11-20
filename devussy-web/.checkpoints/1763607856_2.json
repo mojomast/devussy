@@ -1,0 +1,11 @@
+{
+  "projectName": "token muncher",
+  "languages": "Python",
+  "requirements": "Token Muncher is a single-player, turn-based Pac\u2011Man\u2013style roguelite played in the terminal. The player eats tokens, avoids enemies, gains XP to level up, finds loot and skills, and unlocks persistent meta-progression between runs; points earned after a run can be spent on upgrades. Maps are procedurally generated mazes designed to be simple and low-noise for navigation.",
+  "design": null,
+  "plan": null,
+  "stage": "design",
+  "name": "2",
+  "timestamp": 1763607856,
+  "id": "1763607856_2"
+}

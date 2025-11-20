@@ -1,0 +1,2036 @@
+{
+  "projectName": "token muncher",
+  "languages": "Python",
+  "requirements": "Token Muncher is a single-player, turn-based Pac\u2011Man\u2013style roguelite played in the terminal. The player eats tokens, avoids enemies, gains XP to level up, finds loot and skills, and unlocks persistent meta-progression between runs; points earned after a run can be spent on upgrades. Maps are procedurally generated mazes designed to be simple and low-noise for navigation.",
+  "design": {
+    "project_name": "token muncher",
+    "objectives": [
+      "No objectives parsed"
+    ],
+    "tech_stack": [
+      "No tech stack parsed"
+    ],
+    "architecture_overview": "Goal: simple, testable, modular architecture separating core game rules from rendering and input.\nHigh-level architecture: Layered MVC-ish structure + event bus for decoupling.\nComponents:\nInteraction summary:\nPattern choices:\nData & control flow (simplified):\n1. Renderer draws current GameState.\n2. InputHandler waits for player input.\n3. InputHandler -> Controller dispatches PlayerAction to GameCore.\n4. TurnManager executes one turn tick:\n5. Renderer receives Events or snapshots and updates display.\n6. Repeat until run ends -> MetaStore persists points/unlocks -> display shop screen.\nMermaid sequence (simplified)\n```mermaid\nsequenceDiagram\nparticipant R as Renderer\nparticipant I as InputHandler\nparticipant G as GameCore\nparticipant A as AIController\nparticipant P as Persistence\nR->>G: draw(initial state)\nloop turn\nI->>G: PlayerAction\nG->>G: Process action (Movement/Combat/XP)\nG->>A: request enemy moves\nA->>G: EnemyActions\nG->>R: emit state/events\nR->>User: render\nend\nG->>P: persist meta-progression\nR->>User: show shop / upgrades\n```",
+    "dependencies": [
+      "rich",
+      "Why: high-quality terminal rendering, colors, panels.",
+      "Risk: not as low-level as curses; adequate for most needs. Active community.",
+      "prompt_toolkit",
+      "Why: robust, cross-platform, non-blocking keyboard input and key-bindings.",
+      "Risk: additional dependency; bigger install but very stable.",
+      "sqlite3 (stdlib)",
+      "Why: persistence for meta-progression.",
+      "Risk: small surface for corruption if program crashes during writes; mitigate with transactions.",
+      "poetry",
+      "Why: dependency/packaging management.",
+      "Risk: learning curve for newcomers.",
+      "pytest, hypothesis (optional)",
+      "mypy",
+      "black, isort",
+      "pre-commit",
+      "curses (stdlib) / windows-curses (Windows) \u2014 alternative to prompt_toolkit/Rich for minimal dependencies.",
+      "asciimatics / urwid \u2014 alternative TUI frameworks with richer UI primitives.",
+      "tinydb \u2014 if you prefer JSON-based lightweight persistence over sqlite.",
+      "numpy \u2014 unnecessary; don't include unless you have computational needs.",
+      "prompt_toolkit + rich: low risk, well supported. If portability or minimal installs needed, prefer curses.",
+      "sqlite3: low risk; use WAL mode for concurrency safety (not needed for single process).",
+      "Avoid heavy game engines (pygame) since target is terminal.",
+      "--"
+    ],
+    "challenges": [
+      "Risk: Windows terminal differences, curses incompatibilities.",
+      "Use prompt_toolkit for input; Rich for rendering (both cross-platform).",
+      "Test on Linux/macOS/Windows early.",
+      "Provide fallback to curses for minimal installs.",
+      "Risk: Generated mazes are high-noise -> unpleasant gameplay.",
+      "Choose maze algorithm producing simple navigable mazes (e.g., growing tree with bias, or Prim's modified to produce long corridors).",
+      "Post-process: apply smoothing, remove tiny dead ends, add larger corridors or rooms occasionally.",
+      "Parameterize generation and expose seed for reproducibility and for playtesting.",
+      "Create unit tests that assert connectivity and token reachability.",
+      "Risk: CPU cost on large maps with many enemies.",
+      "Use grid A* with an efficient heap implementation; limit search depth; fallback to simpler heuristics if too expensive.",
+      "Cache path fragments per turn and reuse between enemies where possible.",
+      "Only compute paths when needed (e.g., when player moves or when enemy changes state).",
+      "Keep map sizes modest (configurable).",
+      "Risk: Unexpected ordering bugs (e.g., player and enemies acting simultaneously).",
+      "Risk: DB schema changes break old saves.",
+      "Use a simple schema and store a schema_version.",
+      "Provide migration scripts or, for MVP, store meta as versioned JSON backups before migration.",
+      "Use SQLite transactions and WAL mode.",
+      "Risk: Hard to write automated tests for interactive flows.",
+      "Strict separation: core logic testable without UI.",
+      "For integration-level tests, mock input and use headless renderer (snapshot diffs).",
+      "Use fuzz/deterministic seed testing for reproducible runs.",
+      "Risk: Poor progression balance makes game either trivial or grindy.",
+      "Implement telemetry-friendly logging (local only) to collect run statistics during playtests.",
+      "Implement easy-to-tune config values for XP curves and costs.",
+      "Start with conservative progression and iterate with playtesting.",
+      "Risk: Feature creep.",
+      "Define a minimal viable product (MVP) sprint: map gen, tokens, enemies, XP/levels, single skill, persistence.",
+      "Use iterative approach and version features as optional expansions.",
+      "--"
+    ],
+    "mitigations": [
+      "Mitigation:",
+      "Mitigation:",
+      "Mitigation:",
+      "Mitigation:",
+      "Design explicit TurnManager with deterministic ordering, unit tests for turn resolution cases.",
+      "Mitigation:",
+      "Mitigation:",
+      "Mitigation:",
+      "Mitigation:"
+    ],
+    "raw_llm_response": "# Token Muncher \u2014 Project Design Document\n\nVersion: 1.0  \nTarget runtime: Python 3.10+ (3.11 recommended)  \nProject type: Terminal-based, single-player, turn-based Pac\u2011Man\u2013style roguelite\n\n---\n\n## 1. High-Level Project Objectives\n\n### Purpose & Goal\n- Build a single-player, turn-based roguelite played in the terminal. The player navigates procedurally generated mazes, eats tokens, avoids or fights enemies, gains XP and levels, finds loot and skills, and unlocks persistent meta-progression between runs (points spent for upgrades).\n- Game goals: fun, fast runs with meaningful choices and persistent progression to encourage repeated play.\n\n### Problems the project solves\n- Provides a small, replayable terminal roguelite for players who prefer low-friction, keyboard-driven games.\n- Demonstrates clean architecture and testable design for interactive terminal games.\n- Supplies a framework for incremental content (new enemy types, items, skills) with maintainable systems.\n\n### Target audience\n- Terminal gamers and hobbyists who enjoy roguelite mechanics.\n- Developers & learners who want a clear, maintainable example of building a game in Python without a heavy engine.\n\n### Key success criteria\n- MVP gameplay loop: procedurally generated maze, token eating, simple enemies, XP, level ups, loot & skills, and persistent meta-upgrades.\n- Responsive terminal UI with comfortable key controls on major platforms (Linux/macOS/Windows).\n- Stable save/persistence for meta-progression.\n- Clean codebase with tests for core logic (map gen, AI, progression).\n- Extensible architecture to add new enemies, skills, and mechanics with minimal coupling.\n\n---\n\n## 2. Technology Stack Recommendations\n\n### Base language\n- Python 3.10+ (3.11 recommended)\n  - Rationale: modern typing, dataclasses, performance improvements. Widely supported.\n\n### Terminal / Rendering / Input\nRecommended options (pick one primary; alternatives listed):\n- Primary: Rich + prompt_toolkit (composition)\n  - Rich for rendering colored glyphs, styled console output, and live refresh (nice visuals and easy ASCII styling).\n  - prompt_toolkit for robust, cross-platform, non-blocking keyboard input and key bindings.\n  - Pros: great developer experience, active community, cross-platform, good performance.\n- Alternative 1: curses (standard library) + windows-curses on Windows\n  - Pros: minimal dependencies; cons: low-level API, platform quirks.\n- Alternative 2: asciimatics or urwid\n  - Pros: higher-level TUI features; cons: more dependencies and different rendering ergonomics.\n\nRecommendation: Use Rich (rendering) + prompt_toolkit (input). If you prefer minimizing third-party libs, use curses.\n\n### Persistence\n- SQLite (built-in sqlite3)\n  - Rationale: reliable, ACID, good for storing persistent meta-progression, unlocks, leaderboards.\n  - Alternative: JSON files for a lightweight approach (easier but less robust).\n\n### Packaging & dependency management\n- Poetry (preferred) or pip-tools / pip + venv\n  - Rationale: reproducible environments, dependency management, publishing.\n\n### Dev tools / Quality\n- pytest (unit tests), hypothesis (property testing optional)\n- mypy (static typing)\n- black + isort (formatting)\n- pre-commit (hooks)\n- GitHub Actions (CI)\n\n### Justification and tradeoffs\n- Rich + prompt_toolkit provides comfortable development ergonomics and high-quality terminal output across platforms. Using SQLite ensures robustness of saved meta-progression. Poetry improves developer experience and reproducibility. The dev toolchain ensures maintainability and code quality.\n\n---\n\n## 3. Architecture Overview\n\nGoal: simple, testable, modular architecture separating core game rules from rendering and input.\n\nHigh-level architecture: Layered MVC-ish structure + event bus for decoupling.\n\nComponents:\n- Game Core (Model)\n  - GameState: current run state (map, entities, player, turn, RNG seed)\n  - MapGenerator: procedural maze generator\n  - Entities: Player, Token, Enemy, Items, Loot, Pickups\n  - Systems: MovementSystem, CombatSystem, XP/LevelSystem, DropSystem, LootSystem\n  - TurnManager: manages turn ordering for turn-based logic\n  - EventBus: in-process event emission for cross-component notification\n- Controller\n  - InputHandler: translates key presses to actions\n  - AIController: enemy decision system (pathfinding/patrol/chase)\n- View\n  - Renderer: draws map, HUD, messages to terminal (uses chosen rendering lib)\n  - UI screens: Main Menu, Run Over/Shop/Meta-Upgrades, Inventory/Skill UI\n- Persistence\n  - MetaStore: reads/writes persistent player data (SQLite or JSON)\n  - Save/Load for runs (optional autosave)\n- Tools / Support\n  - RandomSeedManager for reproducibility (store seed per run)\n  - Config module for settings\n  - Logging & telemetry (local logs)\n\nInteraction summary:\n- InputHandler produces PlayerAction events -> GameCore consumes and mutates GameState -> Systems resolve (movement, collisions, XP), emit Events -> Renderer subscribes to events and re-renders per turn -> Persistence stores meta-progression when run ends.\n\nPattern choices:\n- MVC variant: Model = GameCore, Controller = Input/AI, View = Renderer. Helps testability since Model is UI-agnostic.\n- Event-driven inside GameCore via EventBus. Makes adding features (e.g., achievements) easier.\n- Not a microservices architecture; single-process game.\n\nData & control flow (simplified):\n1. Renderer draws current GameState.\n2. InputHandler waits for player input.\n3. InputHandler -> Controller dispatches PlayerAction to GameCore.\n4. TurnManager executes one turn tick:\n   - Process PlayerAction -> MovementSystem -> resolve collisions -> CombatSystem -> DropSystem -> XPSystem -> Level up -> emit Events.\n   - AIController computes enemy actions -> apply same systems.\n5. Renderer receives Events or snapshots and updates display.\n6. Repeat until run ends -> MetaStore persists points/unlocks -> display shop screen.\n\nMermaid sequence (simplified)\n```mermaid\nsequenceDiagram\n  participant R as Renderer\n  participant I as InputHandler\n  participant G as GameCore\n  participant A as AIController\n  participant P as Persistence\n\n  R->>G: draw(initial state)\n  loop turn\n    I->>G: PlayerAction\n    G->>G: Process action (Movement/Combat/XP)\n    G->>A: request enemy moves\n    A->>G: EnemyActions\n    G->>R: emit state/events\n    R->>User: render\n  end\n  G->>P: persist meta-progression\n  R->>User: show shop / upgrades\n```\n\n---\n\n## 4. Key Dependencies\n\nCore libraries (recommended):\n- rich\n  - Why: high-quality terminal rendering, colors, panels.\n  - Risk: not as low-level as curses; adequate for most needs. Active community.\n- prompt_toolkit\n  - Why: robust, cross-platform, non-blocking keyboard input and key-bindings.\n  - Risk: additional dependency; bigger install but very stable.\n- sqlite3 (stdlib)\n  - Why: persistence for meta-progression.\n  - Risk: small surface for corruption if program crashes during writes; mitigate with transactions.\n- poetry\n  - Why: dependency/packaging management.\n  - Risk: learning curve for newcomers.\n\nDev & test:\n- pytest, hypothesis (optional)\n- mypy\n- black, isort\n- pre-commit\n\nOptional/Alternative dependencies:\n- curses (stdlib) / windows-curses (Windows) \u2014 alternative to prompt_toolkit/Rich for minimal dependencies.\n- asciimatics / urwid \u2014 alternative TUI frameworks with richer UI primitives.\n- tinydb \u2014 if you prefer JSON-based lightweight persistence over sqlite.\n- numpy \u2014 unnecessary; don't include unless you have computational needs.\n\nRisk assessment\n- prompt_toolkit + rich: low risk, well supported. If portability or minimal installs needed, prefer curses.\n- sqlite3: low risk; use WAL mode for concurrency safety (not needed for single process).\n- Avoid heavy game engines (pygame) since target is terminal.\n\n---\n\n## 5. Project Structure\n\nRecommended top-level layout (Python packaging style):\n\n```\ntoken_muncher/\n\u251c\u2500 pyproject.toml          # Poetry or build config\n\u251c\u2500 README.md\n\u251c\u2500 LICENSE\n\u251c\u2500 docs/\n\u2502  \u251c\u2500 design.md\n\u2502  \u2514\u2500 gameplay.md\n\u251c\u2500 scripts/                # helper scripts (run, build, format)\n\u251c\u2500 src/\n\u2502  \u2514\u2500 token_muncher/\n\u2502     \u251c\u2500 __main__.py\n\u2502     \u251c\u2500 cli.py            # entry CLI and arg parsing\n\u2502     \u251c\u2500 config.py\n\u2502     \u251c\u2500 logging_config.py\n\u2502     \u251c\u2500 core/\n\u2502     \u2502  \u251c\u2500 game_state.py\n\u2502     \u2502  \u251c\u2500 map.py\n\u2502     \u2502  \u251c\u2500 map_gen.py\n\u2502     \u2502  \u251c\u2500 entity.py\n\u2502     \u2502  \u251c\u2500 systems/\n\u2502     \u2502  \u2502  \u251c\u2500 movement.py\n\u2502     \u2502  \u2502  \u251c\u2500 combat.py\n\u2502     \u2502  \u2502  \u251c\u2500 xp.py\n\u2502     \u2502  \u2502  \u2514\u2500 drop.py\n\u2502     \u2502  \u2514\u2500 turn_manager.py\n\u2502     \u251c\u2500 ai/\n\u2502     \u2502  \u251c\u2500 ai_controller.py\n\u2502     \u2502  \u2514\u2500 pathfinding.py\n\u2502     \u251c\u2500 ui/\n\u2502     \u2502  \u251c\u2500 renderer.py\n\u2502     \u2502  \u251c\u2500 screens.py\n\u2502     \u2502  \u2514\u2500 input_handler.py\n\u2502     \u251c\u2500 persistence/\n\u2502     \u2502  \u251c\u2500 meta_store.py\n\u2502     \u2502  \u2514\u2500 migrations/\n\u2502     \u251c\u2500 assets/           # optional glyphs, color maps, ascii sprites\n\u2502     \u2514\u2500 utils/\n\u2502        \u251c\u2500 events.py\n\u2502        \u2514\u2500 rng.py\n\u251c\u2500 tests/\n\u2502  \u251c\u2500 unit/\n\u2502  \u251c\u2500 integration/\n\u2502  \u2514\u2500 fixtures/\n\u2514\u2500 .github/\n   \u2514\u2500 workflows/\n      \u2514\u2500 ci.yml\n```\n\nNotes:\n- Put core game logic under `core/` so tests can exercise it without TUI dependencies.\n- Keep UI-only code in `ui/` to allow headless testing.\n- `persistence/` contains DB schema & versioning.\n- Tests mirror src structure; provide unit tests for map generator, pathfinding, movement, XP and persistence.\n\nFile responsibilities:\n- `__main__.py` and `cli.py`: CLI entrypoint, start app, argument parsing (e.g., debug mode).\n- `map_gen.py`: procedural generation algorithms (seeded).\n- `events.py`: central Event and EventBus types.\n- `renderer.py`: subscribe to GameState snapshots and draw.\n- `input_handler.py`: key binding mapping and translating to PlayerAction objects.\n- `meta_store.py`: implement a small schema (player_id, unlocked_items, points, run_history).\n\nConfiguration:\n- Provide `config.py` with easily tunable constants (map size, token counts, XP thresholds, turn tick time).\n- Support JSON/ENV override for user-specific settings.\n\nDocumentation:\n- docs/design.md for architecture and algorithms.\n- docs/gameplay.md for mechanics and balancing notes.\n\n---\n\n## 6. Potential Challenges and Mitigations\n\n1. Rendering and input responsiveness across platforms\n   - Risk: Windows terminal differences, curses incompatibilities.\n   - Mitigation:\n     - Use prompt_toolkit for input; Rich for rendering (both cross-platform).\n     - Test on Linux/macOS/Windows early.\n     - Provide fallback to curses for minimal installs.\n\n2. Procedural map quality (too noisy, confusing navigation)\n   - Risk: Generated mazes are high-noise -> unpleasant gameplay.\n   - Mitigation:\n     - Choose maze algorithm producing simple navigable mazes (e.g., growing tree with bias, or Prim's modified to produce long corridors).\n     - Post-process: apply smoothing, remove tiny dead ends, add larger corridors or rooms occasionally.\n     - Parameterize generation and expose seed for reproducibility and for playtesting.\n     - Create unit tests that assert connectivity and token reachability.\n\n3. Pathfinding performance (A*/BFS on every enemy every turn)\n   - Risk: CPU cost on large maps with many enemies.\n   - Mitigation:\n     - Use grid A* with an efficient heap implementation; limit search depth; fallback to simpler heuristics if too expensive.\n     - Cache path fragments per turn and reuse between enemies where possible.\n     - Only compute paths when needed (e.g., when player moves or when enemy changes state).\n     - Keep map sizes modest (configurable).\n\n4. Turn system correctness (syncing player/enemy turns)\n   - Risk: Unexpected ordering bugs (e.g., player and enemies acting simultaneously).\n   - Mitigation:\n     - Design explicit TurnManager with deterministic ordering, unit tests for turn resolution cases.\n\n5. Persisted data corruption or migration complexity\n   - Risk: DB schema changes break old saves.\n   - Mitigation:\n     - Use a simple schema and store a schema_version.\n     - Provide migration scripts or, for MVP, store meta as versioned JSON backups before migration.\n     - Use SQLite transactions and WAL mode.\n\n6. Testability of UI and interactive parts\n   - Risk: Hard to write automated tests for interactive flows.\n   - Mitigation:\n     - Strict separation: core logic testable without UI.\n     - For integration-level tests, mock input and use headless renderer (snapshot diffs).\n     - Use fuzz/deterministic seed testing for reproducible runs.\n\n7. Balancing economy and progression\n   - Risk: Poor progression balance makes game either trivial or grindy.\n   - Mitigation:\n     - Implement telemetry-friendly logging (local only) to collect run statistics during playtests.\n     - Implement easy-to-tune config values for XP curves and costs.\n     - Start with conservative progression and iterate with playtesting.\n\n8. Resource constraints (dev time)\n   - Risk: Feature creep.\n   - Mitigation:\n     - Define a minimal viable product (MVP) sprint: map gen, tokens, enemies, XP/levels, single skill, persistence.\n     - Use iterative approach and version features as optional expansions.\n\n---\n\n## 7. Development Approach\n\n### Methodology\n- Agile / iterative: short iterations (1\u20132 week sprints), backlog of features/bugs, prioritize playable MVP.\n- Use lightweight daily standups (or asynchronous updates) and sprint retrospectives.\n- Milestones:\n  - Alpha (MVP): core loop playable, persistence works.\n  - Beta: UI polish, more skills/items, tuning, automated tests coverage.\n  - Release: packaging and documentation.\n\n### Testing strategy\n- Unit tests:\n  - Map generation: connectivity, token reachability, deterministic with seed.\n  - Pathfinding: correctness and performance bounds.\n  - Game rules: movement, collision, XP/leveling, inventory/loot logic.\n- Integration tests:\n  - Small deterministic runs (seeded) asserting expected outcomes.\n  - Persistence: saving/loading meta-store appears consistent.\n- End-to-end tests:\n  - Automated headless runs using mocked input to confirm run ends and persistence update.\n  - Manual playtesting for UI and balancing.\n- Test tooling:\n  - pytest for tests; run tests in CI pipeline.\n  - Use fixtures for deterministic RNG seeds.\n  - Consider Hypothesis for property testing (e.g., map generator invariants).\n\n### TDD / BDD\n- Recommend TDD for core game rules and map generation. Start by writing tests for deterministic behaviors (map connectivity, XP thresholds) before implementing.\n- Use acceptance tests for high-level features (e.g., \"player can gain XP > threshold and gain a level\").\n\n### CI/CD\n- GitHub Actions workflow:\n  - On push/PR: run linters (black, isort), mypy, pytest.\n  - On tag: build sdist/wheel via Poetry and create GitHub Release artifact.\n- Pre-commit hooks:\n  - black, isort, flake8, mypy checks to maintain code quality.\n\n### Documentation needs\n- README with quickstart, controls, requirements, and how to run locally.\n- docs/design.md containing the full architecture description and decision rationale.\n- docs/gameplay.md explaining tokens, XP, leveling, items, skills, and meta-upgrades.\n- CONTRIBUTING.md describing how to run tests and contribute.\n- Inline docstrings and small module-level docs for public APIs.\n\n---\n\n## Appendices\n\n### Map Generation (practical guidance)\n- Candidate algorithms:\n  - Depth-first search (recursive backtracker) \u2014 creates long corridors, low branching. Good for \"simple low-noise\" mazes.\n  - Prim's (weighted) \u2014 more uniform corridors.\n  - Growing tree with bias parameter \u2014 tune for corridor length vs branching.\n- Post-processing:\n  - Remove short dead-ends below a threshold.\n  - Ensure tokens and exits are not behind very long dead-ends (balance).\n  - Guarantee connectivity: one connected component for traversables.\n\n### Enemy AI\n- States: Patrol, Chase (target player when line-of-sight or proximity), Scatter (random), Flee (low health).\n- Pathfinding: A* on grid; heuristic = Manhattan or Chebyshev depending on movement allowed.\n- Optimization: limit search depth; fallback to greedy movement when search too expensive.\n\n### Sample pseudocode: Main game loop (turn-based)\n```python\nwhile not run_over:\n    renderer.draw(game_state)\n    action = input_handler.get_player_action()  # blocking for keypress\n    game.core.apply_player_action(action)       # validates and mutates\n    turn_manager.resolve_enemy_turns()\n    game.core.resolve_end_of_turn_effects()     # XP, drops, check run end\n```\n\n### Example DB schema (SQLite simple)\nTables:\n- players (player_id INTEGER PRIMARY KEY, name TEXT, points INTEGER, created_at)\n- unlocks (unlock_id INTEGER PK, player_id FK, key TEXT, unlocked_at)\n- runs (run_id INTEGER PK, player_id FK, seed INTEGER, score INTEGER, duration INTEGER, timestamp)\n- settings (key, value) \u2014 optional\n\n---\n\n## MVP Feature Checklist (Actionable)\n- [ ] Seeded procedural maze generation with parametrizable size and noise.\n- [ ] Player entity that moves and eats tokens.\n- [ ] Tokens: spawn rules, points/XP granted.\n- [ ] Enemy entities with simple AI (patrol + chase).\n- [ ] TurnManager resolving turns deterministically.\n- [ ] Renderer using Rich or curses.\n- [ ] Input handling via prompt_toolkit or curses.\n- [ ] XP and level-up system with at least one skill or stat increase on level up.\n- [ ] Loot drops and simple inventory (pickup-to-apply one-time).\n- [ ] End of run summary and points awarded for meta-progression.\n- [ ] MetaStore (SQLite or JSON) to persist points and unlocks.\n- [ ] Unit tests for map gen, pathfinding, movement, XP system.\n- [ ] CI pipeline running linters and tests.\n\n---\n\nIf you want, I can:\n- Produce a minimal MVP implementation scaffold (project skeleton + sample map generator & tests).\n- Provide sample algorithms for map generation (DFS implementation) and A* pathfinding code.\n- Create initial CI YAML and pre-commit config files.\n\nWhich of those would you like next?"
+  },
+  "plan": {
+    "phases": [
+      {
+        "number": 1,
+        "title": "Project Initialization & Tooling",
+        "description": null,
+        "steps": [
+          {
+            "number": "1.1",
+            "description": "Create project scaffolding for token muncher",
+            "details": [
+              "Create directories: `src/token_muncher/` and `tests/unit/`",
+              "Create empty package initializer: `src/token_muncher/__init__.py`",
+              "Create CLI module placeholder: `src/token_muncher/cli.py`",
+              "Create initial user-facing docs: `README.md` with project title and purpose",
+              "Create basic test file scaffolds: `tests/unit/test_sanity.py` and `tests/unit/__init__.py`",
+              "Create repository hygiene files: `.gitignore` (Python artifacts, virtualenv, pycache, etc.)",
+              "Acceptance checks: directories exist, required files exist, and basic boilerplate content is present",
+              "Commands to run (examples):",
+              "`mkdir -p src/token_muncher tests/unit`",
+              "`touch src/token_muncher/__init__.py src/token_muncher/cli.py README.md tests/unit/test_sanity.py tests/unit/__init__.py`",
+              "`cat > .gitignore <<'EOF'\\n__pycache__/\\n*.pyc\\n.env/\\n.venv/\\n*.egg-info/\\ndist/\\nbuild/\\n.pytest_cache/\\nEOF`",
+              "Notes: Ensure `README.md` has a brief project description and setup steps"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.2",
+            "description": "Initialize Git repository and create the initial commit",
+            "details": [
+              "Initialize a new Git repository in the project root",
+              "Stage all scaffolding files",
+              "Create the initial commit with a conventional message",
+              "Acceptance checks: `git status` shows clean working tree; `git log --oneline` shows the initial commit",
+              "Commands to run:",
+              "`git init`",
+              "`git add -A`",
+              "`git commit -m \"chore: initial project scaffolding for token muncher\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.3",
+            "description": "Implement packaging scaffolding: versioning and package structure",
+            "details": [
+              "In `src/token_muncher/__init__.py`, define a public version variable",
+              "Add a stable version string: `__version__ = \"0.1.0\"`",
+              "Ensure the package is importable (no syntax errors)",
+              "Update `README.md` with a short section about the package version and how to retrieve it",
+              "Acceptance checks: Python can import `token_muncher` and read `__version__`",
+              "Commands to run (examples):",
+              "Edit `src/token_muncher/__init__.py` to include:",
+              "`__version__ = \"0.1.0\"`",
+              "Verification: Open a Python REPL and run:",
+              "`import token_muncher; print(token_muncher.__version__)`"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.4",
+            "description": "Implement basic CLI skeleton for token muncher",
+            "details": [
+              "In `src/token_muncher/cli.py`, implement a minimal CLI scaffold with argparse",
+              "Define a function `build_parser()` returning an `ArgumentParser` with a description",
+              "Define a function `main(argv=None)` that parses args (but does nothing else for now)",
+              "Add a simple `if __name__ == \"__main__\": main()` entry point",
+              "Ensure the CLI can be invoked as a module (e.g., `python -m token_muncher.cli`) and shows help",
+              "Acceptance checks: importing `token_muncher.cli` works; `python -m token_muncher.cli --help` prints a help message",
+              "Commands to run (examples):",
+              "Create content in `src/token_muncher/cli.py`:",
+              "import `argparse` and `__version__` from `token_muncher`",
+              "`def build_parser(): ...` and `def main(argv=None): ...` with a basic parser",
+              "`if __name__ == \"__main__\": main()`",
+              "Verification: `python -m token_muncher.cli --help` prints usage info"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.5",
+            "description": "Create tests scaffolding for basic validation",
+            "details": [
+              "Add unit tests to verify basic foundations:",
+              "`tests/unit/test_sanity.py` with a trivial test: `def test_sanity(): assert True`",
+              "`tests/unit/test_version.py` importing `token_muncher.__version__` and asserting it is a non-empty string",
+              "Ensure pytest discovers tests in `tests/unit/`",
+              "Acceptance checks: `pytest tests/unit/` runs and reports at least one passing test",
+              "Commands to run (examples):",
+              "Edit `tests/unit/test_sanity.py` to include the simple sanity test",
+              "Create `tests/unit/test_version.py` with:",
+              "`from token_muncher import __version__`",
+              "`def test_version_non_empty(): assert isinstance(__version__, str) and len(__version__) > 0`",
+              "Verification: `pytest tests/unit/` returns 2 tests passing"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.6",
+            "description": "Add development tooling configurations and helpers",
+            "details": [
+              "Create `requirements-dev.txt` listing dev dependencies: `pytest`, `black`, `flake8`",
+              "Create `pytest.ini` configuring pytest: test paths and minimal options",
+              "Create `.flake8` with basic style rules (e.g., max-line-length 88) and excludes",
+              "Create a `Makefile` with targets: `install`, `test`, `lint`, `format`, `clean`",
+              "Acceptance checks: all files exist with appropriate content; Makefile targets execute as expected",
+              "Commands to run (examples):",
+              "Add contents to:",
+              "`requirements-dev.txt` with:",
+              "`pytest\\nblack\\nflake8`",
+              "`pytest.ini` with:",
+              "`[pytest]\\ntestpaths = tests/unit\\naddopts = -q`",
+              "`.flake8` with:",
+              "`[flake8]\\nmax-line-length = 88\\nexclude = .venv, tests`",
+              "`Makefile` with basic targets and echoed messages",
+              "Verification: `make test` runs pytest; `make lint` runs flake8; `make format` runs black"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.7",
+            "description": "Commit: add scaffolding, tests, and tooling",
+            "details": [
+              "Stage all changes from steps 1.1 through 1.6",
+              "Commit with a conventional message summarizing the milestone",
+              "Acceptance checks: Git history shows a milestone commit",
+              "Commands to run:",
+              "`git add -A`",
+              "`git commit -m \"feat: add project scaffolding, CLI skeleton, tests, and dev tooling\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.8",
+            "description": "Update README with development workflow and how-to",
+            "details": [
+              "Extend `README.md` with sections:",
+              "Development setup: creating and activating a virtual environment, installing dev dependencies",
+              "Running tests: `pytest tests/unit/`",
+              "Linting/formatting: `flake8`, `black`",
+              "Running the CLI: `python -m token_muncher.cli --help` and `python -m token_muncher.cli --version`",
+              "Acceptance checks: README contains clear, actionable development steps and CLI usage examples",
+              "Commands to run (examples):",
+              "Edit `README.md` to add the sections and CLI usage examples"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.9",
+            "description": "Commit: update docs",
+            "details": [
+              "Stage README updates",
+              "Commit with a conventional message",
+              "Commands to run:",
+              "`git add README.md`",
+              "`git commit -m \"docs: add developer workflow and CLI usage examples to README\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.10",
+            "description": "Set up and validate local development environment",
+            "details": [
+              "Create a local Python virtual environment in `.venv` or `venv`",
+              "Activate the environment (Unix: `source .venv/bin/activate`; Windows: `.venv\\Scripts\\activate`)",
+              "Install dev dependencies: `pip install -r requirements-dev.txt`",
+              "Run development checks:",
+              "`flake8 src/ tests/unit/` to lint",
+              "`black --check src/ tests/unit/` to verify formatting without rewriting",
+              "`pytest tests/unit/` to run tests",
+              "Acceptance checks: environment activates cleanly; linting, formatting, and tests pass or report only non-blocking issues",
+              "Commands to run (examples):",
+              "`python3 -m venv .venv`",
+              "`source .venv/bin/activate` (or `.\\venv\\Scripts\\activate` on Windows)",
+              "`pip install -r requirements-dev.txt`",
+              "`flake8 src/ tests/unit/`",
+              "`black --check src/ tests/unit/`",
+              "`pytest tests/unit/`"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.11",
+            "description": "Commit: results from local validation",
+            "details": [
+              "Stage environment setup changes and validation outcomes",
+              "Commit with a conventional message",
+              "Commands to run:",
+              "`git add -A`",
+              "`git commit -m \"test: run local validation (lint, format, tests) and report results\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "1.12",
+            "description": "Final verification: manual CLI usage and import checks",
+            "details": [
+              "Manually verify CLI usage and version:",
+              "Run `python -m token_muncher.cli --help` and confirm help text appears",
+              "Run `python -m token_muncher.cli --version` and confirm output contains \"token-muncher 0.1.0\"",
+              "Validate package import:",
+              "In Python: `import token_muncher; print(token_muncher.__version__)`",
+              "Ensure the version matches 0.1.0 and there are no ImportErrors",
+              "Acceptance checks: CLI outputs are correct; package imports without errors",
+              "Commands to run (examples):",
+              "`python -m token_muncher.cli --help`",
+              "`python -m token_muncher.cli --version`",
+              "Enter Python shell and run `import token_muncher; print(token_muncher.__version__)`"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 2,
+        "title": "Core Data Models & Persistence Abstractions",
+        "description": null,
+        "steps": [
+          {
+            "number": "2.1",
+            "description": "Create core Token model and basic serialization",
+            "details": [
+              "Create directory and module: ensure path src/models/ exists; add __init__.py to src/models",
+              "Implement data model: create src/models/token.py containing a Python dataclass Token with fields: id: str, name: str, value: float, owner_id: Optional[str] = None, created_at: Optional[str] = None",
+              "Add serialization helpers: implement Token.to_dict(self) -> dict and @staticmethod Token.from_dict(d: dict) -> Token",
+              "Add basic validation: ensure name is non-empty and value is non-negative in __post_init__ or in factory usage",
+              "Provide unit tests: create tests/unit/test_token_model.py to verify (a) round-trip via to_dict/from_dict, (b) required fields handling, (c) string/int type tolerance",
+              "Run tests: execute `pytest tests/unit/test_token_model.py`",
+              "Commit: feat: add core Token model and tests",
+              "Include: git add src/models/token.py src/models/__init__.py tests/unit/test_token_model.py",
+              "Include: git commit -m \"feat: add Token model with serialization\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.2",
+            "description": "Create persistence interface (abstract) and JSON file storage",
+            "details": [
+              "Create package: ensure path src/persistence/ exists with __init__.py",
+              "Define interface: create src/persistence/base.py implementing abstract class Storage with methods:",
+              "save(self, id: str, data: dict) -> None",
+              "load(self, id: str) -> dict",
+              "delete(self, id: str) -> None",
+              "list_all(self) -> list[dict]",
+              "Implement concrete storage: create src/persistence/json_file_storage.py with class JsonFileStorage(Storage)",
+              "Constructor: JsonFileStorage(base_dir: str)",
+              "Ensure the base_dir directory exists at initialization",
+              "Implement save: writes JSON to f\"{base_dir}/{id}.json\" using data dict",
+              "Implement load: reads and returns dict from f\"{base_dir}/{id}.json\" or raises FileNotFoundError",
+              "Implement delete: removes f\"{base_dir}/{id}.json\" if exists",
+              "Implement list_all: returns a list of dicts by loading all JSON files in base_dir",
+              "Respect config: use config.get_data_dir() if available",
+              "Create tests: add tests/unit/test_json_file_storage.py to verify save/load/delete/list_all with a temp directory",
+              "Run tests: `pytest tests/unit/test_json_file_storage.py`",
+              "Commit: feat: add JSON file persistence layer",
+              "Include: git add src/persistence/base.py src/persistence/json_file_storage.py tests/unit/test_json_file_storage.py",
+              "Include: git commit -m \"feat: add JSON file-based storage backend\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.3",
+            "description": "Implement TokenRepository using the persistence layer",
+            "details": [
+              "Create file: src/repositories/token_repository.py",
+              "Implement class TokenRepository with:",
+              "__init__(self, storage: Storage)",
+              "add(self, token: Token) -> Token: ensure token.id exists (generate with uuid4 if missing); storage.save(token.id, token.to_dict()); return token",
+              "get_by_id(self, id: str) -> Token: data = storage.load(id); return Token.from_dict(data)",
+              "list_all(self) -> list[Token]: return [Token.from_dict(d) for d in storage.list_all()]",
+              "update(self, token: Token) -> Token: storage.save(token.id, token.to_dict()); return token",
+              "delete(self, id: str) -> None: storage.delete(id)",
+              "Create unit tests: tests/unit/test_token_repository.py to verify add/get/list/update/delete flows",
+              "Run tests: `pytest tests/unit/test_token_repository.py`",
+              "Commit: feat: add TokenRepository with persistence integration",
+              "Include: git add src/repositories/token_repository.py",
+              "Include: git commit -m \"feat: implement TokenRepository using Storage\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.4",
+            "description": "Implement TokenService (business logic layer)",
+            "details": [
+              "Create file: src/services/token_service.py",
+              "Implement class TokenService with:",
+              "__init__(self, repo: TokenRepository)",
+              "create_token(name: str, value: float, owner_id: Optional[str] = None) -> Token",
+              "Validate: name is non-empty, value >= 0",
+              "Construct Token with a generated id and current timestamp as needed; delegate to repo.add(...)",
+              "get_token(id: str) -> Token",
+              "list_tokens() -> list[Token]",
+              "delete_token(id: str) -> None",
+              "Add business-rule tests: tests/unit/test_token_service.py to verify (a) successful create with valid data, (b) retrieval after create, (c) validation errors for invalid input (empty name, negative value), (d) delete works",
+              "Run tests: `pytest tests/unit/test_token_service.py`",
+              "Commit: feat: add TokenService business logic",
+              "Include: git add src/services/token_service.py",
+              "Include: git commit -m \"feat: implement TokenService with validation\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.5",
+            "description": "Configuration and error handling scaffolding",
+            "details": [
+              "Create config module: src/config.py",
+              "Implement function get_data_dir() -> Path that reads TOKEN_MUNCHER_DATA_DIR env var or defaults to \"data\"",
+              "Ensure directory exists on first use",
+              "Create error definitions: src/errors.py with class TokenMuncherError(Exception)",
+              "Update storage usage to reference config:",
+              "In JsonFileStorage, determine base_dir via config.get_data_dir()",
+              "Create minimal tests: tests/unit/test_config.py to verify default vs env override for data_dir",
+              "Run tests: `pytest tests/unit/test_config.py`",
+              "Commit: feat: add configuration loader and custom errors",
+              "Include: git add src/config.py src/errors.py",
+              "Include: git commit -m \"feat: add configuration and custom error types\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.6",
+            "description": "End-to-end integration tests (service + storage)",
+            "details": [
+              "Create integration test: tests/integration/test_end_to_end.py",
+              "Use pytest tmp_path fixture to isolate data_dir",
+              "Instantiate JsonFileStorage with str(tmp_path / \"tokens\"), create TokenRepository(storage), TokenService(repo)",
+              "Perform sequence: create_token(\"sample\", 9.99, owner_id=None); get_token by id; list_tokens; delete_token",
+              "Assert that retrieved token matches created one and list contains it, and after delete, get raises",
+              "Run tests: `pytest tests/integration/test_end_to_end.py`",
+              "Commit: test: add end-to-end integration tests",
+              "Include: git add tests/integration/test_end_to_end.py",
+              "Include: git commit -m \"test: add end-to-end integration tests for token lifecycle\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.7",
+            "description": "CLI (user-facing features) scaffolding",
+            "details": [
+              "Create file: src/cli.py",
+              "Implement a build_parser() function that creates an argparse.ArgumentParser with subcommands: create, get, list, delete",
+              "Each subcommand should accept:",
+              "create: --name NAME --value VALUE [--owner OWNER_ID]",
+              "get: --id ID",
+              "list: no args",
+              "delete: --id ID",
+              "Implement a lightweight parse_args(args=None) that returns the Namespace",
+              "Implement a simple run_command(args: Namespace, service: TokenService) function that would perform actions (create/get/list/delete) using the provided service; for this phase, ensure it can be imported and used by a real runner",
+              "Create unit tests: tests/unit/test_cli.py",
+              "Test build_parser() with sample inputs like [\"create\", \"--name\", \"tok\", \"--value\", \"1.5\"] and verify parsed fields (cmd, name, value)",
+              "Test that invalid input triggers argparse errors (e.g., missing required fields) by invoking parser and catching SystemExit",
+              "Run tests: `pytest tests/unit/test_cli.py`",
+              "Commit: feat: add CLI scaffold and basic tests",
+              "Include: git add src/cli.py",
+              "Include: git commit -m \"feat: add basic CLI for token operations\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.8",
+            "description": "Documentation updates",
+            "details": [
+              "Update README: add a new section Phase 2: Core Data Models & Persistence Abstractions",
+              "Describe Token model, JSON file storage, repository/service layers",
+              "Provide how-to use examples for create/get/list/delete via service and via CLI",
+              "Document environment variable TOKEN_MUNCHER_DATA_DIR and data directory layout",
+              "Include quick-start commands to run tests and CLI help",
+              "Commit: docs: update project documentation for Phase 2",
+              "Include: git add README.md",
+              "Include: git commit -m \"docs: document Phase 2 core data models and persistence abstractions\""
+            ],
+            "done": false
+          },
+          {
+            "number": "2.9",
+            "description": "Code quality gates (linting, formatting, tests)",
+            "details": [
+              "Run formatting: `black src/`",
+              "Run linting: `flake8 src/`",
+              "Run tests: `pytest -q`",
+              "Fix any issues reported by lints or tests",
+              "Commit: chore: apply code quality fixes",
+              "Include: git add .",
+              "Include: git commit -m \"chore: fix linting/formatting issues and ensure tests pass\""
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 3,
+        "title": "Map & Level Generation",
+        "description": null,
+        "steps": [
+          {
+            "number": "3.1",
+            "description": "Create project skeleton for map generation",
+            "details": [
+              "Create directories: `src/map/`, `src/map/__init__.py`, `src/map/tiles.py`, `src/map/level.py`, `src/map/generator.py`, `tests/unit/`, `tests/unit/__init__.py`, `src/cli.py`, and an empty `docs/` folder.",
+              "Add minimal placeholder files with exports:",
+              "`src/map/__init__.py` (empty)",
+              "`src/map/tiles.py` (define stub TileType if needed later)",
+              "`src/map/level.py` (define LevelConfig and basic Level container placeholders)",
+              "`src/map/generator.py` (define MapGenerator class placeholder)",
+              "`src/cli.py` (define a minimal CLI scaffold with a main() stub)",
+              "`tests/unit/__init__.py` (empty)",
+              "Create a basic README section for Phase 3 describing map generation goals (start/exit, tokens, connectivity).",
+              "Acceptance checks:",
+              "All directories exist",
+              "Core files exist and are importable (no syntax errors)",
+              "A sample Python import of `src.map` and `src.map.generator` should not fail",
+              "Commit: git add files and commit with message",
+              "`3.1: Commit: feat: scaffold map generation module skeleton`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.2",
+            "description": "Implement core map tile types",
+            "details": [
+              "In `src/map/tiles.py`, implement:",
+              "An Enum `TileType` with values: WALL, FLOOR, START, EXIT, TOKEN, OBSTACLE",
+              "A function `tile_to_char(tile: TileType) -> str` that returns a single-character representation (e.g., WALL:'#', FLOOR:'.', START:'S', EXIT:'E', TOKEN:'T', OBSTACLE:'X')",
+              "Type hints and docstrings to describe each tile type",
+              "Acceptance checks:",
+              "Code compiles and imports: `from src.map.tiles import TileType, tile_to_char`",
+              "Enum contains all defined tile types",
+              "Commit: `3.2: Commit: feat: implement core map tile types`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.3",
+            "description": "Implement level/config data structures",
+            "details": [
+              "In `src/map/level.py`, implement:",
+              "`@dataclass` class `LevelConfig` with fields: `width: int`, `height: int`, `seed: Optional[int] = None`, `difficulty: str = \"normal\"`",
+              "`@dataclass` class `Level` with fields: `width: int`, `height: int`, `grid: List[List[TileType]]`, `start: Tuple[int, int]`, `exit: Tuple[int, int]`, `tokens: int`, `seed: Optional[int]`",
+              "A method `to_json(self) -> dict` that returns a serializable dict with keys: width, height, start, exit, tokens, seed, difficulty (if stored), and a grid representation (e.g., nested lists of tile codes or indices)",
+              "Basic validation in `__post_init__` to ensure width/height > 0",
+              "Acceptance checks:",
+              "Objects can be instantiated: `LevelConfig(width=15, height=15, seed=123)` and `Level(...)` with a sample grid",
+              "`Level.to_json()` returns a dictionary with expected keys",
+              "Commit: `3.3: Commit: feat: add level/config data structures`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.4",
+            "description": "Implement basic map generation algorithm",
+            "details": [
+              "In `src/map/generator.py`, implement:",
+              "`class MapGenerator` with `__init__(self, config: LevelConfig, rng: Optional[random.Random] = None)` and `generate() -> Level`",
+              "Internal helpers:",
+              "`_init_grid() -> List[List[TileType]]` initializes a grid filled with WALL",
+              "`_carve_floor(grid)` performs a simple randomized carving (e.g., random walk) to create FLOOR tiles",
+              "`_place_start(grid) -> Tuple[int, int]` chooses a start position near top-left and marks it as START",
+              "`_place_exit(grid) -> Tuple[int, int]` chooses an exit position near bottom-right and marks it as EXIT",
+              "`_place_tokens(grid, start, exit) -> int` places a sensible number of TOKEN tiles on FLOOR cells",
+              "Use seeded RNG to ensure deterministic results when `config.seed` is provided",
+              "Make `generate()` assemble a `Level` with grid, start, exit, tokens and ensure minimal validity",
+              "Acceptance checks:",
+              "`generate()` returns a `Level` with matching width/height",
+              "Grid contains START and EXIT tiles",
+              "A reasonable number of TOKEN tiles are placed",
+              "Commit: `3.4: Commit: feat: implement basic map generation algorithm`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.5",
+            "description": "Add connectivity validation for generated maps",
+            "details": [
+              "In `src/map/generator.py`, implement:",
+              "`_is_connected(grid, start, exit) -> bool` performing a 4-direction BFS to verify a path exists between start and exit",
+              "In `generate()`, after carving tokens, call `_is_connected(...)`; if not connected, retry up to a small fixed number of attempts using the same or new seed",
+              "If after retries connectivity still fails, fall back to a minimal guaranteed path by carving a corridor from start to exit",
+              "Acceptance checks:",
+              "A BFS-based connectivity check returns True for generated maps (with a valid seed)",
+              "Multiple runs with the same seed produce connected maps",
+              "Commit: `3.5: Commit: feat: add connectivity validation logic`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.6",
+            "description": "Implement map serialization to JSON",
+            "details": [
+              "In `src/map/level.py` implement:",
+              "`Level.to_json()` to output a structured dict including a serializable grid",
+              "A helper function `grid_to_serializable(grid: List[List[TileType]]) -> List[List[str]]` that maps each tile to a short code (e.g., '#', '.', 'S', 'E', 'T', 'X')",
+              "Acceptance checks:",
+              "`Level.to_json()` yields JSON-friendly data",
+              "A sample map can be serialized and produced as valid JSON",
+              "Commit: `3.6: Commit: feat: add map serialization to JSON`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.7",
+            "description": "Write unit tests for map generation",
+            "details": [
+              "Create `tests/unit/test_map_generation.py` using pytest including:",
+              "`test_map_dimensions()` verifies `level.width == config.width` and `level.height == config.height`",
+              "`test_start_and_exit_present()` asserts `level.start` and `level.exit` are within bounds and tiles are START/EXIT",
+              "`test_connectivity()` uses `_is_connected` logic or runs generator and verifies BFS returns True between start and exit",
+              "`test_token_count()` asserts token count is within a reasonable range based on map size (e.g., between 1 and max(1, width*height//8))",
+              "`test_seed_reproducibility()` runs generator twice with the same seed and asserts grids are identical",
+              "Acceptance checks:",
+              "All tests pass with pytest",
+              "Seed-based reproducibility holds",
+              "Commit: `3.7: Commit: test: add unit tests for map generation`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.8",
+            "description": "Implement a command-line interface (CLI) for map generation",
+            "details": [
+              "In `src/cli.py` implement:",
+              "A CLI using `argparse` with arguments: `--width`, `--height`, `--seed`, `--difficulty` (choices: easy, normal, hard), `--output`",
+              "Create `LevelConfig` from args, instantiate `MapGenerator`, call `generate()`, and write `level.to_json()` to the specified output file (default: `map.json`)",
+              "Print a concise summary to stdout (width, height, start, exit, tokens, output path)",
+              "Add a `if __name__ == \"__main__\": main()` entry point",
+              "Acceptance checks:",
+              "Running `python src/cli.py` with sample args creates a valid JSON file and prints a summary",
+              "Commit: `3.8: Commit: feat: add CLI for map generation`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.9",
+            "description": "Documentation updates",
+            "details": [
+              "Update `README.md` (or create `docs/maps.md`) to include:",
+              "Overview of map generation goals and guarantees (connectivity, start/exit, tokens)",
+              "CLI usage examples and sample command",
+              "JSON schema-ish description for the serialized map (width, height, start/exit, tokens, grid)",
+              "Example of a small generated map in JSON form",
+              "Acceptance checks:",
+              "Documentation exists and contains at least one usage example and a brief explanation of outputs",
+              "Commit: `3.9: Commit: docs: document map generation CLI and format`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.10",
+            "description": "Code quality checks (linting and formatting)",
+            "details": [
+              "Run and enforce:",
+              "`black src/`",
+              "`flake8 src/`",
+              "Address any lint/format issues reported by the tools",
+              "Acceptance checks:",
+              "No linting/formatting errors remain",
+              "Commit: `3.10: Commit: chore: lint and format code`"
+            ],
+            "done": false
+          },
+          {
+            "number": "3.11",
+            "description": "End-to-end verification and finalization",
+            "details": [
+              "Run the full test suite:",
+              "`pytest -q tests/unit/`",
+              "If failures occur, iterate on code and tests until all pass",
+              "Final acceptance: all tests pass and CLI can generate a map deterministically with a given seed",
+              "Commit: `3.11: Commit: test: run full test suite and finalize`"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 4,
+        "title": "Game Core & Turn/Rules Engine",
+        "description": null,
+        "steps": [
+          {
+            "number": "4.1",
+            "description": "Create project structure and bootstrap skeleton files",
+            "details": [
+              "Create directory tree: `src/game_core/`, `src/game_core/models/`, `src/game_core/engine/`, `src/game_core/cli/`, `tests/unit/`, `tests/integration/`",
+              "Add package initializers: `src/game_core/__init__.py`, `src/game_core/models/__init__.py`, `src/game_core/engine/__init__.py`, `src/game_core/cli/__init__.py`",
+              "Create placeholder module files with minimal class skeletons:",
+              "`src/game_core/models/board.py` with a placeholder `Board` class",
+              "`src/game_core/models/token.py` with a placeholder `Token` data class",
+              "`src/game_core/models/player.py` with a placeholder `Player` data class",
+              "`src/game_core/engine/game_engine.py` with a placeholder `GameEngine` class",
+              "`src/game_core/cli/cli.py` with a placeholder `run_game` function",
+              "Add lightweight docstrings at the top of each file describing purpose and basic usage",
+              "Add an initial project note in `README_PHASE4.md` describing Phase 4 goals and API surface",
+              "Acceptance criteria:",
+              "All directories exist and are importable",
+              "Core modules can be imported without syntax errors",
+              "Documentation placeholder exists",
+              "Commit:",
+              "git add [all new files and dirs]",
+              "git commit -m \"feat: scaffold game core package, models, engine, and CLI skeleton for Phase 4\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.2",
+            "description": "Implement Token, Player, and Board models (data structures and helpers)",
+            "details": [
+              "Implement `Token` in `src/game_core/models/token.py` as a dataclass with fields: `player_id: int`, `symbol: str` (optional), and any needed metadata",
+              "Implement `Player` in `src/game_core/models/player.py` as a dataclass with fields: `id: int`, `name: str`, `color: str`",
+              "Implement `Board` in `src/game_core/models/board.py` with:",
+              "Constructor `Board(width: int, height: int)` creating a 2D grid initialized to `None`",
+              "Method `is_within_bounds(x: int, y: int) -> bool`",
+              "Method `is_empty(x: int, y: int) -> bool`",
+              "Method `place_token(x: int, y: int, token: Token) -> bool` (returns True if placed, False if occupied/invalid)",
+              "Method `get_token(x: int, y: int) -> Optional[Token]`",
+              "Method `count_tokens_by_player(player_id: int) -> int`",
+              "Method `get_empty_positions() -> List[Tuple[int, int]]`",
+              "`__str__` or `__repr__` for a simple human-readable board display",
+              "Add type hints and small docstrings describing each method",
+              "Create unit tests in `tests/unit/test_models.py` covering:",
+              "Board initialization and bounds checks",
+              "Placing tokens on empty cells",
+              "Rejecting placement on occupied cells or out-of-bounds",
+              "Token association with players",
+              "Acceptance criteria:",
+              "All model methods behave deterministically with valid inputs",
+              "Tests cover typical and edge cases",
+              "Commit:",
+              "git add src/game_core/models/board.py src/game_core/models/token.py src/game_core/models/player.py tests/unit/test_models.py",
+              "git commit -m \"feat: add core data models (Board, Token, Player) and unit tests\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.3",
+            "description": "Implement GameEngine core logic and turn-based rules (placement + capture)",
+            "details": [
+              "Implement `GameEngine` in `src/game_core/engine/game_engine.py` with:",
+              "Constructor `GameEngine(board: Board, players: List[Player])`",
+              "Property `current_player_index: int` and method `get_current_player() -> Player`",
+              "Method `start_game()` to initialize turns and state",
+              "Method `make_move(x: int, y: int) -> dict`:",
+              "Validate move in bounds and on an empty cell",
+              "Place a token for the current player",
+              "Resolve captures: for each orthogonal neighbor, if neighbor belongs to the opponent, remove it (capture)",
+              "Advance turn to next player",
+              "Return a summary dict including success, captures, board state snapshot",
+              "Method `is_game_over() -> bool` (game ends when no empty cells remain)",
+              "Method `get_winner() -> Optional[Player]` (determine winner by token count; return None for tie)",
+              "Internal helper `_capture_at(x, y, player_id)` to process neighbor captures",
+              "Custom exception `MoveError` for invalid moves",
+              "Add unit tests in `tests/unit/test_engine.py` to verify:",
+              "Proper turn order and placement",
+              "Capture mechanics (token removal from opponent on adjacency)",
+              "End-of-game detection and winner determination",
+              "Acceptance criteria:",
+              "Engine enforces rules and maintains consistent state",
+              "All edge cases tested (out-of-bounds, occupied, end conditions)",
+              "Commit:",
+              "git add src/game_core/engine/game_engine.py tests/unit/test_engine.py",
+              "git commit -m \"feat: implement game engine core and rules (placement, capture, end condition)\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.4",
+            "description": "Create CLI interface and basic user interaction scaffolding",
+            "details": [
+              "Implement `run_game` and support utilities in `src/game_core/cli/cli.py`:",
+              "Function `parse_args(args: Sequence[str]) -> dict` to parse `--width`, `--height`, and `--players` inputs; provide sensible defaults",
+              "Function `format_board(board: Board) -> str` to render a simple text board for the console",
+              "Function `run_game(board_width: int, board_height: int, player_names: List[str])`:",
+              "Initialize `Player` instances and `GameEngine`",
+              "Loop: print board, prompt for move as \"x y\", validate, call `make_move`, handle `MoveError` with clear message",
+              "On game end, announce winner or draw",
+              "Function `print_help()` that prints usage and example session",
+              "Add minimal integration test in `tests/integration/test_cli_help.py` to verify `print_help()` outputs expected sections and that parsing without args yields defaults",
+              "Acceptance criteria:",
+              "CLI module exists and can parse basic arguments",
+              "Interactive loop skeleton handles invalid input gracefully",
+              "Help text is present and informative",
+              "Commit:",
+              "git add src/game_core/cli/cli.py tests/integration/test_cli_help.py",
+              "git commit -m \"feat: add CLI interface for Phase 4 game engine (help, parse_args, run_game)\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.5",
+            "description": "Documentation updates and API reference for Phase 4",
+            "details": [
+              "Create and populate `docs/PHASE4.md` detailing:",
+              "Game rules and data model overview (Board, Token, Player)",
+              "How to run the CLI and what to expect",
+              "API sketches for `GameEngine`, `Board`, and move workflow",
+              "Example session with sample coordinates",
+              "Update `README_PHASE4.md` or section in root `README.md` with quickstart instructions and link to Phase 4 docs",
+              "Acceptance criteria:",
+              "Documentation clearly describes core components and usage",
+              "Examples demonstrate expected inputs/outputs",
+              "Commit:",
+              "git add docs/PHASE4.md README_PHASE4.md",
+              "git commit -m \"docs: document Phase 4 game core and rules engine\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.6",
+            "description": "Code quality checks (linting, formatting) and small improvements",
+            "details": [
+              "Run formatting: `black src/` (or language-equivalent formatter)",
+              "Run linting: `flake8 src/` (adjust paths if using a different linter)",
+              "Address any style or simple correctness issues reported",
+              "Acceptance criteria:",
+              "Code is consistently formatted and lint-clean",
+              "Commit:",
+              "git add . (or targeted files)",
+              "git commit -m \"chore: apply formatting and lint fixes for Phase 4\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.7",
+            "description": "Execute test suite and fix defects",
+            "details": [
+              "Run tests: `pytest tests/`",
+              "Review failing tests, implement fixes in models/engine/cli as needed",
+              "Re-run tests until green",
+              "Acceptance criteria:",
+              "All unit and integration tests pass",
+              "Commit:",
+              "git add tests/ and src/ as needed",
+              "git commit -m \"test: add and run unit/integration tests for Phase 4; fix failures\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.8",
+            "description": "End-to-end integration example (non-interactive) and validation",
+            "details": [
+              "Add integration script under `tests/integration/test_sample_game_run.py` that:",
+              "Creates a small board (e.g., 3x3), two players",
+              "Simulates a deterministic sequence of moves (no user input)",
+              "Asserts on final token counts and winner",
+              "If desired, add a small standalone script at `scripts/run_sample_game.py` that can be executed to observe a run",
+              "Acceptance criteria:",
+              "Non-interactive scenario demonstrates engine correctness and captures",
+              "Commit:",
+              "git add tests/integration/test_sample_game_run.py scripts/run_sample_game.py",
+              "git commit -m \"test: integration sample game run to validate engine behavior\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.9",
+            "description": "User-facing messages, error handling, and examples refinement",
+            "details": [
+              "Review and enhance error messages in `MoveError` and CLI prompts",
+              "Add explicit error messages for invalid coordinates, occupied cells, and out-of-bounds moves",
+              "Update `tests/integration/test_cli_help.py` and `tests/unit/test_engine.py` to cover error text expectations",
+              "Acceptance criteria:",
+              "All user-facing messages are clear and actionable",
+              "Commit:",
+              "git add tests/unit/test_engine.py tests/integration/test_cli_help.py",
+              "git commit -m \"fix: improve user-facing errors and messages for Phase 4\""
+            ],
+            "done": false
+          },
+          {
+            "number": "4.10",
+            "description": "Final verification, packaging readiness, and Phase 4 wrap-up",
+            "details": [
+              "Run a final full test pass: `pytest tests/`",
+              "Ensure all modules import cleanly in a fresh environment",
+              "Prepare a Phase 4 summary for project documentation and handoff",
+              "Acceptance criteria:",
+              "Phase 4 deliverables are complete, tested, documented, and ready for review",
+              "Commit:",
+              "git add README_PHASE4.md docs/PHASE4.md",
+              "git commit -m \"docs: finalize Phase 4 summary and docs; ready for review\""
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 5,
+        "title": "Enemy AI & Pathfinding",
+        "description": null,
+        "steps": [
+          {
+            "number": "5.1",
+            "description": "Create AI and pathfinding skeleton",
+            "details": [
+              "Create project skeleton with directories and placeholder modules:",
+              "Create src/ai/__init__.py and src/ai/enemy.py",
+              "Create src/pathfinding/__init__.py and src/pathfinding/a_star.py",
+              "Create examples/run_enemy_demo.py",
+              "Create tests/unit/ (and __init__.py if desired) and tests/integration/ directories",
+              "Implement minimal class scaffolds:",
+              "In src/ai/enemy.py, add a basic Enemy class with __init__(self, id, start_pos, patrol_points=None) and a docstring describing intended behavior",
+              "In src/pathfinding/a_star.py, add a minimal AStarPathfinder class with a stub find_path(start, goal, grid, allow_diagonal=False) returning an empty path",
+              "Add lightweight in-file documentation:",
+              "Docstrings for Grid concept (in a_star.py) and Enemy class (in enemy.py)",
+              "Prepare a simple example script scaffold:",
+              "In examples/run_enemy_demo.py, add a small main() that prints a message and imports the skeletons without executing heavy logic",
+              "Acceptance criteria:",
+              "All listed files and directories exist",
+              "Modules import without syntax errors (you can run python -c \"import src.ai.enemy, src.pathfinding.a_star\" to verify)",
+              "Basic API surface described in docstrings is present",
+              "Commit: 5.1: Commit: chore: scaffold AI/pathfinding project structure"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.2",
+            "description": "Implement A* pathfinding core (core data structures and pathfinding logic)",
+            "details": [
+              "Implement grid and pathfinding core in src/pathfinding/a_star.py:",
+              "Define a simple Grid representation: width, height, walls (set of blocked coordinates)",
+              "Implement Grid.in_bounds(pos), Grid.passable(pos), and Grid.neighbors(pos, allow_diagonal=False)",
+              "Implement a robust AStarPathfinder.find_path(start, goal, grid, allow_diagonal=False) returning a list of positions from start to goal (inclusive) or [] if no path",
+              "Add internal helpers: heuristic(a, b) using Manhattan distance, reconstruct_path(came_from, start, goal)",
+              "Ensure the path uses only walkable cells and respects grid bounds",
+              "Add type hints and clear docstrings for all functions/classes",
+              "Implement unit tests for pathfinding in tests/unit/test_pathfinding.py:",
+              "Test 1: Empty 5x5 grid, path from (0,0) to (4,4) exists and is a non-empty list",
+              "Test 2: Grid with a wall barrier; ensure path avoids blocked cells and still reaches goal if possible",
+              "Test 3: allow_diagonal=False vs allow_diagonal=True behavior difference (path length heuristic)",
+              "Acceptance criteria:",
+              "Pathfinding correctly finds valid paths or returns [] when blocked",
+              "Tests pass locally (when run)",
+              "Path respects grid boundaries and walls",
+              "Commit: 5.2: Commit: feat: implement A* pathfinding core and unit tests"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.3",
+            "description": "Implement Enemy AI core behaviors (patrol and chase states)",
+            "details": [
+              "Implement Enemy class behavior in src/ai/enemy.py:",
+              "Extend Enemy with attributes: state (e.g., \"patrol\", \"chase\"), path (list of positions), view_distance (int), current_pos, patrol_points",
+              "Implement methods:",
+              "can_see(self, target_pos): simple distance check (euclidean or Manhattan) within view_distance",
+              "update(self, target_pos, grid, pathfinder): switches between patrol and chase; computes a path to target when chasing using pathfinder.find_path; advances position along the path if available",
+              "advance_along_path(self): moves to next step if path exists",
+              "Provide a helpful __repr__ for debugging",
+              "Add basic docstrings and type hints",
+              "Add unit tests in tests/unit/test_enemy_ai.py:",
+              "Test 1: Patrol behavior when no target is in range; enemy should hold or advance along patrol_points",
+              "Test 2: Chase behavior when target is in range; path is computed via pathfinder and enemy advances along that path",
+              "Test 3: Behavior when pathfinder returns an empty path (blocked target); enemy remains in patrol state",
+              "Acceptance criteria:",
+              "Enemy transitions between patrol and chase based on distance to player_pos",
+              "Pathfinding is invoked for chase mode and enemy position updates accordingly",
+              "Tests cover primary state transitions and edge cases",
+              "Commit: 5.3: Commit: feat: implement basic Enemy AI behaviors"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.4",
+            "description": "Integrate pathfinding with enemy AI controller (or orchestration)",
+            "details": [
+              "Create an AI controller module for orchestration in src/ai/controller.py:",
+              "Define class EnemyAIController with __init__(self, pathfinder, grid)",
+              "Implement method step_enemy(self, enemy, player_pos) that:",
+              "Determines state via enemy.can_see(player_pos)",
+              "If chasing, obtains path via pathfinder.find_path and moves enemy along the path",
+              "If patrolling, ensures a patrol path exists and advances along it",
+              "Ensure the controller does not mutate the grid or pathfinder beyond its API",
+              "Wire tests in tests/integration/test_ai_controller.py:",
+              "Setup a small grid with a known obstacle layout",
+              "Place an enemy with patrol_points and a player_pos within chase range",
+              "Run a few steps and assert that:",
+              "Enemy moves toward player (path exists and is used)",
+              "Obstacles are avoided (path does not include walls)",
+              "Acceptance criteria:",
+              "Controller coordinates pathfinding with enemy movement",
+              "Integration test confirms obstacle avoidance and correct movement direction",
+              "Commit: 5.4: Commit: feat: integrate pathfinding with Enemy AI controller"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.5",
+            "description": "Add tests for edge cases and reliability",
+            "details": [
+              "Extend tests to cover edge cases in pathfinding and AI:",
+              "Test 1: Unreachable target due to enclosed walls; find_path returns []",
+              "Test 3: Path length sanity checks on larger grids (e.g., 10x10) to ensure performance remains reasonable",
+              "Update or add test files as needed:",
+              "tests/unit/test_pathfinding_edge_cases.py",
+              "tests/integration/test_ai_edge_cases.py",
+              "Acceptance criteria:",
+              "All edge-case tests pass",
+              "Behavior remains stable under grid mutations",
+              "Commit: 5.5: Commit: test: cover edge cases for pathfinding and AI"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.6",
+            "description": "Run code quality checks (linting and formatting)",
+            "details": [
+              "Run formatting and linting:",
+              "Execute: black src/ tests/ examples/ && echo \"formatting complete\"",
+              "Execute: flake8 src/ tests/",
+              "If issues reported, fix simple style or type hints",
+              "Optional: add a pre-commit hook reminder or run locally as part of this step",
+              "Acceptance criteria:",
+              "Code passes formatting and linting without errors",
+              "Commit: 5.6: Commit: chore: run code quality checks and fix issues"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.7",
+            "description": "Documentation updates",
+            "details": [
+              "Create API/docs for AI and pathfinding:",
+              "Add docs/enemy_ai.md describing:",
+              "Overview of pathfinding integration and Enemy AI states",
+              "Public API of AStarPathfinder, Grid, Enemy, and EnemyAIController",
+              "Example usage with code snippets",
+              "Update root README with a short section \u201cEnemy AI & Pathfinding\u201d and an example run",
+              "Ensure docstrings in code reflect current behavior and expectations",
+              "Acceptance criteria:",
+              "Documentation exists and explains how to use the AI/pathfinding features",
+              "README builds with minimal effort (no broken links or missing sections)",
+              "Commit: 5.7: Commit: docs: add enemy AI & pathfinding docs"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.8",
+            "description": "User-facing demo (CLI/example)",
+            "details": [
+              "Implement a simple demo script in examples/run_enemy_demo.py:",
+              "Create a small 10x10 grid with a few walls",
+              "Instantiate a Grid-like object and AStarPathfinder",
+              "Create an Enemy with a patrol route and a simulated player position",
+              "Run a short loop of steps showing enemy position, state, and next path steps",
+              "Print output in a readable format; optionally provide a minimal ASCII visualization",
+              "Provide run instructions:",
+              "CLI: python3 -m examples.run_enemy_demo",
+              "Expected sample output included in docs or a comment block",
+              "Acceptance criteria:",
+              "Demo runs without errors and demonstrates patrol and chase behavior",
+              "Output is human-readable and helps verify behavior",
+              "Commit: 5.8: Commit: feat: add enemy AI demonstration script"
+            ],
+            "done": false
+          },
+          {
+            "number": "5.9",
+            "description": "Final test run and release readiness",
+            "details": [
+              "Run full test suite and summarize results:",
+              "Execute: pytest -q",
+              "If available, run basic coverage checks and report percent covered",
+              "Sanity checks:",
+              "Confirm that all new modules load in a clean Python session",
+              "Ensure no crash paths remain in typical scenarios",
+              "Documentation sanity:",
+              "Quick sanity read of docs/enemy_ai.md and README to ensure consistency with code",
+              "Acceptance criteria:",
+              "All tests pass locally",
+              "Code quality remains high after tests",
+              "Documentation reflects current implementation",
+              "Commit: 5.9: Commit: test: run full test suite and summarize results"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 6,
+        "title": "Input Handling & Terminal Rendering (TUI)",
+        "description": null,
+        "steps": [
+          {
+            "number": "6.1",
+            "description": "Create TUI skeleton structure and initial files",
+            "details": [
+              "Create directories: `src/tui/`, `tests/unit/`, and `docs/` (if not existing)",
+              "Create Python package initializer: `src/tui/__init__.py`",
+              "Create core modules with placeholders:",
+              "`src/tui/app.py` (stub class `TUIApp`)",
+              "`src/tui/renderer.py` (stub class `TerminalRenderer`)",
+              "`src/tui/input_handler.py` (stub class `InputHandler`)",
+              "`src/tui/command_parser.py` (stub function `parse_command`)",
+              "Create test stubs:",
+              "`tests/unit/__init__.py`",
+              "`tests/unit/test_input_handler.py` (basic import/structure)",
+              "`tests/unit/test_command_parser.py` (basic import/structure)",
+              "Create documentation placeholder:",
+              "`docs/tui.md` (empty scaffold with headings for later fill)",
+              "Acceptance checks:",
+              "Run: `ls -R src/tui tests/unit docs | sed -e 's/$/\\n/'` to verify files exist",
+              "Ensure Python can import the modules without syntax errors (e.g., run `python - << 'PY'\\nimport src.tui as t; print('ok')\\nPY`)",
+              "Commit:",
+              "`6.1: feat: scaffold TUI structure, tests, and docs` via: `git add src/tui tests/unit docs/tui.md; git commit -m \"feat: scaffold TUI structure, tests, and docs\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.2",
+            "description": "Implement TerminalRenderer with curses-based rendering scaffolding",
+            "details": [
+              "Implement in `src/tui/renderer.py`:",
+              "Class `TerminalRenderer` with initializer accepting a `stdscr` or creating one via `curses.initscr()` if provided",
+              "Methods:",
+              "`init_screen()` to configure curses modes (cbreak, noecho, keypad)",
+              "`render_header(title: str)` to display a header line",
+              "`render_body(lines: list[str], highlight_index: int | None = None)` to render token lines",
+              "`render_input(prompt: str, current_input: str)` to render an input line",
+              "`refresh()` to refresh the screen",
+              "`teardown()` to restore terminal state on exit",
+              "Include basic input validation and type hints; guard curses usage so importing the module without a terminal won\u2019t crash",
+              "Acceptance checks:",
+              "Import `TerminalRenderer` and instantiate with a mock or None to ensure class exists",
+              "Ensure methods exist and are callable (no runtime errors when not in a real terminal)",
+              "Commit:",
+              "`6.2: feat: implement TerminalRenderer scaffolding` via: `git add src/tui/renderer.py; git commit -m \"feat: implement TerminalRenderer scaffolding\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.3",
+            "description": "Implement InputHandler for editing/typeable input",
+            "details": [
+              "Implement in `src/tui/input_handler.py`:",
+              "Class `InputHandler` with:",
+              "`__init__(self, max_length: int = 256)`",
+              "`feed_key(self, key: str)` accepts a character or special token like `'ENTER'`, `'BACKSPACE'`",
+              "`insert_char(self, ch: str)` to append a character if under max length",
+              "`handle_backspace(self)` to delete last character",
+              "`get_buffer(self) -> str` to retrieve current input",
+              "`reset(self)` to clear buffer",
+              "Behavior:",
+              "Basic line editing: append printable chars, backspace deletes, cap at max length",
+              "Enter returns the current buffer via `get_buffer()` (without removing it automatically; leave to caller)",
+              "Acceptance checks:",
+              "Create a small in-memory test sequence (e.g., feed 'a', 'b', 'c', 'BACKSPACE', 'd') and assert buffer equals \"abd\"",
+              "Ensure buffer length respects `max_length`",
+              "Commit:",
+              "`6.3: feat: implement input handling` via: `git add src/tui/input_handler.py; git commit -m \"feat: implement input handling\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.4",
+            "description": "Implement CommandParser for TUI command parsing",
+            "details": [
+              "Implement in `src/tui/command_parser.py`:",
+              "Function `parse_command(text: str) -> dict` with structure:",
+              "Returns `{\"action\": \"add\"|\"remove\"|\"list\"|\"help\"|\"quit\"|\"unknown\", \"args\": [...] , \"raw\": text}`",
+              "Supported commands (case-insensitive):",
+              "`add <token>`: adds a token (token is the rest of the text after \"add\")",
+              "`remove <index|token>`: remove by index or by token value",
+              "`list`: request list of tokens",
+              "`help`: provide usage string",
+              "`quit`: exit the app",
+              "Basic parsing: trim, split, handle missing args, return deterministic structure",
+              "Acceptance checks:",
+              "`parse_command(\"add token42\")` yields action `add` and args `[\"token42\"]`",
+              "`parse_command(\"remove 2\")` yields action `remove` and args `[\"2\"]`",
+              "`parse_command(\"unknown\")` yields action `unknown`",
+              "Tests:",
+              "Create or extend `tests/unit/test_command_parser.py` to cover above scenarios",
+              "Commit:",
+              "`6.4: feat: implement command parser` via: `git add src/tui/command_parser.py tests/unit/test_command_parser.py; git commit -m \"feat: implement command parser\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.5",
+            "description": "Implement TUIApp skeleton to wire components",
+            "details": [
+              "Implement in `src/tui/app.py`:",
+              "Class `TUIApp` with:",
+              "`__init__(self, renderer: TerminalRenderer, input_handler: InputHandler)`",
+              "Internal state: `self.tokens: list[str] = []`, `self.renderer`, `self.input_handler`",
+              "Methods:",
+              "`add_token(token: str)` to append to `self.tokens`",
+              "`remove_token(index_or_token: int | str)` to remove by index or by value",
+              "`get_tokens() -> list[str]` to expose current tokens",
+              "`process_input(text: str)` uses `parse_command` to interpret and modify tokens",
+              "`render()` to call renderer methods: header, body (tokens), and input area (current input)",
+              "`run_once()` as a single loop step placeholder (non-terminal logic for testability)",
+              "Minimal non-terminal behavior to enable tests without a real terminal",
+              "If executed with curses, provide a `start()` or `run()` using `curses.wrapper` in a separate path",
+              "Acceptance checks:",
+              "Instantiate with mock renderer/input handler and perform a sequence: add_token(\"ABC\"), process_input(\"add DEF\"), then verify tokens list is [\"ABC\",\"DEF\"]",
+              "Commit:",
+              "`6.5: feat: implement TUI app skeleton integrating renderer and input` via: `git add src/tui/app.py; git commit -m \"feat: implement TUI app skeleton\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.6",
+            "description": "Create and run unit tests for input handling and command parsing",
+            "details": [
+              "Expand or create tests:",
+              "Update `tests/unit/test_input_handler.py` to cover:",
+              "Type sequence: 'a', 'b', 'c' => buffer \"abc\"",
+              "Backspace handling after typing: buffer \"ab\"",
+              "Max length constraint enforcement",
+              "Update `tests/unit/test_command_parser.py` to cover:",
+              "`add`, `remove`, `list`, `help`, `quit`, and unknown command",
+              "Run tests locally:",
+              "Install test deps if needed, then run: `pytest -q tests/unit/`",
+              "Acceptance checks:",
+              "All new tests pass; no failures",
+              "Commit:",
+              "`6.6: test: add unit tests for input handler and command parser` via: `git add tests/unit/test_input_handler.py tests/unit/test_command_parser.py; git commit -m \"test: add unit tests for input handler and command parser\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.7",
+            "description": "Documentation: add TUI usage guide",
+            "details": [
+              "Create/extend `docs/tui.md` with:",
+              "Overview of the TUI module and its components",
+              "How to run the TUI (terminal requirements, Python version)",
+              "Commands and examples: add, remove, list, help, quit",
+              "API surface: high-level descriptions of `TerminalRenderer`, `InputHandler`, `CommandParser`, and `TUIApp`",
+              "Cross-link: update root `README.md` to reference the new TUI docs",
+              "Acceptance checks:",
+              "File exists and contains sample usage text",
+              "README links render correctly in plain text",
+              "Commit:",
+              "`6.7: docs: add TUI usage guide` via: `git add docs/tui.md README.md; git commit -m \"docs: add TUI usage guide\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.8",
+            "description": "Add a runnable sample TUI runner script",
+            "details": [
+              "Create `scripts/run_tui.py`:",
+              "Import `curses`, create a small demo that instantiates a `TerminalRenderer` and `InputHandler`, wires a minimal `TUIApp`, and runs a tiny loop that accepts a few hard-coded commands (e.g., add 1, add 2) to demonstrate the flow",
+              "Use a guard: `if __name__ == \"__main__\":` and `curses.wrapper(main)` pattern",
+              "Document how to run: `python scripts/run_tui.py`",
+              "Acceptance checks:",
+              "Script exists and is executable",
+              "Running it in a terminal shows no import-time crashes and prints a basic demo",
+              "Commit:",
+              "`6.8: feat: add sample TUI runner script` via: `git add scripts/run_tui.py; git commit -m \"feat: add sample TUI runner script\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.9",
+            "description": "Code quality checks: linting, formatting, and basic config",
+            "details": [
+              "Create or ensure dev tooling is present:",
+              "Add minimal dev requirements file if not present: `requirements-dev.txt` with `black`, `flake8`, `pytest`",
+              "Run quality tools:",
+              "Format: `black src/tui/ tests/unit/ scripts/`",
+              "Lint: `flake8 src/tui/ tests/unit/`",
+              "Test: `pytest -q tests/unit/`",
+              "Acceptance checks:",
+              "No lint errors; code formatted; tests pass",
+              "Commit:",
+              "`6.9: chore: run linters/formatters` via: `git add -A; git commit -m \"chore: run linters/formatters\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.10",
+            "description": "Add Python configuration for linting/formatting",
+            "details": [
+              "Create configuration files:",
+              "`pyproject.toml` with `[tool.black]` settings (line length, target version)",
+              "`[tool.flake8]` settings (max-line-length, exclude patterns)",
+              "`.gitignore` updates for common Python artifacts",
+              "Acceptance checks:",
+              "Files exist and are syntactically valid TOML",
+              "Tools pick up settings when run (e.g., `black .` respects config)",
+              "Commit:",
+              "`6.10: config: add lint/format configuration` via: `git add pyproject.toml .flake8 .gitignore; git commit -m \"config: add lint/format configuration\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.11",
+            "description": "Final verification: end-to-end smoke test",
+            "details": [
+              "Run full verification:",
+              "`pytest -q tests/unit/`",
+              "`black --check src/tui/ tests/` and fix if needed",
+              "`flake8 src/tui/`",
+              "Acceptance checks:",
+              "All tests pass; no linting/formatting issues",
+              "Codebase remains compliant with configured style",
+              "Commit:",
+              "`6.11: test: verify end-to-end checks` via: `git add -A; git commit -m \"test: verify end-to-end checks\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "6.12",
+            "description": "Documentation and handoff polish",
+            "details": [
+              "Update any remaining docs or README sections to reflect the Phase 6 work:",
+              "Ensure usage examples in `docs/tui.md` are accurate",
+              "Ensure `README.md` has a short \"How to run the TUI\" snippet",
+              "Acceptance checks:",
+              "Documentation builds or renders locally (if you have a docs tool) or at least contains accurate instructions and examples",
+              "Commit:",
+              "`6.12: docs: finalize TUI documentation` via: `git add docs/tui.md README.md; git commit -m \"docs: finalize TUI documentation\"`"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 7,
+        "title": "Meta-Progression, Shop & Persistence UX",
+        "description": null,
+        "steps": [
+          {
+            "number": "7.1",
+            "description": "Create the persistence layer (ProgressManager) to save/load player state",
+            "details": [
+              "Create directory: `src/persistence/`",
+              "Create file: `src/persistence/progress.py`",
+              "Implement a `ProgressManager` class with:",
+              "`__init__(self, path: Optional[str] = None)` that defaults to `~/.token_muncher/progress.json` and expands the user path",
+              "`_ensure_storage()` that creates the directory if it does not exist",
+              "`load_progress() -> dict` that returns a dict with sensible defaults if the file is missing",
+              "`save_progress(data: dict) -> None` that writes JSON with pretty formatting",
+              "`update(**kwargs) -> None` that merges new values into the current progress and saves",
+              "`reset() -> None` that resets to a DEFAULT_PROGRESS payload",
+              "Define a constant DEFAULT_PROGRESS with fields like: `tokens`, `meta_level`, `multiplier`, `unlocks`, `prestige_count`, `version`",
+              "Ensure robust error handling around JSON I/O and missing keys; keep behavior predictable",
+              "Include type hints and docstrings for all public methods",
+              "Acceptance:",
+              "Save a sample progress dict to a temporary path and reload it, verifying that the values round-trip correctly",
+              "If the default path is used, ensure the directory is created on first save",
+              "Commit: `git add src/persistence/progress.py && git add src/persistence/__init__.py (if added) && git commit -m \"feat: add persistenceProgressManager with load/save/reset\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.2",
+            "description": "Implement Shop system with purchasable tokens-based items",
+            "details": [
+              "Create directory: `src/shop/`",
+              "Create file: `src/shop/items.json` containing a small catalog, e.g. items like:",
+              "`{\"id\":\"multiplier_boost\",\"name\":\"Multiplier Boost\",\"price\":50,\"description\":\"Increase token multiplier by 0.25\",\"effect\":{\"multiplier_delta\":0.25}}`",
+              "`{\"id\":\"prestige_token\",\"name\":\"Prestige Token\",\"price\":200,\"description\":\"Unlock a prestige point for meta-progression\",\"effect\":{\"prestige\":1}}`",
+              "Create file: `src/shop/shop.py`",
+              "Implement a `Shop` class with:",
+              "`__init__(self, progress_manager)` storing a reference to `ProgressManager`",
+              "`list_items() -> list[dict]` that reads and returns the catalog from `items.json`",
+              "`can_afford(item_id: str) -> bool` that checks current tokens against item price",
+              "`buy(item_id: str) -> tuple[bool, str]` that deducts tokens, applies immediate effects to progress (e.g., adjust `multiplier` or `prestige_count`), and returns (success, message)",
+              "Internal helper `_load_item(item_id)` to fetch item data",
+              "Ensure purchase updates progress via `ProgressManager.update(...)` to modify `tokens`, `multiplier`, or other relevant fields",
+              "Keep operations isolated from UI; do not depend on external state",
+              "Create minimal tests in `tests/unit/test_shop.py` (see 7.5 for test expectations)",
+              "Acceptance:",
+              "Calling `list_items()` returns the catalog with at least two items",
+              "Calling `buy('multiplier_boost')` when tokens >= price reduces tokens accordingly and increments `multiplier` as per item",
+              "Commit: `git add src/shop/ items.json src/shop/shop.py && git commit -m \"feat: implement basic in-game shop with purchasable items and persistence hooks\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.3",
+            "description": "Implement Meta-Progression system (prestige, unlocks, and progression bonuses)",
+            "details": [
+              "Create directory: `src/meta/`",
+              "Create file: `src/meta/progression.py`",
+              "Implement a `MetaProgressionManager` class with:",
+              "`__init__(self, progress_manager: ProgressManager)` to connect with persistence",
+              "`get_current_prestige() -> int` returns current prestige count",
+              "`prestige()` -> increments prestige, resets or reallocates certain progress fields, increases a global multiplier or unlock tier",
+              "`unlock_feature(feature_id: str)` -> marks a feature as unlocked in progress",
+              "`is_unlocked(feature_id: str) -> bool` -> checks unlock state",
+              "`get_total_bonus()` -> compute a bonus value (e.g., multiplier bonus) based on prestige and unlocked features",
+              "Use the existing `ProgressManager` to persist the new fields: `prestige_count`, `unlocks`, and any derived `multiplier` changes",
+              "Create tests: `tests/unit/test_meta.py` to validate:",
+              "Prestige increases the counter and affects bonus",
+              "Unlocking and querying features works as expected",
+              "Acceptance:",
+              "After calling `prestige()`, `get_current_prestige()` increments by 1 and bonus increases as designed",
+              "Commit: `git add src/meta/progression.py && git commit -m \"feat: add meta-progression system with prestige and unlocks\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.4",
+            "description": "Integrate a CLI-based UX for Shop, Progress, and Prestige commands",
+            "details": [
+              "Create directory: `src/ui/`",
+              "Create file: `src/ui/cli.py`",
+              "Implement functions:",
+              "`render_main_menu() -> str` returns a friendly textual menu listing: Shop, Progress, Prestige, Help, Exit",
+              "`handle_command(cmd: str, shop: Shop, meta: MetaProgressionManager, progress: ProgressManager) -> str` that processes commands like `shop`, `shop list`, `shop buy <item_id>`, `prestige`, `progress`, `help`",
+              "`format_item_list(items: list[dict]) -> str` helper to present items neatly",
+              "Ensure input parsing is robust and provides friendly error messages for unknown commands",
+              "Provide a short `--help` text and example usage embedded in the strings",
+              "Acceptance:",
+              "Invoking `render_main_menu()` returns a well-formatted menu string",
+              "`handle_command(\"shop list\", ...)` returns a readable catalog string",
+              "Commit: `git add src/ui/cli.py && git commit -m \"feat: add CLI UI scaffolding for shop and progression\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.5",
+            "description": "Implement unit tests for persistence, shop, and meta-progression",
+            "details": [
+              "Create tests directory structure if not present: `tests/unit/`",
+              "Create `tests/unit/test_persistence.py`:",
+              "Use a temp path (pytest tmp_path) to instantiate `ProgressManager(path=tmp_path / \"progress.json\")`",
+              "Test `reset()`, `update(tokens=10)`, then `load_progress()` reflects updates",
+              "Test that missing file when loading returns defaults",
+              "Create `tests/unit/test_shop.py`:",
+              "Instantiate a mock or real `ProgressManager` using a temp path",
+              "Seed tokens to 100, load shop items, call `buy(\"multiplier_boost\")` and assert tokens decrease and `multiplier` increases appropriately",
+              "Create `tests/unit/test_meta.py`:",
+              "Instantiate `ProgressManager` with temp path, seed prestige via `MetaProgressionManager.prestige()`, verify `get_current_prestige()` increments and `get_total_bonus()` changes",
+              "Run: `pytest -q tests/unit/`",
+              "Acceptance:",
+              "All tests pass locally",
+              "Commit: `git add tests/unit/test_persistence.py tests/unit/test_shop.py tests/unit/test_meta.py && git commit -m \"test: add unit tests for persistence, shop, and meta-progression\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.6",
+            "description": "Run code quality checks (linting and formatting)",
+            "details": [
+              "Install tooling if not present (assume available): `pip install black flake8`",
+              "Run formatting: `black src/ tests/`",
+              "Run linting: `flake8 src/ tests/`",
+              "Fix any reported issues and re-run until clean",
+              "Acceptance:",
+              "Lint/format reports no errors or warnings",
+              "Commit: `git add . && git commit -m \"chore: run linting and formatting across phase 7 codebase\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.7",
+            "description": "Documentation updates for Phase 7 features",
+            "details": [
+              "Create docs directory if not present: `docs/`",
+              "Create `docs/phase7_meta_shop_persistence.md` with:",
+              "Overview of persistence, shop, and meta-progression features",
+              "How to use the CLI UI (example commands)",
+              "Data model description (what gets stored)",
+              "Example workflows: earning tokens, buying items, prestiging",
+              "Update `README.md` or `docs/index.md` to reference Phase 7 docs",
+              "Acceptance:",
+              "Documentation files exist and contain at least one usage example",
+              "README references Phase 7 docs",
+              "Commit: `git add docs/ phase7_meta_shop_persistence.md README.md && git commit -m \"docs: phase 7 \u2014 meta-progression, shop, and persistence UX documentation\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.8",
+            "description": "Create a small end-to-end demo script for Phase 7",
+            "details": [
+              "Create directory: `scripts/`",
+              "Create file: `scripts/demo_phase7.py`",
+              "Import `ProgressManager`, `Shop`, and `MetaProgressionManager`",
+              "Sequence:",
+              "Initialize managers with a temporary path (for demo)",
+              "Add tokens, list shop items, buy an item, check updated tokens and multiplier",
+              "Trigger a prestige, verify prestige count and multiplier effect",
+              "Print concise, readable output at each step",
+              "Acceptance:",
+              "Running `python scripts/demo_phase7.py` prints a clear progression flow and final state summary",
+              "Commit: `git add scripts/demo_phase7.py && git commit -m \"feat: add end-to-end demo for phase 7 progression and shop UX\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "7.9",
+            "description": "Create a lightweight integration test for end-to-end flow",
+            "details": [
+              "Create `tests/integration/test_full_flow.py`",
+              "Use a temporary progress file path",
+              "Flow:",
+              "Start with tokens = 150",
+              "Create shop and buy an item that increases multiplier",
+              "Perform prestige",
+              "Assert final tokens, prestige count, and multiplier reflect actions",
+              "Acceptance:",
+              "The integration test exercises persistence, shop purchase, and meta-progression together",
+              "Commit: `git add tests/integration/test_full_flow.py && git commit -m \"test: integration test for full phase 7 flow (persistence + shop + meta-progression)\"`"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 8,
+        "title": "Testing, QA & Performance Tuning",
+        "description": null,
+        "steps": [
+          {
+            "number": "8.1",
+            "description": "Setup test scaffolding and QA plan",
+            "details": [
+              "Create directories: tests/unit/, tests/integration/, tests/perf/, tests/data/ at the project root.",
+              "Add test configuration file (e.g., pytest.ini or pyproject.toml) configuring pytest defaults, test paths, and markers.",
+              "Create a basic fixture file: tests/conftest.py with a sample fixture like load_sample_input().",
+              "Create a QA planning document: docs/QA_PLAN.md outlining test coverage goals, performance targets, and acceptance criteria.",
+              "Update .gitignore to exclude test artifacts (e.g., test-results/ and perf/outputs/).",
+              "Acceptance checks:",
+              "All new directories exist; pytest config present; QA_PLAN.md exists with explicit targets."
+            ],
+            "done": false
+          },
+          {
+            "number": "8.2",
+            "description": "Add test data and utilities",
+            "details": [
+              "Create tests/data/sample_input.json with representative input for core components.",
+              "Create tests/utils/test_utils.py with helper functions (e.g., load_json(path), deep_compare(a,b)).",
+              "Create tests/helpers.py to centralize test helpers (e.g., get_fixture_path(name)).",
+              "Document how to run tests and what data is used in tests/README.md.",
+              "Ensure imports work by keeping a clean module layout and avoiding circular imports.",
+              "Acceptance checks:",
+              "Helpers import cleanly; sample_input.json loads via load_json; test data path resolution works."
+            ],
+            "done": false
+          },
+          {
+            "number": "8.3",
+            "description": "Implement unit test skeletons for core modules",
+            "details": [
+              "Create tests/unit/test_tokenizer.py with at least 2 skeleton tests for tokenization paths, using pytest.",
+              "Create tests/unit/test_parser.py with at least 2 skeleton tests for parsing results, using pytest.",
+              "Use pytest.importorskip to gracefully skip tests if target modules aren\u2019t present yet, and include clear skip reasons.",
+              "Add docstrings describing the intended behavior of each test and expected outcomes.",
+              "Include a short test plan header in each file explaining what will be exercised once the code is ready.",
+              "Acceptance checks:",
+              "Test files exist; tests are discoverable by pytest; tests run as skipped or placeholder until code is implemented."
+            ],
+            "done": false
+          },
+          {
+            "number": "8.4",
+            "description": "Commit: feat(tests): scaffold unit tests and QA plan",
+            "details": [
+              "Stage new tests, QA plan, and config: git add tests/ docs/ docs/QA_PLAN.md pytest.ini",
+              "Commit message: git commit -m \"feat(tests): scaffold unit tests and QA plan\"",
+              "Ensure CI would run pytest and report scaffolding status",
+              "Acceptance checks:",
+              "Commit recorded with the expected message; repository reflects new test scaffolding"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.5",
+            "description": "Add integration tests scaffolding",
+            "details": [
+              "Create tests/integration/test_cli_help.py to verify that CLI help text prints and includes examples.",
+              "Create tests/integration/test_end_to_end.py with a minimal end-to-end scenario using a CLI runner or subprocess to simulate a typical usage flow.",
+              "Add a small mock or fixture to supply deterministic input for integration tests.",
+              "Update test discovery by ensuring pytest can find integration tests (tag them if needed).",
+              "Acceptance checks:",
+              "Integration test files exist; tests can run (skipping if environment not prepared); CLI help path exercised."
+            ],
+            "done": false
+          },
+          {
+            "number": "8.6",
+            "description": "Commit: feat(tests): add integration tests scaffolding",
+            "details": [
+              "Stage new integration tests: git add tests/integration/",
+              "Commit message: git commit -m \"feat(tests): add integration tests scaffolding\"",
+              "Acceptance checks:",
+              "Commit successfully created and contains integration test files"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.7",
+            "description": "Setup performance benchmarks framework",
+            "details": [
+              "Create a dedicated benchmark file: tests/perf/benchmark_tokenization.py with a couple of benchmarked functions (e.g., tokenization_path_a, tokenization_path_b).",
+              "Configure pytest-benchmark (or an equivalent tool) by updating pytest.ini/pyproject.toml to enable benchmarks, e.g., addopts including --benchmark-compare and appropriate rounds.",
+              "Add a small README snippet in tests/perf/README.md describing how to run benchmarks and what metrics to look for.",
+              "Include a simple trainer script or helper to generate a consistent workload for benchmarking.",
+              "Acceptance checks:",
+              "Benchmark file exists; pytest-benchmark is configured; benchmark script runs without syntax errors."
+            ],
+            "done": false
+          },
+          {
+            "number": "8.8",
+            "description": "Commit: feat(perf): benchmarks scaffolding",
+            "details": [
+              "Stage benchmark files and config: git add tests/perf/ benchmark config files (pytest.ini or pyproject.toml)",
+              "Commit message: git commit -m \"feat(perf): benchmarks scaffolding\"",
+              "Acceptance checks:",
+              "Commit contains benchmark scaffolding; benchmarks can be discovered by pytest and run"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.9",
+            "description": "Run linting and formatting",
+            "details": [
+              "Run code formatting: python -m black src/ tests/",
+              "Run linting: flake8 src/ tests/",
+              "Address any style or lint issues (e.g., unused imports, line length)",
+              "Ensure lint passes cleanly with no errors reported",
+              "Acceptance checks:",
+              "Black reformats applied; Flake8 reports zero errors/warnings (or only accepted, non-blocking warnings)"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.10",
+            "description": "Commit: chore(style): apply code style fixes",
+            "details": [
+              "Stage changes from formatting/lint fixes: git add .",
+              "Commit message: git commit -m \"chore(style): apply code style fixes\"",
+              "Acceptance checks:",
+              "Commit created; codebase is now formatted and linted"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.11",
+            "description": "Run unit tests and fix failures",
+            "details": [
+              "Run tests: pytest -q tests/unit tests/integration -q",
+              "Examine any failures, adjust tests or add appropriate xfail/skip markers if functionality is pending",
+              "If tests rely on external resources, mock those dependencies to keep tests hermetic",
+              "Acceptance checks:",
+              "Tests run; failures reduced; remaining failures are clearly documented in code or test notes"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.12",
+            "description": "Commit: test: run and fix tests",
+            "details": [
+              "Stage test results and any fixes: git add tests/unit tests/integration",
+              "Commit message: git commit -m \"test: run and fix unit/integration tests\"",
+              "Acceptance checks:",
+              "Commit records the test run progress and any fixes applied"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.13",
+            "description": "Improve CLI help messages and error handling",
+            "details": [
+              "Locate the CLI entry point (e.g., src/token_muncher/cli.py or src/token_muncher/__main__.py) and ensure argparse/Click parsers provide descriptive help, usage examples, and version info",
+              "Add user-friendly error handling for common invalid inputs with clear messages",
+              "Add tests to verify --help output and error messages (e.g., tests/integration/test_cli_error_messages.py)",
+              "Document sample commands in the README under a \"CLI usage\" section",
+              "Acceptance checks:",
+              "Running python -m token_muncher --help shows helpful usage and examples; invalid inputs yield clear messages"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.14",
+            "description": "Commit: feat(cli): add help and error messages",
+            "details": [
+              "Stage CLI changes and tests: git add src/token_muncher/ tests/integration/test_cli_error_messages.py",
+              "Commit message: git commit -m \"feat(cli): add help and error messages\"",
+              "Acceptance checks:",
+              "Commit exists; CLI help and error handling enhancements are tracked"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.15",
+            "description": "Documentation updates (testing, QA, and user guidance)",
+            "details": [
+              "Update README.md with explicit testing commands (unit, integration, and benchmarks) and prerequisites",
+              "Update docs/QA_PLAN.md with current testing scope, targets, and verification steps",
+              "Add a short troubleshooting section for common test failures",
+              "Acceptance checks:",
+              "Documentation reflects testing strategy and how to reproduce QA steps"
+            ],
+            "done": false
+          },
+          {
+            "number": "8.16",
+            "description": "Commit: docs: update testing/QA docs",
+            "details": [
+              "Stage documentation updates: git add README.md docs/QA_PLAN.md",
+              "Commit message: git commit -m \"docs: update testing and QA documentation\"",
+              "Acceptance checks:",
+              "Commit contains updated docs; readers can follow new testing guidance"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 9,
+        "title": "UX Polish, Playtesting & Balancing",
+        "description": null,
+        "steps": [
+          {
+            "number": "9.1",
+            "description": "Create UX polish plan and assets directory",
+            "details": [
+              "Create the document at `docs/phase9/ux-polish-plan.md` outlining goals, success metrics, and describe the polish tasks to be completed.",
+              "Create assets directory structure `assets/ui/phase9/{icons,fonts,sprites}` with placeholder placeholder files (e.g., `placeholder.png`, `placeholder.ttf`, `README.md`).",
+              "Populate the plan with user stories such as improved tooltips, clearer help text, and actionable on-screen hints.",
+              "Add a one-page summary at `docs/phase9/README.md` that explains how to use the assets and how polish tasks map to user flows.",
+              "Commit: `git add docs/phase9/ux-polish-plan.md assets/ui/phase9/README.md` and `git commit -m \"docs: phase 9 UX polish plan and assets scaffolding\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.2",
+            "description": "Implement UI polish utilities module",
+            "details": [
+              "Create file `src/ui/polish/uiPolish.js` implementing a small utility module for UI polish.",
+              "Implement functions:",
+              "`formatTime(ms)` -> returns a human-friendly time string (e.g., \"02:15\")",
+              "`formatScore(n)` -> returns a thousand-separated string (e.g., \"1,234\")",
+              "`buildTooltip(label, text)` -> returns a stable tooltip object/string",
+              "`renderHint(message)` -> returns a ready-to-render hint string",
+              "Add JSDoc comments and export the functions.",
+              "Create initial unit test scaffold at `tests/unit/test_ui_polish.js` covering all functions with basic inputs.",
+              "Update `src/ui/index.js` (or equivalent barrel) to export `uiPolish`.",
+              "Run quality checks: lint and format (e.g., `npm run lint`, `npm run format` if configured).",
+              "Commit: `git add src/ui/polish/uiPolish.js tests/unit/test_ui_polish.js` and `git commit -m \"feat(ui): add UI polish utilities\"` and then `git commit -m \"test(ui): add unit tests for UI polish utilities\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.3",
+            "description": "Update in-game help text source",
+            "details": [
+              "Create `src/ui/help.js` exposing `getHelpText()` that returns the current help/instruction text including examples.",
+              "Implement a lightweight integration point (e.g., export `getHelpText` and provide a usage snippet in comments).",
+              "Create unit tests at `tests/unit/test_help.js` to verify help text contains expected sections (e.g., \"How to play\", \"Scoring\", \"Controls\").",
+              "Add/Update documentation: `docs/help.md` with the current help text example and a note about localization.",
+              "Commit: `git add src/ui/help.js tests/unit/test_help.js docs/help.md` and `git commit -m \"feat(help): add in-game help text provider\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.4",
+            "description": "Create error handling module and messages",
+            "details": [
+              "Create `src/errors/gameError.js` with a `GameError` class (properties: `code`, `message`, `details`) and a `toUserMessage()` helper.",
+              "Define a small set of error codes: `INVALID_ACTION`, `OUT_OF_BOUNDS`, `INSUFFICIENT_FUNDS`, each with default user-friendly messages.",
+              "Provide a function `formatError(error)` that returns a user-facing string.",
+              "Create unit tests at `tests/unit/test_gameError.js` to verify codes map to messages and `toUserMessage()` formatting works.",
+              "Commit: `git add src/errors/gameError.js tests/unit/test_gameError.js` and `git commit -m \"feat(errors): structured game error types and formatter\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.5",
+            "description": "Create playtesting plan and data collection method",
+            "details": [
+              "Create `docs/playtesting/plan.md` detailing test scenarios (e.g., newbie onboarding, speedrun path, high-difficulty curve), data to collect (completion time, score, token counts, user feedback), roles, schedule, and success criteria.",
+              "Add a lightweight template `docs/playtesting/results_template.md` to guide testers on what to record.",
+              "Include brief instructions for testers (how to capture screenshots or logs, where to put results).",
+              "Commit: `git add docs/playtesting/plan.md docs/playtesting/results_template.md` and `git commit -m \"docs(playtesting): add plan and result template\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.6",
+            "description": "Create balancing configuration with tunables",
+            "details": [
+              "Create `config/balance.json` containing tunables such as:",
+              "`\"difficulty\": \"normal\"`",
+              "`\"tokenValue\": 10`",
+              "`\"spawnRate\": { \"min\": 0.5, \"max\": 2.0 }`",
+              "`\"levelUpThreshold\": 1000`",
+              "`\"difficultyModifiers\": { \"easy\": {...}, \"normal\": {...}, \"hard\": {...} }`",
+              "Create a short documentation file `docs/config_balance.md` explaining each key, allowed ranges, and how they influence gameplay.",
+              "Commit: `git add config/balance.json docs/config_balance.md` and `git commit -m \"docs(config): balance tunables and guidance\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.7",
+            "description": "Implement balancing helper functions",
+            "details": [
+              "Create `src/game/balance.js` implementing:",
+              "`clamp(value, min, max)`",
+              "`lerp(a, b, t)`",
+              "`weightedRandom(weights)` that returns an index based on weights",
+              "`adjustForDifficulty(baseValue, difficulty, balanceConfig)` that reads from `config/balance.json` to adjust the value",
+              "Add unit tests at `tests/unit/test_balance.js` covering edge cases (min/max, zero weights, different difficulties).",
+              "If a small example usage exists, add a comment snippet in the file showing how to call `adjustForDifficulty`.",
+              "Commit: `git add src/game/balance.js tests/unit/test_balance.js` and `git commit -m \"feat(balance): balancing helpers and difficulty adjustment\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.8",
+            "description": "Add telemetry stub",
+            "details": [
+              "Create `src/telemetry/metrics.js` with `recordEvent(event, payload)` that logs to console or writes to a test-friendly in-memory store.",
+              "Add a small example integration in `src/game/balance.js` to call `recordEvent('balance_adjusted', { value, difficulty })` when values change.",
+              "Create unit tests at `tests/unit/test_metrics.js` ensuring `recordEvent` can be called without error and, if using a mock, that it records expected data.",
+              "Commit: `git add src/telemetry/metrics.js tests/unit/test_metrics.js` and `git commit -m \"feat(telemetry): add metrics stub with basic recording\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.9",
+            "description": "Run quality checks",
+            "details": [
+              "Run JavaScript lint/format/tests if applicable:",
+              "`npm run lint` (or `npx eslint .` as fallback)",
+              "`npm run format` (or `npx prettier --write .` as fallback)",
+              "`npm test` (or `pytest tests/` if using Python)",
+              "Fix any lint/format/test failures that appear.",
+              "Commit: `git add -A` and `git commit -m \"chore(quality): run lint, format, and tests\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.10",
+            "description": "Create unit tests for new modules",
+            "details": [
+              "Add or expand unit tests for:",
+              "UI polish: `tests/unit/test_ui_polish.js`",
+              "Help text: `tests/unit/test_help.js`",
+              "Game errors: `tests/unit/test_gameError.js`",
+              "Balancing: `tests/unit/test_balance.js`",
+              "Telemetry: `tests/unit/test_metrics.js`",
+              "Run tests locally and ensure all pass.",
+              "Commit: `git add tests/unit/` and `git commit -m \"test(unit): add comprehensive tests for UX polish, help, errors, balance, telemetry\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.11",
+            "description": "Documentation updates",
+            "details": [
+              "Update root `README.md` with a short section on Phase 9: UX Polish, Playtesting & Balancing including links to plan and balance config.",
+              "Update `docs/phase9/ux-polish-plan.md` with progress notes and any changes since creation.",
+              "Update `docs/help.md` and any relevant docs to reflect new help text behavior.",
+              "Commit: `git add README.md docs/phase9/ux-polish-plan.md docs/help.md` and `git commit -m \"docs: phase 9 UX polish and help text updates\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.12",
+            "description": "Playtest run and reporting",
+            "details": [
+              "Create a script `scripts/run_playtests.sh` that:",
+              "Guides testers through the playthroughs",
+              "Collects results into `docs/playtesting/results_<date>.md`",
+              "Invokes balance/config checks and records basic telemetry",
+              "Run the script to generate a sample results file and verify structure.",
+              "Commit: `git add scripts/run_playtests.sh docs/playtesting/results_*.md` and `git commit -m \"test(playtesting): add run script and results reporting\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.13",
+            "description": "QA verification pass",
+            "details": [
+              "Create a QA checklist at `docs/phase9/qa_checklist.md` with items: tooltips visible, help text accessible, error messages friendly, balance values sane, UI formatting consistent.",
+              "Perform a quick manual QA pass and record findings in the checklist.",
+              "If issues are found, add a follow-up task list in the doc and link to it from the commit.",
+              "Commit: `git add docs/phase9/qa_checklist.md` and `git commit -m \"docs(qa): phase 9 verification checklist\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "9.14",
+            "description": "Phase wrap-up release notes",
+            "details": [
+              "Create `docs/phase9/release_notes.md` summarizing UX polish outcomes, balancing tunables, playtesting plan/results, and any known caveats.",
+              "Add a short changelog entry to a project-wide `CHANGELOG.md` noting Phase 9 changes.",
+              "Commit: `git add docs/phase9/release_notes.md CHANGELOG.md` and `git commit -m \"docs(changelog): Phase 9 UX polish, playtesting & balancing\"`"
+            ],
+            "done": false
+          }
+        ]
+      },
+      {
+        "number": 10,
+        "title": "Release Packaging, Documentation & Distribution",
+        "description": null,
+        "steps": [
+          {
+            "number": "10.1",
+            "description": "Create packaging scaffolding and metadata",
+            "details": [
+              "Create package directory and version file: add directory `token_muncher/` with `__init__.py` containing `__version__ = \"0.1.0\"`.",
+              "Add CLI entry point module placeholders: create `token_muncher/cli.py` (empty skeleton) and `token_muncher/__main__.py` (to invoke CLI).",
+              "Create Python project metadata files: add `pyproject.toml` with build-system and basic project metadata (name, version, description, authors, license, readme, requires-python).",
+              "Create packaging configuration: add `setup.cfg` (or augment `pyproject.toml`) to declare package metadata and a console script entry point.",
+              "Create packaging manifests: add `MANIFEST.in` to include `README.md`, `CHANGELOG.md`, `LICENSE`, and `docs/` contents.",
+              "Create documentation skeleton: ensure `README.md`, `CHANGELOG.md`, and `docs/index.md` exist with initial content.",
+              "Update ignore rules: add common Python artifacts to `.gitignore` (e.g., `__pycache__/`, `dist/`, `build/`, `.egg-info/`).",
+              "Acceptance checks: verify all new files exist and have sane initial content; able to import `token_muncher` and read `__version__`.",
+              "Commit: `git add` all new and modified packaging files, then `git commit -m \"feat: scaffolding for packaging and release metadata\"`",
+              "Git commit example: `git add token_muncher/ pyproject.toml setup.cfg MANIFEST.in README.md CHANGELOG.md docs/ .gitignore && git commit -m \"feat: add packaging scaffolding (versioning, metadata, manifest)\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.2",
+            "description": "Implement CLI entry point and version integration",
+            "details": [
+              "Implement module entry point: fill `token_muncher/__main__.py` with a `main()` function that delegates to `token_muncher.cli:main` and a guard for `if __name__ == \"__main__\": main()`.",
+              "Implement minimal CLI skeleton: write `token_muncher/cli.py` with a `main()` function that uses `argparse` to handle `--version`, `--tokenize`, and `--help`.",
+              "Wire versioning: import `__version__` from `token_muncher` and print it when `--version` is used.",
+              "Configure console script: update `setup.cfg` (or `pyproject.toml`) to declare a console script: `token-muncher = token_muncher.__main__:main` so it can be installed as an executable.",
+              "Ensure Python module packaging compatibility: ensure `token_muncher` is importable in tests (no syntax errors, basic import works).",
+              "Acceptance checks: running `python -m token_muncher --version` prints the version; `token-muncher --help` shows usage information.",
+              "Commit: `git add token_muncher/__main__.py token_muncher/cli.py` then `git commit -m \"feat: add CLI entry point and version handling\"`",
+              "Commit example: `git add token_muncher/__main__.py token_muncher/cli.py && git commit -m \"feat: implement CLI skeleton with --version and --tokenize\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.3",
+            "description": "Implement CLI core behavior and tests",
+            "details": [
+              "Implement tokenize function: in `token_muncher/cli.py`, add a simple `def tokenize_input(text): return text.split()` to illustrate tokenization.",
+              "Implement main flow: in `token_muncher/cli.py`, implement `main()` to parse `--version` and `--tokenize <TEXT>`; on `--tokenize`, print the tokens joined by spaces; otherwise show help.",
+              "Export version for tests: ensure `from token_muncher import __version__` is available and used by the CLI.",
+              "Add tests for CLI: create `tests/unit/test_cli.py` with tests for:",
+              "version output: run `sys.executable -m token_muncher --version` and verify output equals `0.1.0`.",
+              "tokenize behavior: run `sys.executable -m token_muncher --tokenize \"hello world\"` and verify output is `hello world`.",
+              "help text: run `sys.executable -m token_muncher --help` and verify exit code is 0 and contains \"usage\".",
+              "Acceptance checks: tests pass locally; CLI produces expected outputs for version and tokenize.",
+              "Commit: `git add token_muncher/ tests/unit/test_cli.py` then `git commit -m \"test: add CLI behavior tests (version, tokenize, help)\"`",
+              "Commit example: `git add token_muncher/ tests/unit/test_cli.py && git commit -m \"test: add CLI behavior tests\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.4",
+            "description": "Create tests for packaging metadata and docs",
+            "details": [
+              "Metadata test: add `tests/unit/test_metadata.py` to verify `token_muncher.__version__` exists and is non-empty.",
+              "Documentation presence test: add `tests/unit/test_docs_presence.py` to verify `docs/index.md` exists.",
+              "Run tests suite: ensure `pytest` discovers and runs tests in `tests/`.",
+              "Acceptance checks: tests asserting version attribute and docs presence pass.",
+              "Commit: `git add tests/unit/test_metadata.py tests/unit/test_docs_presence.py` then `git commit -m \"test: validate packaging metadata and docs presence\"`",
+              "Commit example: `git add tests/unit/test_metadata.py tests/unit/test_docs_presence.py && git commit -m \"test: verify packaging metadata and docs presence\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.5",
+            "description": "Code quality and formatting",
+            "details": [
+              "Run formatter: `black token_muncher/ tests/`",
+              "Run linter: `flake8 token_muncher/ tests/`",
+              "Resolve any lint/format issues; re-run tests to confirm no regressions.",
+              "Acceptance checks: codebase passes linting and formatting checks without errors.",
+              "Commit: `git add .` then `git commit -m \"chore: apply formatting and lint fixes\"`",
+              "Commit example: `git add . && git commit -m \"chore: format code and fix lint issues\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.6",
+            "description": "Packaging build and distribution",
+            "details": [
+              "Build artifacts: run `python -m build` to generate `dist/` with `.whl` and `.tar.gz`.",
+              "Verify artifacts: confirm that at least `dist/token_muncher-0.1.0-py3-none-any.whl` and `.tar.gz` exist.",
+              "Validate packaging metadata: run `python -m pip install --no-deps dist/token_muncher-0.1.0-py3-none-any.whl` in a clean venv, then run `python -c \"import token_muncher; print(token_muncher.__version__)\"` to confirm import works.",
+              "Optional test publish: if credentials exist, perform a dry-run publish to Test PyPI using `twine check dist/*` and `twine upload --repository testpypi dist/*` (do not overwrite real PyPI).",
+              "Acceptance checks: distribution artifacts exist and can be installed in isolation.",
+              "Commit: `git add dist/` then `git commit -m \"feat: build distributions (wheel, sdist) and verify installability\"`",
+              "Commit example: `git add dist/ && git commit -m \"feat: build distributions and verify install in clean env\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.7",
+            "description": "Documentation updates and user guide",
+            "details": [
+              "Update README: add installation steps (e.g., `pip install .` or `pip install dist/token_muncher-0.1.0-py3-none-any.whl`), quick-start examples for `python -m token_muncher --version` and `python -m token_muncher --tokenize \"sample text\"`.",
+              "Create or expand docs: add `docs/usage.md` with concrete examples and expected outputs.",
+              "Update CHANGELOG: add a release note for 0.1.0 summarizing CLI features and packaging steps.",
+              "Provide a minimal user guide: include error message examples and troubleshooting tips.",
+              "Acceptance checks: README/docs contain install and usage examples; CHANGELOG updated.",
+              "Commit: `git add README.md docs/usage.md CHANGELOG.md` then `git commit -m \"docs: release notes and user guide for v0.1.0\"`",
+              "Commit example: `git add README.md docs/usage.md CHANGELOG.md && git commit -m \"docs: add user guide and release notes\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.8",
+            "description": "CI configuration and release automation",
+            "details": [
+              "Create GitHub Actions workflow: add `.github/workflows/release.yml` that runs on push tags, sets up Python, installs dependencies, runs lint, runs tests, and builds distributions.",
+              "Workflow contents: include steps for checkout, setup-python, install build dependencies (build, setuptools, wheel, twine, flake8, black), run `pytest`, run `black --check`, run `flake8`, run `python -m build`, and optionally `twine check dist/*`.",
+              "Documentation for CI: add a short section in `docs/usage.md` describing CI expectations for releases.",
+              "Acceptance checks: CI workflow file exists and contains steps for tests, lint, and packaging; it can be triggered by a tag.",
+              "Commit: `git add .github/workflows/release.yml` then `git commit -m \"ci: add release workflow for tests, lint, and packaging\"`",
+              "Commit example: `git add .github/workflows/release.yml && git commit -m \"ci: add release workflow\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.9",
+            "description": "Release tagging and artifact finalization",
+            "details": [
+              "Create release tag: run `git tag v0.1.0`",
+              "Push tag: run `git push origin v0.1.0`",
+              "Update release notes if needed: ensure the tag points to a commit with updated CHANGELOG and docs.",
+              "Optional: commit a small release note update if necessary: `git add CHANGELOG.md` then `git commit -m \"docs: finalize v0.1.0 release notes\"`",
+              "Acceptance checks: remote shows tag `v0.1.0` and release page corresponds to the version.",
+              "Commit example: `git tag v0.1.0 && git push origin v0.1.0 && git add CHANGELOG.md && git commit -m \"docs: finalize release notes for v0.1.0\"`"
+            ],
+            "done": false
+          },
+          {
+            "number": "10.10",
+            "description": "Final verification, handover and backstop plan",
+            "details": [
+              "Re-run local verification: run `pytest` to ensure all tests pass; run `python -m token_muncher --version` and `python -m token_muncher --tokenize \"final test\"` to confirm CLI behavior.",
+              "Validate packaging end-to-end: confirm `dist/` artifacts exist and can be installed in a clean venv.",
+              "Prepare handover notes: summarize how to build, test, lint, package, and publish; include troubleshooting steps.",
+              "Prepare release checklist: confirm docs, changelog, tests, and CI workflow are up-to-date.",
+              "Acceptance checks: all verifications pass; handover notes written.",
+              "Commit: `git add .` then `git commit -m \"docs: finalize release handover and verification steps\"`",
+              "Commit example: `git add . && git commit -m \"docs: finalize release handover and verification steps\"`"
+            ],
+            "done": false
+          }
+        ]
+      }
+    ],
+    "summary": "Development plan for token muncher with 10 phases",
+    "raw_basic_response": "1. **Phase 1: Project Initialization & Tooling**\n   Brief description: Establish the development foundation, repository, and automation so the team can work reproducibly and with quality controls.  \n   - Create VCS repository, branching strategy, and initial README with high-level goals and MVP definition.  \n   - Configure Python packaging and dependency management with poetry (pyproject.toml).  \n   - Add linters/formatters (mypy, black, isort), pre-commit hooks, and CI pipeline templates (unit tests, style checks).  \n   - Scaffold project layout (packages: core, ui, ai, persistence, tests) and placeholder modules.  \n   - Install test framework (pytest) and set up basic test runner configuration.\n\n2. **Phase 2: Core Data Models & Persistence Abstractions**\n   Brief description: Define the domain models and a stable persistence interface to support save/load and meta-progression.  \n   - Design GameState, Entity, Tile/Cell, Position, PlayerAction, Event, and serialization schemas.  \n   - Implement MetaStore abstraction with SQLite backend, schema_version support, and WAL transactions.  \n   - Implement simple in-memory and file-backed persistence adapters for testing and headless runs.  \n   - Add unit tests for model invariants and persistence read/write/migration behavior.  \n   - Provide simple migration/backup strategy (versioned JSON dumps) for schema changes.\n\n3. **Phase 3: Map & Level Generation**\n   Brief description: Implement deterministic, parameterized map generation and post-processing to produce playable mazes/levels.  \n   - Implement pluggable generator API and at least one algorithm (growing tree with bias or modified Prim) with seed support.  \n   - Add post-processing: smoothing, dead-end pruning, occasional rooms/corridor insertion, and parameter configuration.  \n   - Create validation tests asserting connectivity, token reachability, and reproducibility given a seed.  \n   - Expose generation parameters and level metadata for tuning and playtesting.  \n   - Add lightweight visualization/debug tools (headless snapshots) for QA of generated maps.\n\n4. **Phase 4: Game Core & Turn/Rules Engine**\n   Brief description: Build the headless deterministic game engine that processes actions, resolves turns, and emits events.  \n   - Implement TurnManager and deterministic tick processing with clear ordering and conflict resolution rules.  \n   - Implement core mechanics: movement, token interactions, combat resolution, XP/leveling, and simple skill effects.  \n   - Build event bus to decouple core logic from UI/AI and to emit snapshots/events for rendering.  \n   - Create comprehensive unit tests for rule correctness, edge cases, and deterministic replay via seeds.  \n   - Implement headless run mode for automated integration tests and telemetry generation.\n\n5. **Phase 5: Enemy AI & Pathfinding**\n   Brief description: Add enemy behavior and efficient pathfinding that scales and behaves predictably.  \n   - Implement AIController abstraction and basic enemy state machine (idle, pursue, evade, patrol).  \n   - Implement A* pathfinding with efficient heap, search depth limits, shared fragment caching, and heuristics.  \n   - Optimize path reuse and compute-on-change strategies to reduce per-turn CPU cost.  \n   - Add unit and performance tests (benchmarks) to enforce acceptable CPU/memory limits for target map sizes.  \n   - Provide tunable AI parameters and deterministic seeds for reproducible behavior in tests/playtests.\n\n6. **Phase 6: Input Handling & Terminal Rendering (TUI)**\n   Brief description: Integrate prompt_toolkit and Rich-based TUI components for interactive play, with a headless rendering option.  \n   - Implement Renderer that subscribes to GameCore events and draws GameState using Rich panels and coloring.  \n   - Implement InputHandler with prompt_toolkit key-bindings, non-blocking input, and robust cross-platform behavior.  \n   - Provide a headless renderer mode for test automation and snapshot comparisons.  \n   - Implement fallbacks: optional curses-based rendering/input mode for minimal installs and Windows compatibility handling.  \n   - Add input validation, clear error handling, and help-overlay/keybinding documentation accessible in-game.\n\n7. **Phase 7: Meta-Progression, Shop & Persistence UX**\n   Brief description: Build long-term progression systems, shop UI, and ensure reliable persistence of meta-progression between runs.  \n   - Implement points/experience->currency flow and upgrade/unlock data model for the shop.  \n   - Create Shop UI screen rendered by Renderer and wired to MetaStore persistence actions.  \n   - Persist progression reliably with transactional saves, backups before migrations, and schema_version checks.  \n   - Implement simple telemetry/logging for playtest metrics (local-only) and tools to export runs for analysis.  \n   - Add unit/integration tests for save/restore and upgrade application semantics.\n\n8. **Phase 8: Testing, QA & Performance Tuning**\n   Brief description: Harden the codebase with broad testing, fuzzing, profiling, and cross-platform QA to reduce runtime and correctness risks.  \n   - Expand unit tests and integration tests (core rules, AI, map gen, persistence, TUI headless snapshots).  \n   - Add property-based tests (hypothesis) for generator and core invariants; deterministic seed fuzz tests.  \n   - Profile CPU/memory hotspots, optimize pathfinding and map operations, and add caching where needed.  \n   - Run cross-platform acceptance tests (Linux/macOS/Windows), and validate prompt_toolkit/Rich compatibility.  \n   - Implement regression tests and CI gates to prevent performance or correctness regressions.\n\n9. **Phase 9: UX Polish, Playtesting & Balancing**\n   Brief description: Iterate on user experience, difficulty tuning, onboarding, and collect playtest data to refine gameplay balance.  \n   - Add help text, tutorials or first-time run guidance, and clear HUD/feedback for actions and XP.  \n   - Expose configuration flags for difficulty, map size, XP curves, and RNG seed to facilitate playtests.  \n   - Conduct internal playtests, collect local telemetry snapshots, and adjust progression and enemy parameters.  \n   - Improve accessibility/keyboard ergonomics and provide alternative keybindings and colorblind-friendly palettes.  \n   - Document gameplay mechanics, configuration options, and recommended tuning workflows for designers.\n\n10. **Phase 10: Release Packaging, Documentation & Distribution**\n    Brief description: Prepare the project for release, finalize documentation, and automate packaging and distribution.  \n    - Finalize user documentation: README, quickstart, gameplay guide, developer CONTRIBUTING.md, and API docs for core modules.  \n    - Package the application with poetry, create installable artifacts, and provide platform-specific notes (Windows curses vs prompt_toolkit).  \n    - Configure CI/CD release pipeline (build artifacts, run final tests, publish to chosen distribution channel).  \n    - Prepare example runs, seed library, and troubleshooting guide (common terminal issues, migration steps).  \n    - Create issue templates, roadmap notes for future features, and a lightweight migration script for MetaStore upgrades.",
+    "raw_detailed_responses": null
+  },
+  "stage": "design",
+  "name": "6",
+  "timestamp": 1763609116,
+  "id": "1763609116_6"
+}

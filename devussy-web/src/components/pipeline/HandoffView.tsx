@@ -40,7 +40,17 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
                 })
             });
 
-            if (!response.ok) throw new Error('Failed to generate handoff');
+            if (!response.ok) {
+                const errorText = await response.text();
+                let errorMessage = 'Failed to generate handoff';
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    if (errorJson.error) errorMessage = errorJson.error;
+                } catch (e) {
+                    errorMessage = errorText || errorMessage;
+                }
+                throw new Error(errorMessage);
+            }
 
             const data = await response.json();
             setHandoffContent(data.content);
@@ -57,12 +67,119 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
         generateHandoff();
     }, []);
 
+    const formatDesignAsMarkdown = (design: any): string => {
+        // If we have raw_llm_response (new standard) or raw_response (legacy), use it
+        if (design.raw_llm_response) {
+            return design.raw_llm_response;
+        }
+        if (design.raw_response) {
+            return design.raw_response;
+        }
+
+        // Otherwise, format the design object as markdown
+        let md = `# ${design.project_name || 'Project Design'}\n\n`;
+
+        if (design.objectives && Array.isArray(design.objectives)) {
+            md += `## Objectives\n\n`;
+            design.objectives.forEach((obj: string) => {
+                // Skip separator markers
+                if (obj === '--' || obj === '---') return;
+                md += `- ${obj}\n`;
+            });
+            md += `\n`;
+        }
+
+        if (design.architecture) {
+            md += `## Architecture\n\n${design.architecture}\n\n`;
+        }
+
+        if (design.tech_stack && Array.isArray(design.tech_stack)) {
+            md += `## Technology Stack\n\n`;
+            design.tech_stack.forEach((tech: string) => {
+                md += `- ${tech}\n`;
+            });
+            md += `\n`;
+        }
+
+        if (design.data_model) {
+            md += `## Data Model\n\n${design.data_model}\n\n`;
+        }
+
+        if (design.api_design) {
+            md += `## API Design\n\n${design.api_design}\n\n`;
+        }
+
+        if (design.security) {
+            md += `## Security\n\n${design.security}\n\n`;
+        }
+
+        if (design.deployment) {
+            md += `## Deployment\n\n${design.deployment}\n\n`;
+        }
+
+        return md;
+    };
+
+    const formatPlanAsMarkdown = (plan: any): string => {
+        let md = `# Development Plan\n\n`;
+
+        if (plan.project_name) {
+            md += `**Project:** ${plan.project_name}\n\n`;
+        }
+
+        if (plan.phases && Array.isArray(plan.phases)) {
+            md += `## Phases\n\n`;
+            plan.phases.forEach((phase: any) => {
+                const phaseNum = phase.number || phase.phase_number;
+                const phaseTitle = phase.title || phase.name || `Phase ${phaseNum}`;
+
+                md += `### Phase ${phaseNum}: ${phaseTitle}\n\n`;
+
+                if (phase.description) {
+                    md += `${phase.description}\n\n`;
+                }
+
+                if (phase.steps && Array.isArray(phase.steps) && phase.steps.length > 0) {
+                    md += `**Steps:**\n\n`;
+                    phase.steps.forEach((step: any, idx: number) => {
+                        const stepTitle = step.title || step.name || `Step ${idx + 1}`;
+                        md += `${idx + 1}. ${stepTitle}\n`;
+                        if (step.description) {
+                            md += `   ${step.description}\n`;
+                        }
+                    });
+                    md += `\n`;
+                }
+
+                if (phase.deliverables && Array.isArray(phase.deliverables)) {
+                    md += `**Deliverables:**\n`;
+                    phase.deliverables.forEach((deliverable: string) => {
+                        md += `- ${deliverable}\n`;
+                    });
+                    md += `\n`;
+                }
+
+                if (phase.acceptance_criteria && Array.isArray(phase.acceptance_criteria)) {
+                    md += `**Acceptance Criteria:**\n`;
+                    phase.acceptance_criteria.forEach((criteria: string) => {
+                        md += `- ${criteria}\n`;
+                    });
+                    md += `\n`;
+                }
+
+                md += `---\n\n`;
+            });
+        }
+
+        return md;
+    };
+
     const handleDownload = async () => {
         const zip = new JSZip();
 
-        // Add core files
-        zip.file("project_design.md", design.raw_response || JSON.stringify(design, null, 2));
-        zip.file("development_plan.md", JSON.stringify(plan, null, 2));
+        // Add core files with proper markdown formatting
+        zip.file("project_design.md", formatDesignAsMarkdown(design));
+        zip.file("development_plan.md", formatPlanAsMarkdown(plan));
         zip.file("handoff_instructions.md", handoffContent);
 
         // Add individual phase documents

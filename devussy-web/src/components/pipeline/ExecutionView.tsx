@@ -25,6 +25,8 @@ interface ExecutionViewProps {
     modelConfig: ModelConfig;
     onComplete: (detailedPlan?: any) => void;
     onSpawnHiveMindWindow?: (phase: PhaseStatus, plan: any, projectName: string) => void;
+    onExecutionStateChange?: (phases: PhaseStatus[]) => void;  // Emit phase state for checkpoints
+    initialPhases?: PhaseStatus[];  // Restore from checkpoint
 }
 
 export const ExecutionView: React.FC<ExecutionViewProps> = ({
@@ -32,7 +34,9 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     projectName,
     modelConfig,
     onComplete,
-    onSpawnHiveMindWindow
+    onSpawnHiveMindWindow,
+    onExecutionStateChange,
+    initialPhases
 }) => {
     const [viewMode, setViewMode] = useState<'grid' | 'tabs'>('grid');
     const [concurrency, setConcurrency] = useState<number>(modelConfig.concurrency || 3);
@@ -75,20 +79,40 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     const phaseOutputBuffers = useRef<Map<number, string>>(new Map());
     const updateTimers = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
-    // Initialize phases from plan
+    // Initialize phases from plan or restore from checkpoint
     useEffect(() => {
-        if (plan && plan.phases) {
-            const initialPhases: PhaseStatus[] = plan.phases.map((p: any) => ({
-                number: p.number,
-                title: p.title || p.name || `Phase ${p.number}`,
-                status: 'queued',
-                output: '',
-                progress: 0
-            }));
-            console.log('[ExecutionView] Initialized phases:', initialPhases.map(p => ({ number: p.number, title: p.title })));
+        if (initialPhases && initialPhases.length > 0) {
+            console.log('[ExecutionView] Restoring phases from checkpoint:', initialPhases.length);
             setPhases(initialPhases);
+        } else if (plan && plan.phases) {
+            // Only initialize if we don't have phases OR if the plan has changed significantly
+            // AND we haven't started execution yet.
+            // This prevents resetting state when "Proceed to Handoff" updates the plan prop.
+            setPhases(prev => {
+                if (prev.length > 0 && prev.some(p => p.status !== 'queued' || p.output)) {
+                    console.log('[ExecutionView] Preserving existing execution state');
+                    return prev;
+                }
+
+                const initialPhases: PhaseStatus[] = plan.phases.map((p: any) => ({
+                    number: p.number,
+                    title: p.title || p.name || `Phase ${p.number}`,
+                    status: 'queued',
+                    output: '',
+                    progress: 0
+                }));
+                console.log('[ExecutionView] Initialized phases:', initialPhases.map(p => ({ number: p.number, title: p.title })));
+                return initialPhases;
+            });
         }
-    }, [plan]);
+    }, [plan, initialPhases]);
+
+    // Emit phase state changes for checkpoints
+    useEffect(() => {
+        if (onExecutionStateChange && phases.length > 0) {
+            onExecutionStateChange(phases);
+        }
+    }, [phases, onExecutionStateChange]);
 
     // Auto-scroll for each phase - scroll to bottom when content updates
     useEffect(() => {
@@ -439,7 +463,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     };
 
     const renderPhaseColumn = (phase: PhaseStatus) => (
-        <div key={phase.number} className={`h-full ${getStatusColor(phase.status)} rounded-lg overflow-hidden border flex flex-col`}>
+        <div key={phase.number} className={`${getStatusColor(phase.status)} rounded-lg overflow-hidden border flex flex-col`}>
             <PhaseDetailView
                 phase={{ number: phase.number }}
                 plan={plan}
@@ -528,7 +552,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-auto">
                 {viewMode === 'grid' ? (
                     <div className={`grid gap-4 p-4 h-full auto-rows-fr ${phases.length <= 3 ? 'grid-cols-3' :
                         phases.length <= 6 ? 'grid-cols-3' :
@@ -555,7 +579,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                         </div>
 
                         {/* Tab Content */}
-                        <div className="flex-1 p-4">
+                        <div className="flex-1 p-4 overflow-auto">
                             {phases.filter(p => p.number === selectedTab).map(phase => renderPhaseColumn(phase))}
                         </div>
                     </div>

@@ -79,9 +79,9 @@ class HiveMindManager:
         **llm_kwargs: Any
     ) -> List[str]:
         """Run parallel drone requests."""
-        drone_responses = []
         
-        for i in range(count):
+        async def execute_drone(i: int):
+            """Execute a single drone with its specific configuration."""
             # Calculate temperature for this drone
             if temperature_jitter and count > 1:
                 # Spread temperatures: e.g. 0.5, 0.7, 0.9 for count=3, base=0.7
@@ -110,15 +110,20 @@ class HiveMindManager:
                     callback=callback.on_token_async,
                     **drone_kwargs
                 )
-                drone_responses.append(response)
                 # Notify completion
                 await callback.on_completion_async(response)
+                return response
             else:
                 # No callback, just get full response
                 logger.debug(f"Drone {i+1}/{count} launching with temp={temp:.2f}")
                 response = await self.llm_client.generate_completion(prompt, **drone_kwargs)
-                drone_responses.append(response)
-                
+                return response
+        
+        # Execute all drones concurrently using asyncio.gather
+        logger.info(f"Launching {count} drones concurrently...")
+        drone_responses = await asyncio.gather(*[execute_drone(i) for i in range(count)])
+        logger.info(f"All {count} drones have completed")
+        
         return drone_responses
 
     def _format_for_arbiter(self, original_prompt: str, drone_responses: List[str]) -> str:

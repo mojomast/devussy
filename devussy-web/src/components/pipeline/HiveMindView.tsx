@@ -43,8 +43,13 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
     const drone2Ref = useRef<HTMLDivElement>(null);
     const drone3Ref = useRef<HTMLDivElement>(null);
     const arbiterRef = useRef<HTMLDivElement>(null);
+    const hasStartedRef = useRef(false);
 
     useEffect(() => {
+        // Prevent duplicate execution in React StrictMode
+        if (hasStartedRef.current) return;
+        hasStartedRef.current = true;
+
         const executeHiveMind = async () => {
             try {
                 const endpoint = type === 'design' ? '/api/design/hivemind' : '/api/plan/hivemind';

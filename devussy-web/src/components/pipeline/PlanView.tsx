@@ -31,25 +31,25 @@ export const PlanView: React.FC<PlanViewProps> = ({
     const parsePhasesFromText = (text: string): PhaseData[] => {
         const phases: PhaseData[] = [];
         const lines = text.split('\n');
-        
+
         let currentPhase: PhaseData | null = null;
         let collectingContent = false;
         let contentLines: string[] = [];
-        
+
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const trimmed = line.trim();
-            
+
             // Match phase headers like "1. **Phase 1: Title**"
             const phaseMatch = trimmed.match(/^(\d+)\.\s*\*\*\s*Phase\s+\d+:\s*(.+?)\s*\*\*\s*$/i);
-            
+
             if (phaseMatch) {
                 // Save previous phase with collected content
                 if (currentPhase && contentLines.length > 0) {
                     currentPhase.description = contentLines.join('\n').trim();
                     phases.push(currentPhase);
                 }
-                
+
                 // Start new phase
                 const phaseNum = parseInt(phaseMatch[1]);
                 const title = phaseMatch[2].trim();
@@ -86,21 +86,21 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 }
             }
         }
-        
+
         // Don't forget the last phase
         if (currentPhase && contentLines.length > 0) {
             currentPhase.description = contentLines.join('\n').trim();
             phases.push(currentPhase);
         }
-        
+
         console.log('[PlanView] Parsed', phases.length, 'phases from text');
         phases.forEach(p => console.log(`  Phase ${p.number}: ${p.title} (${p.description?.length || 0} chars)`));
-        
+
         return phases;
     };
 
     // Parse phases from plan data (fallback)
-    const parsePhasesFromPlan = (planData: any) => {
+    const parsePhasesFromPlan = (planData: any): PhaseData[] => {
         if (!planData || !planData.phases) return [];
 
         return planData.phases.map((phase: any, index: number) => ({
@@ -110,10 +110,22 @@ export const PlanView: React.FC<PlanViewProps> = ({
         }));
     };
 
+    // Ref to track the current abort controller
+    const abortControllerRef = React.useRef<AbortController | null>(null);
+    const isGeneratingRef = React.useRef(false);
+
     const generatePlan = async () => {
+        if (isGeneratingRef.current) return;
+
         setIsLoading(true);
         setError(null);
         setPlanContent("");  // Reset content
+        isGeneratingRef.current = true;
+
+        // Create new abort controller
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         try {
             // Bypass Next.js proxy and hit backend directly to avoid buffering
             const backendUrl = `http://${window.location.hostname}:8000/api/plan/basic`;
@@ -124,7 +136,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 body: JSON.stringify({
                     design: design,
                     modelConfig
-                })
+                }),
+                signal: controller.signal
             });
 
             if (!response.ok) throw new Error('Failed to generate plan');
@@ -182,18 +195,35 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 }
             }
         } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log('Plan generation aborted');
+                return;
+            }
             console.error("Plan generation error:", err);
             setError(err.message || "An error occurred");
         } finally {
-            setIsLoading(false);
+            if (abortControllerRef.current === controller) {
+                setIsLoading(false);
+                isGeneratingRef.current = false;
+                abortControllerRef.current = null;
+            }
         }
     };
 
     // Auto-generate on mount if not present
     React.useEffect(() => {
-        if (!plan && !isLoading && !error) {
+        if (plan || isLoading || error) return;
+
+        const timeoutId = setTimeout(() => {
             generatePlan();
-        }
+        }, 50); // Debounce to handle StrictMode double-mount
+
+        return () => {
+            clearTimeout(timeoutId);
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
     }, []);
 
     // Phase management functions

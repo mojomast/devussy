@@ -17,7 +17,7 @@ import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipelin
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'hivemind';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'hivemind' | 'help';
 
 interface WindowState {
   id: string;
@@ -27,6 +27,7 @@ interface WindowState {
   zIndex: number;
   isMinimized?: boolean;
   props?: any;
+  size?: { width: number; height: number };
 }
 
 export default function Page() {
@@ -50,7 +51,7 @@ export default function Page() {
   // Model Configuration
   const [modelConfigs, setModelConfigs] = useState<ModelConfigs>({
     global: {
-      model: 'gpt-5-mini',
+      model: 'openai/gpt-5-mini',
       temperature: 0.7,
       reasoning_effort: 'medium',
       concurrency: 3
@@ -98,7 +99,9 @@ export default function Page() {
     setWindows([]);
 
     setTimeout(() => {
-      if (data.stage === 'execute' && data.plan) {
+      if (data.stage === 'handoff') {
+        spawnWindow('handoff', 'Project Handoff');
+      } else if (data.stage === 'execute' && data.plan) {
         spawnWindow('execute', 'Execution Phase');
       } else if (data.stage === 'plan' && data.design) {
         spawnWindow('plan', 'Development Plan');
@@ -114,16 +117,42 @@ export default function Page() {
   };
 
   // Window Management Functions
+  const getWindowSize = (type: WindowType): { width: number; height: number } => {
+    switch (type) {
+      case 'init':
+        return { width: 800, height: 700 };  // Fits form content comfortably
+      case 'interview':
+        return { width: 700, height: 600 };
+      case 'design':
+        return { width: 800, height: 700 };
+      case 'plan':
+        return { width: 900, height: 750 };
+      case 'execute':
+        return { width: 1200, height: 800 };  // Wide for multi-column
+      case 'handoff':
+        return { width: 800, height: 700 };
+      case 'hivemind':
+        return { width: 1000, height: 700 };
+      case 'help':
+        return { width: 700, height: 600 };
+      default:
+        return { width: 600, height: 400 };
+    }
+  };
+
+  // Window Management Functions
   const spawnWindow = (type: WindowType, title: string, props?: any) => {
     const id = `${type}-${Date.now()}`;
     const offset = windows.length * 30;
+    const size = getWindowSize(type);
     const newWindow: WindowState = {
       id,
       type,
       title,
       position: { x: 100 + offset, y: 100 + offset },
       zIndex: nextZIndex,
-      props
+      props,
+      size
     };
 
     setWindows(prev => [...prev, newWindow]);
@@ -225,6 +254,23 @@ export default function Page() {
       requirements,
       languages: languages.split(',').map(l => l.trim()).filter(Boolean)
     });
+  };
+
+  const handleNewProject = () => {
+    spawnWindow('init', 'New Project');
+  };
+
+  const handleHelp = () => {
+    // Prevent duplicate help windows
+    const existingHelp = windows.find(w => w.type === 'help');
+    if (existingHelp) {
+      focusWindow(existingHelp.id);
+      if (existingHelp.isMinimized) {
+        toggleMinimize(existingHelp.id);
+      }
+      return;
+    }
+    spawnWindow('help', 'Devussy Studio Help');
   };
 
   // Render Content based on Window Type
@@ -360,6 +406,52 @@ export default function Page() {
             modelConfig={getEffectiveConfig('execute')}
           />
         );
+      case 'help':
+        return (
+          <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
+            <h1 className="text-2xl font-bold mb-4">Devussy Studio Help</h1>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">Getting Started</h2>
+            <p>Devussy Studio is an AI-powered development pipeline that takes you from requirements to deployment-ready code.</p>
+
+            <h3 className="text-lg font-semibold mt-4 mb-2">Pipeline Stages:</h3>
+            <ol className="list-decimal list-inside space-y-2">
+              <li><strong>Interview</strong> - Interactive chat to gather requirements</li>
+              <li><strong>Design</strong> - Generate system architecture and design</li>
+              <li><strong>Plan</strong> - Create detailed development plan with phases</li>
+              <li><strong>Execute</strong> - Generate code for each phase</li>
+              <li><strong>Handoff</strong> - Export project and push to GitHub</li>
+            </ol>
+            <h2 className="text-xl font-semibold mt-6 mb-3">Circular Stateless Development</h2>
+            <p>Devussy enables <strong>agent-agnostic, stateless development</strong> where any AI agent can pick up where another left off.</p>
+
+            <h3 className="text-lg font-semibold mt-4 mb-2">How It Works:</h3>
+            <ol className="list-decimal list-inside space-y-2">
+              <li><strong>Generate Plan</strong> - Use Devussy to create a comprehensive development plan</li>
+              <li><strong>Export Handoff</strong> - Download the plan, design, and context as a zip file</li>
+              <li><strong>Share with Any Agent</strong> - Give the handoff document to any AI coding assistant (Claude, GPT, Gemini, etc.)</li>
+              <li><strong>Agent Reads Context</strong> - Tell the agent: <code className="bg-gray-800 px-2 py-1 rounded">"Read the handoff.md file and implement the next phase"</code></li>
+              <li><strong>Iterate</strong> - Different agents can work on different phases, all following the same plan</li>
+            </ol>
+            <h3 className="text-lg font-semibold mt-4 mb-2">Key Benefits:</h3>
+            <ul className="list-disc list-inside space-y-1">
+              <li>✅ <strong>No vendor lock-in</strong> - Switch between AI providers freely</li>
+              <li>✅ <strong>Consistent quality</strong> - All agents follow the same plan</li>
+              <li>✅ <strong>Parallel development</strong> - Multiple agents can work on different phases</li>
+              <li>✅ <strong>Full context</strong> - Handoff document contains everything needed</li>
+            </ul>
+            <h2 className="text-xl font-semibold mt-6 mb-3">Tips</h2>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Use <strong>checkpoints</strong> to save your progress at any stage</li>
+              <li>Edit phases in the Plan view before execution</li>
+              <li>Adjust <strong>concurrency</strong> in settings to control parallel execution</li>
+              <li>Enable <strong>Swarm Mode</strong> (experimental) for multi-agent consensus</li>
+              <li>Windows can be minimized but not closed - find them in the taskbar</li>
+            </ul>
+            <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>
+            <p>Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your project for detailed technical documentation.</p>
+          </div>
+        );
       default:
         return null;
     }
@@ -392,6 +484,7 @@ export default function Page() {
           key={window.id}
           title={window.title}
           initialPosition={window.position}
+          initialSize={window.size}
           isActive={activeWindowId === window.id}
           isMinimized={window.isMinimized}
           onFocus={() => focusWindow(window.id)}
@@ -416,6 +509,8 @@ export default function Page() {
             focusWindow(id);
           }
         }}
+        onNewProject={handleNewProject}
+        onHelp={handleHelp}
       />
     </main>
   );

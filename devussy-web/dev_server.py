@@ -12,8 +12,19 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 class DevServerHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # Route: /api/checkpoints
+        if self.path.startswith('/api/checkpoints'):
+            try:
+                from api.checkpoints import handler
+                handler.do_GET(self)
+            except Exception as e:
+                self.send_error(500, str(e))
+                print(f"Error in /api/checkpoints: {e}")
+                import traceback
+                traceback.print_exc()
+        
         # Route: /api/models
-        if self.path.startswith('/api/models'):
+        elif self.path.startswith('/api/models'):
             try:
                 from api.models import handler
                 handler.do_GET(self)

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { motion, useDragControls } from 'framer-motion';
-import { X, Minus, Square, Maximize2 } from 'lucide-react';
+import { Minus } from 'lucide-react';
 import { cn } from '@/utils';
 
 interface WindowFrameProps {
@@ -133,12 +133,6 @@ export function WindowFrame({
                 <div className="flex items-center gap-2">
                     <button onClick={onMinimize} className="rounded-sm p-1 hover:bg-white/10">
                         <Minus className="h-3 w-3" />
-                    </button>
-                    <button onClick={() => setIsMaximized(!isMaximized)} className="rounded-sm p-1 hover:bg-white/10">
-                        {isMaximized ? <Square className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-                    </button>
-                    <button onClick={onClose} className="rounded-sm p-1 hover:bg-destructive/20 hover:text-destructive">
-                        <X className="h-3 w-3" />
                     </button>
                 </div>
             </div>
