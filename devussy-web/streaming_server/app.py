@@ -24,6 +24,7 @@ from src.pipeline.detailed_devplan import DetailedDevPlanGenerator
 from src.pipeline.handoff_prompt import HandoffPromptGenerator
 from src.pipeline.hivemind import HiveMindManager
 from src.models import ProjectDesign, DevPlan
+from src.concurrency import ConcurrencyManager
 import os
 import glob
 import time
@@ -131,10 +132,12 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
 @app.post("/api/design")
 async def design_stream_alias(request: Request, x_streaming_proxy_key: str | None = Header(None)):
     """Alias for `/api/design/stream` kept for backwards compatibility with the frontend which hits `/api/design` for SSE streaming."""
+    _validate_incoming_request(x_streaming_proxy_key)
     return await design_stream(request, x_streaming_proxy_key)
 
 @app.post("/api/design/hivemind")
 async def design_hivemind(request: Request):
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
     data = await request.json()
     project_name = data.get('projectName')
     requirements = data.get('requirements')
@@ -192,6 +195,78 @@ async def design_hivemind(request: Request):
                 item = await queue.get()
                 if item.get('content'):
                     # drone or arbiter token
+                    yield f"data: {json.dumps({'type': item['type'], 'content': item['content']})}\n\n"
+                elif item.get('type') and item['type'].endswith('_complete'):
+                    yield f"data: {json.dumps({'type': item['type']})}\n\n"
+                elif item.get('done'):
+                    yield f"data: {json.dumps({'done': True, 'design': item.get('design')})}\n\n"
+                    break
+        except asyncio.CancelledError:
+            return
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.post("/api/plan/hivemind")
+async def plan_hivemind(request: Request):
+    # Accept POST with a plan and optional model config
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
+    data = await request.json()
+    plan_data = data.get('plan') or data.get('basicPlan')
+    project_name = data.get('projectName') or (plan_data and plan_data.get('name'))
+    if not plan_data or not project_name:
+        raise HTTPException(status_code=400, detail='Missing required data')
+
+    model_config = data.get('modelConfig', {})
+    config = load_config()
+    if model_config.get('model'):
+        config.llm.model = model_config.get('model')
+    if model_config.get('temperature') is not None:
+        config.llm.temperature = float(model_config.get('temperature'))
+
+    async def event_generator():
+        llm_client = create_llm_client(config)
+        hivemind = HiveMindManager(llm_client)
+        queue: asyncio.Queue = asyncio.Queue()
+
+        class DroneHandler:
+            def __init__(self, drone_id: str):
+                self.drone_id = drone_id
+            async def on_token_async(self, token: str):
+                await queue.put({'type': self.drone_id, 'content': token})
+            async def on_completion_async(self, full_response: str):
+                await queue.put({'type': f'{self.drone_id}_complete'})
+
+        try:
+            # Build prompt from plan JSON by summarizing phases
+            prompt = """Generate a design summary and improvements for this development plan:\n"""
+            try:
+                # Try to create a short summary from plan
+                phases = plan_data.get('phases', [])
+                prompt += f"Project: {project_name}\nPhases:\n"
+                for p in phases:
+                    prompt += f"- {p.get('number')}: {p.get('title')}\n"
+            except Exception:
+                prompt += json.dumps(plan_data)[:1000]
+
+            drone_handlers = [DroneHandler('drone1'), DroneHandler('drone2'), DroneHandler('drone3')]
+            arbiter_handler = DroneHandler('arbiter')
+
+            async def run_swarm():
+                final_response = await hivemind.run_swarm(
+                    prompt=prompt,
+                    count=3,
+                    temperature_jitter=True,
+                    drone_callbacks=drone_handlers,
+                    arbiter_callback=arbiter_handler,
+                )
+                await queue.put({'done': True, 'design': {'project_name': project_name, 'raw_response': final_response}})
+
+            task = asyncio.create_task(run_swarm())
+
+            while True:
+                item = await queue.get()
+                if item.get('content'):
                     yield f"data: {json.dumps({'type': item['type'], 'content': item['content']})}\n\n"
                 elif item.get('type') and item['type'].endswith('_complete'):
                     yield f"data: {json.dumps({'type': item['type']})}\n\n"
@@ -410,6 +485,7 @@ async def github_create(request: Request):
 
 @app.post("/api/plan/basic")
 async def plan_basic(request: Request):
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
     data = await request.json()
     design_data = data.get('design')
     if not design_data:
@@ -480,6 +556,7 @@ async def plan_basic(request: Request):
 
 @app.post("/api/plan/detail")
 async def plan_detail(request: Request):
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
     data = await request.json()
     plan_data = data.get('plan') or data.get('basicPlan')
     phase_number = data.get('phaseNumber')
@@ -511,7 +588,8 @@ async def plan_detail(request: Request):
 
     async def event_generator():
         llm_client = create_llm_client(config)
-        generator = DetailedDevPlanGenerator(llm_client)
+        concurrency_manager = ConcurrencyManager(config)
+        generator = DetailedDevPlanGenerator(llm_client, concurrency_manager)
         queue: asyncio.Queue = asyncio.Queue()
 
         class APIHandler:
