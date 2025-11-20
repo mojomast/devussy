@@ -18,6 +18,8 @@ class ProjectDesign(BaseModel):
     challenges: List[str] = Field(default_factory=list)
     mitigations: List[str] = Field(default_factory=list)
     raw_llm_response: Optional[str] = Field(default=None, description="Full raw markdown response from LLM")
+    complexity: Optional[str] = Field(default=None, description="Project complexity rating (Low, Medium, High)")
+    estimated_phases: Optional[int] = Field(default=None, description="Estimated number of phases required")
 
     def to_json(self) -> str:
         return self.model_dump_json(indent=2)

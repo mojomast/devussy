@@ -8,7 +8,6 @@ export interface ModelConfig {
     temperature: number;
     reasoning_effort: 'low' | 'medium' | 'high' | null;
     concurrency?: number; // Number of concurrent phase executions (1-10)
-    swarmMode?: boolean; // Enable HiveMind swarm mode (experimental)
 }
 
 export type PipelineStage = 'global' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff';
@@ -325,37 +324,6 @@ export const ModelSettings: React.FC<ModelSettingsProps> = ({ configs, onConfigs
                                                 </div>
                                                 <p className="text-[10px] text-white/30">
                                                     Number of phases to generate simultaneously during execution.
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* Swarm Mode Toggle (show for global and execute stage) */}
-                                        {(selectedTab === 'global' || selectedTab === 'execute') && (
-                                            <div className="space-y-2 pt-2 border-t border-white/10">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <label className="text-xs font-mono text-white/50 uppercase tracking-wider">Swarm Mode</label>
-                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 font-mono uppercase">Testing</span>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleConfigUpdate({ ...currentConfig, swarmMode: !currentConfig.swarmMode })}
-                                                        className={cn(
-                                                            "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                                                            currentConfig.swarmMode
-                                                                ? "bg-green-500"
-                                                                : "bg-white/20"
-                                                        )}
-                                                    >
-                                                        <span
-                                                            className={cn(
-                                                                "inline-block h-3 w-3 transform rounded-full bg-white transition-transform",
-                                                                currentConfig.swarmMode ? "translate-x-5" : "translate-x-1"
-                                                            )}
-                                                        />
-                                                    </button>
-                                                </div>
-                                                <p className="text-[10px] text-white/30">
-                                                    Enable HiveMind multi-drone consensus for phase generation. Uses 3 parallel LLM instances with arbiter synthesis. <span className="text-yellow-400">Experimental feature.</span>
                                                 </p>
                                             </div>
                                         )}

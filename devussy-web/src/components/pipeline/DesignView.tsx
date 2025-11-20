@@ -12,7 +12,6 @@ interface DesignViewProps {
     languages: string[];
     modelConfig: ModelConfig;
     onDesignComplete: (design: any) => void;
-    onSpawnHiveMindWindow?: () => void;
 }
 
 export const DesignView: React.FC<DesignViewProps> = ({
@@ -20,8 +19,7 @@ export const DesignView: React.FC<DesignViewProps> = ({
     requirements,
     languages,
     modelConfig,
-    onDesignComplete,
-    onSpawnHiveMindWindow
+    onDesignComplete
 }) => {
     const [designContent, setDesignContent] = useState("");
     const [isGenerating, setIsGenerating] = useState(true);
@@ -148,17 +146,6 @@ export const DesignView: React.FC<DesignViewProps> = ({
                         <Edit2 className="h-4 w-4 mr-2" />
                         {isEditing ? "Preview" : "Edit"}
                     </Button>
-                    {onSpawnHiveMindWindow && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={onSpawnHiveMindWindow}
-                            className="border-yellow-500/50 hover:bg-yellow-500/10 hover:border-yellow-500"
-                        >
-                            <Sparkles className="h-4 w-4 mr-2" />
-                            🐝 Hive Mode
-                        </Button>
-                    )}
                     <Button
                         size="sm"
                         onClick={() => onDesignComplete(designData || { raw_llm_response: designContent, project_name: projectName })}

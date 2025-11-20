@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, Sparkles, ArrowRight } from "lucide-react";
+import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, ArrowRight } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { PhaseDetailView } from './PhaseDetailView';
 
@@ -24,7 +24,6 @@ interface ExecutionViewProps {
     projectName: string;
     modelConfig: ModelConfig;
     onComplete: (detailedPlan?: any) => void;
-    onSpawnHiveMindWindow?: (phase: PhaseStatus, plan: any, projectName: string) => void;
     onExecutionStateChange?: (phases: PhaseStatus[]) => void;  // Emit phase state for checkpoints
     initialPhases?: PhaseStatus[];  // Restore from checkpoint
 }
@@ -34,7 +33,6 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     projectName,
     modelConfig,
     onComplete,
-    onSpawnHiveMindWindow,
     onExecutionStateChange,
     initialPhases
 }) => {
@@ -463,13 +461,12 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     };
 
     const renderPhaseColumn = (phase: PhaseStatus) => (
-        <div key={phase.number} className={`${getStatusColor(phase.status)} rounded-lg overflow-hidden border flex flex-col`}>
+        <div key={phase.number} className={`${getStatusColor(phase.status)} rounded-lg overflow-hidden border flex flex-col h-full`}>
             <PhaseDetailView
                 phase={{ number: phase.number }}
                 plan={plan}
                 projectName={projectName}
                 modelConfig={modelConfig}
-                onHiveMindClick={onSpawnHiveMindWindow ? () => onSpawnHiveMindWindow(phase, plan, projectName) : undefined}
                 status={phase.status}
                 output={phase.output}
                 error={phase.error}
@@ -552,12 +549,12 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-hidden">
                 {viewMode === 'grid' ? (
-                    <div className={`grid gap-4 p-4 h-full auto-rows-fr ${phases.length <= 3 ? 'grid-cols-3' :
+                    <div className={`grid gap-4 p-4 h-full ${phases.length <= 3 ? 'grid-cols-3' :
                         phases.length <= 6 ? 'grid-cols-3' :
                             'grid-cols-4'
-                        }`}>
+                        }`} style={{ gridAutoRows: '1fr' }}>
                         {phases.map(phase => renderPhaseColumn(phase))}
                     </div>
                 ) : (
@@ -579,7 +576,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                         </div>
 
                         {/* Tab Content */}
-                        <div className="flex-1 p-4 overflow-auto">
+                        <div className="flex-1 overflow-hidden p-4">
                             {phases.filter(p => p.number === selectedTab).map(phase => renderPhaseColumn(phase))}
                         </div>
                     </div>

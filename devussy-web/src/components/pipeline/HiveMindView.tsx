@@ -136,7 +136,7 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
     }, [arbiter.content]);
 
     const DronePane = ({ title, state, scrollRef, color }: { title: string; state: StreamState; scrollRef: React.RefObject<HTMLDivElement | null>; color: string }) => (
-        <Card className={cn("flex flex-col border-2", `border-${color}-500/30`)}>
+        <Card className={cn("flex flex-col border-2 h-full", `border-${color}-500/30`)}>
             <div className={cn("px-3 py-2 border-b flex items-center justify-between", `bg-${color}-950/40`)}>
                 <div className="flex items-center gap-2">
                     <Zap className={cn("h-4 w-4", `text-${color}-400`)} />
@@ -145,7 +145,7 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
                 {state.isActive && <Loader2 className={cn("h-3 w-3 animate-spin", `text-${color}-400`)} />}
                 {state.isComplete && <Check className={cn("h-3 w-3", `text-${color}-500`)} />}
             </div>
-            <ScrollArea className="flex-1 p-3 bg-black/80 font-mono text-xs min-h-[200px] max-h-[250px]">
+            <ScrollArea className="flex-1 p-3 bg-black/80 font-mono text-xs overflow-auto">
                 <div className={cn("whitespace-pre-wrap", `text-${color}-300`)}>
                     {state.content || "Waiting..."}
                     {state.isActive && <span className="animate-pulse">_</span>}
@@ -170,12 +170,12 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
                 </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 flex-1 overflow-hidden">
+            <div className="grid grid-cols-2 gap-4 flex-1" style={{ gridAutoRows: '1fr' }}>
                 <DronePane title="Drone 1" state={drone1} scrollRef={drone1Ref} color="cyan" />
                 <DronePane title="Drone 2" state={drone2} scrollRef={drone2Ref} color="purple" />
                 <DronePane title="Drone 3" state={drone3} scrollRef={drone3Ref} color="orange" />
 
-                <Card className="flex flex-col border-2 border-green-500/50">
+                <Card className="flex flex-col border-2 border-green-500/50 h-full">
                     <div className="px-3 py-2 border-b flex items-center justify-between bg-green-950/40">
                         <div className="flex items-center gap-2">
                             <Zap className="h-4 w-4 text-green-400" />
@@ -195,7 +195,7 @@ export const HiveMindView: React.FC<HiveMindViewProps> = ({
                         {arbiter.isActive && <Loader2 className="h-3 w-3 animate-spin text-green-400" />}
                         {arbiter.isComplete && <Check className="h-3 w-3 text-green-500" />}
                     </div>
-                    <ScrollArea className="flex-1 p-3 bg-black/80 font-mono text-xs min-h-[200px] max-h-[250px]">
+                    <ScrollArea className="flex-1 p-3 bg-black/80 font-mono text-xs overflow-auto">
                         <div className="whitespace-pre-wrap text-green-300">
                             {arbiter.content || "Waiting for drones to complete..."}
                             {arbiter.isActive && <span className="animate-pulse">_</span>}

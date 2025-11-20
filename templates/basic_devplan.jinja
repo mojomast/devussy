@@ -89,9 +89,15 @@ This project was defined through an interactive guided questionnaire. The user p
 - {{ challenge }}
 {% endfor %}
 
+{% if project_design.complexity %}
+### Complexity Assessment
+- **Rating**: {{ project_design.complexity }}
+- **Estimated Phases**: {{ project_design.estimated_phases }}
+{% endif %}
+
 ## Your Task
 
-Create a high-level development plan that organizes the project implementation into **5-10 logical phases**. Each phase should represent a major milestone or functional area of the project.
+Create a high-level development plan that organizes the project implementation into **{{ project_design.estimated_phases if project_design.estimated_phases else "5-10" }} logical phases**. Each phase should represent a major milestone or functional area of the project.
 
 ### Requirements
 

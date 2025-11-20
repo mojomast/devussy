@@ -12,12 +12,11 @@ import { PlanView } from "@/components/pipeline/PlanView";
 import { ExecutionView } from "@/components/pipeline/ExecutionView";
 import { HandoffView } from "@/components/pipeline/HandoffView";
 import { InterviewView } from "@/components/pipeline/InterviewView";
-import { HiveMindView } from "@/components/pipeline/HiveMindView";
 import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipeline/ModelSettings";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'hivemind' | 'help';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help';
 
 interface WindowState {
   id: string;
@@ -131,8 +130,6 @@ export default function Page() {
         return { width: 1200, height: 800 };  // Wide for multi-column
       case 'handoff':
         return { width: 800, height: 700 };
-      case 'hivemind':
-        return { width: 1000, height: 700 };
       case 'help':
         return { width: 700, height: 600 };
       default:
@@ -239,22 +236,7 @@ export default function Page() {
     spawnWindow('handoff', 'Project Handoff');
   };
 
-  const handleSpawnHiveMind = (phase: any, plan: any, projectName: string) => {
-    spawnWindow('hivemind', `HiveMind: Phase ${phase.number}`, {
-      phase,
-      plan,
-      projectName
-    });
-  };
 
-  const handleSpawnDesignHiveMind = () => {
-    spawnWindow('hivemind', 'HiveMind: Design', {
-      type: 'design',
-      projectName,
-      requirements,
-      languages: languages.split(',').map(l => l.trim()).filter(Boolean)
-    });
-  };
 
   const handleNewProject = () => {
     spawnWindow('init', 'New Project');
@@ -365,15 +347,14 @@ export default function Page() {
             languages={languages.split(',').map(l => l.trim()).filter(Boolean)}
             modelConfig={getEffectiveConfig('design')}
             onDesignComplete={handleDesignComplete}
-            onSpawnHiveMindWindow={handleSpawnDesignHiveMind}
           />
         );
       case 'plan':
         return (
           <PlanView
             design={design}
-            modelConfig={getEffectiveConfig('plan')}
             onPlanApproved={handlePlanApproved}
+            modelConfig={getEffectiveConfig('plan')}
           />
         );
       case 'execute':
@@ -383,7 +364,6 @@ export default function Page() {
             projectName={projectName}
             modelConfig={getEffectiveConfig('execute')}
             onComplete={handlePhaseComplete}
-            onSpawnHiveMindWindow={handleSpawnHiveMind}
           />
         );
       case 'handoff':
@@ -392,18 +372,6 @@ export default function Page() {
             design={design}
             plan={plan}
             modelConfig={getEffectiveConfig('handoff')}
-          />
-        );
-      case 'hivemind':
-        return (
-          <HiveMindView
-            phase={window.props?.phase}
-            plan={window.props?.plan}
-            projectName={window.props?.projectName}
-            type={window.props?.type}
-            requirements={window.props?.requirements}
-            languages={window.props?.languages}
-            modelConfig={getEffectiveConfig('execute')}
           />
         );
       case 'help':
@@ -445,7 +413,6 @@ export default function Page() {
               <li>Use <strong>checkpoints</strong> to save your progress at any stage</li>
               <li>Edit phases in the Plan view before execution</li>
               <li>Adjust <strong>concurrency</strong> in settings to control parallel execution</li>
-              <li>Enable <strong>Swarm Mode</strong> (experimental) for multi-agent consensus</li>
               <li>Windows can be minimized but not closed - find them in the taskbar</li>
             </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>

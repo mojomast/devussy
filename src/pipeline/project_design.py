@@ -171,6 +171,9 @@ class ProjectDesignGenerator:
             elif "challenge" in stripped.lower() and stripped.startswith("#"):
                 current_section = "challenges"
                 continue
+            elif "complexity" in stripped.lower() and stripped.startswith("#"):
+                current_section = "complexity"
+                continue
             elif stripped.startswith("#"):
                 # Unknown section, skip
                 current_section = None
@@ -195,6 +198,24 @@ class ProjectDesignGenerator:
                             mitigations.append(content)
                         else:
                             challenges.append(content)
+                    elif current_section == "complexity":
+                        # Parse complexity fields
+                        lower_content = content.lower()
+                        if "complexity rating" in lower_content:
+                            parts = content.split(":", 1)
+                            if len(parts) > 1:
+                                complexity = parts[1].strip()
+                        elif "estimated phases" in lower_content:
+                            parts = content.split(":", 1)
+                            if len(parts) > 1:
+                                # Extract number from string like "4-6" or "5"
+                                val_str = parts[1].strip()
+                                # Try to find the first number
+                                import re
+                                num_match = re.search(r'\d+', val_str)
+                                if num_match:
+                                    estimated_phases = int(num_match.group(0))
+
             elif current_section == "architecture" and stripped:
                 if not stripped.startswith("#"):
                     architecture_lines.append(stripped)
@@ -223,4 +244,6 @@ class ProjectDesignGenerator:
             dependencies=dependencies if dependencies else [],
             challenges=challenges if challenges else [],
             mitigations=mitigations if mitigations else [],
+            complexity=locals().get("complexity"),
+            estimated_phases=locals().get("estimated_phases"),
         )

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Check, Terminal, Play, Loader2, AlertCircle, Sparkles } from "lucide-react";
+import { Check, Terminal, Play, Loader2, AlertCircle } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 
 interface PhaseDetailViewProps {
@@ -13,7 +13,6 @@ interface PhaseDetailViewProps {
     projectName: string;
     modelConfig: ModelConfig;
     onComplete?: () => void;
-    onHiveMindClick?: () => void;  // New callback for Hive Mode
     // Controlled props
     status?: 'queued' | 'running' | 'complete' | 'failed';
     output?: string;
@@ -27,7 +26,6 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
     projectName,
     modelConfig,
     onComplete,
-    onHiveMindClick,
     status,
     output: controlledOutput,
     error: controlledError,
@@ -141,17 +139,6 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
                     Phase {phase.number} Execution
                 </h2>
                 <div className="flex gap-2">
-                    {!hasStarted.current && onHiveMindClick && (
-                        <Button
-                            size="sm"
-                            onClick={onHiveMindClick}
-                            variant="outline"
-                            className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
-                        >
-                            <Sparkles className="h-4 w-4 mr-2" />
-                            🐝 Hive Mode
-                        </Button>
-                    )}
                     {!hasStarted.current && (
                         <Button
                             size="sm"
@@ -175,7 +162,7 @@ export const PhaseDetailView: React.FC<PhaseDetailViewProps> = ({
                 </div>
             </div>
 
-            <ScrollArea className="flex-1 p-4 bg-black/90 font-mono text-sm text-green-400">
+            <ScrollArea className="flex-1 p-4 bg-black/90 font-mono text-sm text-green-400 overflow-auto">
                 <div className="whitespace-pre-wrap">
                     {output}
                     {isExecuting && <span className="animate-pulse">_</span>}

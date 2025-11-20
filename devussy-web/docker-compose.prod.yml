@@ -1,0 +1,42 @@
+version: "3.8"
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - USE_LOCAL_API=false
+    depends_on:
+      - streaming-server
+
+  streaming-server:
+    build:
+      # Build from repository root so the backend 'src' package is available
+      context: ..
+      dockerfile: devussy-web/streaming_server/Dockerfile
+    working_dir: /app
+    # REMOVED: volumes mount. This ensures we use the code baked into the image.
+    command: sh -lc "uvicorn streaming_server.app:app --host 0.0.0.0 --port 8000 --workers 4"
+    ports:
+      - "8000:8000"
+    environment:
+      - REQUESTY_API_KEY=${REQUESTY_API_KEY}
+      - STREAMING_SECRET=${STREAMING_SECRET}
+      - LLM_PROVIDER=requesty
+      - PYTHONPATH=/app:/app/devussy-web
+
+  nginx:
+    image: nginx:stable-alpine
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      # REMOVED: ./nginx/conf.d mount as it does not exist
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - streaming-server
