@@ -15,11 +15,14 @@ services:
 
   streaming-server:
     build:
-      context: .
-      dockerfile: streaming_server/Dockerfile
+      # Build from repository root so the backend 'src' package is available
+      context: ..
+      dockerfile: devussy-web/streaming_server/Dockerfile
     working_dir: /app
     volumes:
-      - ./:/app:delegated
+      # Mount the repository root into /app in dev mode; this makes both the
+      # backend 'src' and the devussy-web streaming_server module available
+      - ../:/app:delegated
     command: sh -lc "uvicorn streaming_server.app:app --host 0.0.0.0 --port 8000 --workers 1 --reload"
     ports:
       - "8000:8000"
