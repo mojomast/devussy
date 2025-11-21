@@ -199,7 +199,8 @@
   inset: 0;
   z-index: -2;
   /* Updated to use user-provided PNG if present; fallback to existing SVG */
-  background-image: url('/devussy logo minimal.png'), url('/devussy-logo-bg.svg');
+  /* Use the underscore filename in the public folder and avoid spaces. */
+  background-image: url('/devussy_logo_minimal.png'), url('/devussy-logo-bg.svg');
   background-repeat: no-repeat;
   background-position: center;
   background-size: 40% auto;
