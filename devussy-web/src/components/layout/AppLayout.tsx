@@ -11,7 +11,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Put the background logo above the background color but below UI windows */}
       <div className="fixed inset-0 z-0 bg-logo" />
       {/* Slight radial overlay above the logo but below content */}
-      <div className="fixed inset-0 z-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-background to-background opacity-40" />
+  <div className="fixed inset-0 z-[5] bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-background to-background opacity-40" />
 
 
       <Header />
