@@ -79,7 +79,7 @@
 }
 
 .dark {
-  --background: oklch(0.10 0.05 260);
+  --background: #0f1317; /* dark navy background to match the Devussy hero image */
   /* Deep dark blue/black */
   --foreground: oklch(0.98 0.02 260);
   --card: oklch(0.15 0.06 260);
@@ -191,4 +191,17 @@
   100% {
     background-position: 0 100%;
   }
+}
+
+/* Background logo centered behind UI, low-opacity */
+.bg-logo {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image: url('/devussy-logo-bg.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 40% auto;
+  opacity: 0.08;
+  pointer-events: none;
 }
