@@ -198,7 +198,7 @@
   position: fixed;
   inset: 0;
   z-index: -2;
-  background-image: url('/devussy-logo-bg.png');
+  background-image: url('/devussy-logo-bg.svg');
   background-repeat: no-repeat;
   background-position: center;
   background-size: 40% auto;
