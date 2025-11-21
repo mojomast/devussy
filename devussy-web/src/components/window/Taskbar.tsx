@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { cn } from "@/utils";
-import { Layout, HelpCircle, Plus } from "lucide-react";
+import { Layout, HelpCircle, Plus, Sun, Moon, TreePine, Waves } from "lucide-react";
+import { useTheme } from '../ThemeProvider';
 
 interface TaskbarProps {
     windows: Array<{ id: string; title: string; type: string }>;
@@ -21,11 +22,35 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     onNewProject,
     onHelp
 }) => {
+    const { theme, toggleTheme } = useTheme();
+
+    const ThemeIcon = () => {
+        if (theme.includes('forest')) {
+            return <TreePine className="h-4 w-4" />;
+        }
+        if (theme.includes('ocean')) {
+            return <Waves className="h-4 w-4" />;
+        }
+        if (theme.includes('dark')) {
+            return <Moon className="h-4 w-4" />;
+        }
+        return <Sun className="h-4 w-4" />;
+    };
+
     return (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 shadow-2xl transition-all hover:bg-black/70">
             <div className="px-2 border-r border-white/10 mr-1">
                 <Layout className="h-5 w-5 text-primary" />
             </div>
+
+            {/* Theme Toggle Button */}
+            <button
+                onClick={toggleTheme}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
+                title="Toggle Theme"
+            >
+                <ThemeIcon />
+            </button>
 
             {/* New Project Button */}
             <button
