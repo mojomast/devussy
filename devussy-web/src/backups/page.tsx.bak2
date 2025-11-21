@@ -592,22 +592,6 @@ export default function Page() {
         minimizedWindowIds={windows.filter(w => w.isMinimized).map(w => w.id)}
         onWindowClick={(id) => {
           const win = windows.find(w => w.id === id);
-          if (win?.isMinimized) {
-            toggleMinimize(id);
-          } else {
-            focusWindow(id);
-          }
-        }}
-        onNewProject={handleNewProject}
-        onHelp={handleHelp}
-        onOpenModelSettings={handleOpenModelSettings}
-        currentState={{
-          projectName,
-          languages,
-          requirements,
-          design,
-          plan,
-          stage: getActiveStage()
         }}
         onLoadCheckpoint={handleLoadCheckpoint}
         modelConfigs={modelConfigs}

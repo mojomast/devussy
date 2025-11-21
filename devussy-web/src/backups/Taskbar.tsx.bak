@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from "@/utils";
-import { Layout, HelpCircle, Plus, Power, Settings } from "lucide-react";
+import { Layout, HelpCircle, Plus, Power } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
@@ -15,7 +15,6 @@ interface TaskbarProps {
     onWindowClick: (id: string) => void;
     onNewProject?: () => void;
     onHelp?: () => void;
-    onOpenModelSettings?: () => void;
     // Props for Start Menu options
     currentState?: any;
     onLoadCheckpoint?: (data: any) => void;
@@ -31,7 +30,6 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     onWindowClick,
     onNewProject,
     onHelp,
-    onOpenModelSettings,
     currentState,
     onLoadCheckpoint,
     modelConfigs,
@@ -148,14 +146,19 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                                     </div>
                                 )}
 
-                                {/* Model Settings Button */}
-                                <button onClick={() => { onOpenModelSettings?.(); setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors cursor-pointer text-left">
-                                    <Settings className="h-8 w-8 text-gray-600 group-hover:text-white" />
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-sm">AI Models</span>
-                                        <span className="text-[10px] text-gray-500 group-hover:text-white/80">Configure models</span>
+                                {/* Model Settings Wrapper */}
+                                {modelConfigs && onModelConfigsChange && (
+                                    <div className="p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors cursor-pointer flex items-center gap-2">
+                                        <div className="scale-75 origin-left">
+                                            <ModelSettings
+                                                configs={modelConfigs}
+                                                onConfigsChange={onModelConfigsChange}
+                                                activeStage={activeStage || 'global'}
+                                            />
+                                        </div>
+                                        <span className="text-xs font-medium text-[#1A3E78] group-hover:text-white">AI Models</span>
                                     </div>
-                                </button>
+                                )}
                             </div>
                         </div>
 

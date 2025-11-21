@@ -18,7 +18,7 @@ import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help';
 
 interface WindowState {
   id: string;
@@ -146,8 +146,6 @@ export default function Page() {
         return { width: 900, height: 800 };
       case 'help':
         return { width: 700, height: 600 };
-      case 'model-settings':
-        return { width: 500, height: 650 };
       default:
         return { width: 600, height: 400 };
     }
@@ -285,19 +283,6 @@ export default function Page() {
       return;
     }
     spawnWindow('help', 'Devussy Studio Help');
-  };
-
-  const handleOpenModelSettings = () => {
-    // Prevent duplicate model settings windows
-    const existing = windows.find(w => w.type === 'model-settings');
-    if (existing) {
-      focusWindow(existing.id);
-      if (existing.isMinimized) {
-        toggleMinimize(existing.id);
-      }
-      return;
-    }
-    spawnWindow('model-settings', 'AI Model Settings');
   };
 
   // Auto-open Help modal on the first visit (unless dismissed)
@@ -461,15 +446,6 @@ export default function Page() {
             modelConfig={getEffectiveConfig('handoff')}
           />
         );
-      case 'model-settings':
-        return (
-          <ModelSettings
-            configs={modelConfigs}
-            onConfigsChange={setModelConfigs}
-            activeStage={getActiveStage()}
-            isWindowMode={true}
-          />
-        );
       case 'help':
         return (
           <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
@@ -600,7 +576,6 @@ export default function Page() {
         }}
         onNewProject={handleNewProject}
         onHelp={handleHelp}
-        onOpenModelSettings={handleOpenModelSettings}
         currentState={{
           projectName,
           languages,

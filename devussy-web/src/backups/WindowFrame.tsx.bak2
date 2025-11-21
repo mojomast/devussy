@@ -133,31 +133,27 @@ export function WindowFrame({
                         {onMinimize && (
                             <button
                                 onClick={onMinimize}
-                                className="w-[21px] h-[21px] rounded-sm flex items-center justify-center transition-colors group"
+                                className="w-[21px] h-[21px] rounded-sm flex items-center justify-center hover:bg-[#4B8DE8] active:bg-[#1F4EBF] transition-colors"
                                 style={{
-                                    background: 'linear-gradient(to bottom, #ECE9D8 0%, #E0DED0 50%, #D5CCBA 100%)',
+                                    background: 'linear-gradient(to bottom, #ffffff 0%, #d8dfe9 100%)',
                                     border: '1px solid #003c74',
-                                    boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.8), inset -1px -1px 0 rgba(0,0,0,0.2)'
+                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = 'linear-gradient(to bottom, #F2F0E8 0%, #E8E5D8 50%, #DDD9CA 100%)'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'linear-gradient(to bottom, #ECE9D8 0%, #E0DED0 50%, #D5CCBA 100%)'}
                             >
-                                <Minus className="w-3 h-3 text-black" strokeWidth={2} />
+                                <Minus className="w-3 h-3 text-black" strokeWidth={3} />
                             </button>
                         )}
                         {onClose && (
                             <button
                                 onClick={onClose}
-                                className="w-[21px] h-[21px] rounded-sm flex items-center justify-center transition-colors group"
+                                className="w-[21px] h-[21px] rounded-sm flex items-center justify-center hover:bg-red-500 active:bg-red-600 transition-colors"
                                 style={{
-                                    background: 'linear-gradient(to bottom, #ECE9D8 0%, #E0DED0 50%, #D5CCBA 100%)',
+                                    background: 'linear-gradient(to bottom, #ffffff 0%, #d8dfe9 100%)',
                                     border: '1px solid #003c74',
-                                    boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.8), inset -1px -1px 0 rgba(0,0,0,0.2)'
+                                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)'
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.background = 'linear-gradient(to bottom, #FF6B68 0%, #FF4842 50%, #E63946 100%)'}
-                                onMouseLeave={(e) => e.currentTarget.style.background = 'linear-gradient(to bottom, #ECE9D8 0%, #E0DED0 50%, #D5CCBA 100%)'}
                             >
-                                <X className="w-3 h-3 text-black group-hover:text-white" strokeWidth={2} />
+                                <X className="w-3 h-3 text-black" strokeWidth={3} />
                             </button>
                         )}
                     </div>
