@@ -589,9 +589,15 @@ async def plan_detail(request: Request):
         config.llm.model = model_config.get('model')
     if model_config.get('temperature') is not None:
         config.llm.temperature = float(model_config.get('temperature'))
+    
+    # Force streaming enabled for this endpoint
+    config.llm.streaming_enabled = True
 
     async def event_generator():
         llm_client = create_llm_client(config)
+        # Explicitly set streaming_enabled on the client instance
+        llm_client.streaming_enabled = True
+        
         concurrency_manager = ConcurrencyManager(config)
         generator = DetailedDevPlanGenerator(llm_client, concurrency_manager)
         queue: asyncio.Queue = asyncio.Queue()
