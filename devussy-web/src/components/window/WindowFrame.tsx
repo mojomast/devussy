@@ -75,14 +75,16 @@ export function WindowFrame({
                 newHeight = Math.max(200, startHeight + deltaY);
             }
             if (direction.includes('w')) {
-                const proposedWidth = Math.max(300, startWidth - deltaX);
-                newX = startPosX + deltaX;
-                newWidth = proposedWidth;
+                newWidth = Math.max(300, startWidth - deltaX);
+                // Only move position by the actual width change, not the full delta
+                const actualWidthChange = startWidth - newWidth;
+                newX = startPosX + actualWidthChange;
             }
             if (direction.includes('n')) {
-                const proposedHeight = Math.max(200, startHeight - deltaY);
-                newY = startPosY + deltaY;
-                newHeight = proposedHeight;
+                newHeight = Math.max(200, startHeight - deltaY);
+                // Only move position by the actual height change, not the full delta
+                const actualHeightChange = startHeight - newHeight;
+                newY = startPosY + actualHeightChange;
             }
 
             setSize({ width: newWidth, height: newHeight });
