@@ -197,13 +197,13 @@
 .bg-logo {
   position: fixed;
   inset: 0;
-  z-index: -2;
+  z-index: 0;
   /* Updated to use user-provided PNG if present; fallback to existing SVG */
   /* Use the underscore filename in the public folder and avoid spaces. */
   background-image: url('/devussy_logo_minimal.png'), url('/devussy-logo-bg.svg');
   background-repeat: no-repeat;
-  background-position: center;
-  background-size: 40% auto;
-  opacity: 0.08;
+  background-position: center center;
+  background-size: 55% auto;
+  opacity: 0.12;
   pointer-events: none;
 }
