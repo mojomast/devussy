@@ -544,7 +544,7 @@ export default function Page() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
+    <main className="flex min-h-screen flex-col relative bg-transparent">
       {/* Global Header / Toolbar (Optional) */}
       {theme !== 'bliss' && (
         <div className="absolute top-4 right-4 z-50 flex items-center gap-2">

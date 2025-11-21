@@ -75,18 +75,18 @@ export function WindowFrame({
                 newHeight = Math.max(200, startHeight + deltaY);
             }
             if (direction.includes('w')) {
-                newWidth = Math.max(300, startWidth - deltaX);
-                newX = startPosX + (startWidth - newWidth);
+                const proposedWidth = Math.max(300, startWidth - deltaX);
+                newX = startPosX + deltaX;
+                newWidth = proposedWidth;
             }
             if (direction.includes('n')) {
-                newHeight = Math.max(200, startHeight - deltaY);
-                newY = startPosY + (startHeight - newHeight);
+                const proposedHeight = Math.max(200, startHeight - deltaY);
+                newY = startPosY + deltaY;
+                newHeight = proposedHeight;
             }
 
             setSize({ width: newWidth, height: newHeight });
-            if (direction.includes('w') || direction.includes('n')) {
-                setPosition({ x: newX, y: newY });
-            }
+            setPosition({ x: newX, y: newY });
         };
 
         const handlePointerUp = () => {

@@ -17,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${jetbrainsMono.className} antialiased`}>
+    <html lang="en" className="dark overflow-hidden" style={{ overscrollBehavior: 'none' }}>
+      <body className={`${jetbrainsMono.className} antialiased overflow-hidden h-full`} style={{ overscrollBehavior: 'none' }}>
         <ThemeProvider>
           <div className="scanlines" />
           <AppLayout>
