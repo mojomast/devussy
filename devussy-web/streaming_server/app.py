@@ -73,6 +73,10 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
     config.llm.streaming_enabled = True
 
     llm_client = create_llm_client(config)
+    # Explicitly set streaming_enabled on the client instance to ensure it's picked up
+    # This fixes the issue where LLMClient checks config.streaming_enabled but we set config.llm.streaming_enabled
+    llm_client.streaming_enabled = True
+
     generator = ProjectDesignGenerator(llm_client)
 
     async def event_generator():
