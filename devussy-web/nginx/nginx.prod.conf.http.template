@@ -11,27 +11,10 @@ http {
   sendfile        on;
   keepalive_timeout  65;
 
-  # HTTP Server - Redirect to HTTPS or serve directly if no SSL yet
+  # HTTP Server - Serve directly (no SSL)
   server {
     listen 80 default_server;
-    server_name dev.ussy.host;
-
-    # Redirect all HTTP traffic to HTTPS
-    return 301 https://$host$request_uri;
-  }
-
-  # HTTPS Server
-  server {
-    listen 443 ssl http2 default_server;
-    server_name dev.ussy.host;
-
-    # SSL Config
-    ssl_certificate /etc/letsencrypt/live/dev.ussy.host/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dev.ussy.host/privkey.pem;
-    ssl_session_timeout 1d;
-    ssl_session_cache shared:SSL:10m;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
+    server_name ${LETSENCRYPT_DOMAIN:-dev.ussy.host};
 
     # Frontend
     location / {
@@ -70,4 +53,3 @@ http {
     }
   }
 }
-
