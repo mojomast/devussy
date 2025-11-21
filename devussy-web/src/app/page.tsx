@@ -47,6 +47,11 @@ export default function Page() {
   const [plan, setPlan] = useState<any>(null);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
 
+  // Help preferences
+  const [dontShowHelpAgain, setDontShowHelpAgain] = useState<boolean>(() => {
+    try { return localStorage.getItem('devussy_help_dismissed') === '1'; } catch (e) { return false; }
+  });
+
   // Model Configuration
   const [modelConfigs, setModelConfigs] = useState<ModelConfigs>({
     global: {
@@ -255,6 +260,23 @@ export default function Page() {
     spawnWindow('help', 'Devussy Studio Help');
   };
 
+  // Auto-open Help modal on the first visit (unless dismissed)
+  useEffect(() => {
+    try {
+      const dismissed = localStorage.getItem('devussy_help_dismissed');
+      const seen = localStorage.getItem('devussy_seen_help');
+      if (!dismissed && !seen) {
+        // Delay slightly to allow initial window to render
+        setTimeout(() => {
+          handleHelp();
+          try { localStorage.setItem('devussy_seen_help', '1'); } catch (e) {}
+        }, 300);
+      }
+    } catch (e) {
+      // localStorage might be unavailable; ignore silently
+    }
+  }, []);
+
   // Render Content based on Window Type
   const renderWindowContent = (window: WindowState) => {
     switch (window.type) {
@@ -378,6 +400,9 @@ export default function Page() {
         return (
           <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
             <h1 className="text-2xl font-bold mb-4">Devussy Studio Help</h1>
+            <div className="rounded-md p-3 bg-background/80 text-sm text-muted-foreground mb-4">
+              <strong className="text-primary">Public preview:</strong> This web demo contains a baked-in API for testing and prototyping. It is a public preview and is under active development. Please avoid putting any sensitive secrets here. Thank you for trying Devussy Studio.
+            </div>
 
             <h2 className="text-xl font-semibold mt-6 mb-3">Getting Started</h2>
             <p>Devussy Studio is an AI-powered development pipeline that takes you from requirements to deployment-ready code.</p>
@@ -417,6 +442,26 @@ export default function Page() {
             </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>
             <p>Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your project for detailed technical documentation.</p>
+
+            <div className="mt-6 flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={dontShowHelpAgain}
+                  onChange={(e) => {
+                    const v = e.target.checked;
+                    try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) {}
+                    setDontShowHelpAgain(v);
+                  }}
+                />
+                Don't show this again
+              </label>
+              <div>
+                <Button variant="secondary" onClick={() => closeWindow(window.id)}>
+                  Close
+                </Button>
+              </div>
+            </div>
           </div>
         );
       default:
