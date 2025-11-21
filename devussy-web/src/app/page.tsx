@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowRight, Sparkles, Layers, Code2, GitBranch, MessageSquare } from "lucide-react";
+import { ArrowRight, Sparkles, Layers, Code2, GitBranch, MessageSquare, Zap, Play } from "lucide-react";
 import { WindowFrame } from "@/components/window/WindowFrame";
 import { DesignView } from "@/components/pipeline/DesignView";
 import { PlanView } from "@/components/pipeline/PlanView";
@@ -15,6 +15,7 @@ import { InterviewView } from "@/components/pipeline/InterviewView";
 import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipeline/ModelSettings";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help';
 
@@ -25,7 +26,7 @@ interface WindowState {
   position: { x: number; y: number };
   zIndex: number;
   isMinimized?: boolean;
-  props?: any;
+  props?: Record<string, any>;
   size?: { width: number; height: number };
 }
 
@@ -41,6 +42,9 @@ export default function Page() {
   const [projectName, setProjectName] = useState("");
   const [languages, setLanguages] = useState("");
   const [requirements, setRequirements] = useState("");
+
+  // Auto-run State
+  const [isAutoRun, setIsAutoRun] = useState(false);
 
   // Pipeline Data
   const [design, setDesign] = useState<any>(null);
@@ -98,6 +102,9 @@ export default function Page() {
     if (data.design) setDesign(data.design);
     if (data.plan) setPlan(data.plan);
 
+    // Reset auto-run on manual load
+    setIsAutoRun(false);
+
     // Restore windows based on stage
     // We'll clear existing windows and spawn the relevant one
     setWindows([]);
@@ -124,7 +131,7 @@ export default function Page() {
   const getWindowSize = (type: WindowType): { width: number; height: number } => {
     switch (type) {
       case 'init':
-        return { width: 800, height: 700 };  // Fits form content comfortably
+        return { width: 800, height: 750 };  // Fits form content comfortably
       case 'interview':
         return { width: 700, height: 600 };
       case 'design':
@@ -134,7 +141,7 @@ export default function Page() {
       case 'execute':
         return { width: 1200, height: 800 };  // Wide for multi-column
       case 'handoff':
-        return { width: 800, height: 700 };
+        return { width: 900, height: 800 };
       case 'help':
         return { width: 700, height: 600 };
       default:
@@ -143,7 +150,7 @@ export default function Page() {
   };
 
   // Window Management Functions
-  const spawnWindow = (type: WindowType, title: string, props?: any) => {
+  const spawnWindow = (type: WindowType, title: string, props?: Record<string, any>) => {
     const id = `${type}-${Date.now()}`;
     const offset = windows.length * 30;
     const size = getWindowSize(type);
@@ -197,6 +204,7 @@ export default function Page() {
 
   // Pipeline Handlers
   const handleStartInterview = () => {
+    setIsAutoRun(false);
     spawnWindow('interview', 'Requirements Interview');
   };
 
@@ -204,6 +212,21 @@ export default function Page() {
     if (projectName && requirements) {
       spawnWindow('design', 'System Design');
     }
+  };
+
+  const handleTryItNow = () => {
+    // Set sample project data
+    setProjectName("Todo SaaS with Stripe");
+    setLanguages("Next.js, TypeScript, TailwindCSS, Supabase, Stripe");
+    setRequirements("A modern Todo list SaaS application where users can sign up, create lists, add tasks with due dates, and upgrade to a premium plan via Stripe to unlock unlimited lists and collaboration features. It should have a clean, responsive UI.");
+
+    // Enable auto-run mode
+    setIsAutoRun(true);
+
+    // Start the pipeline immediately
+    setTimeout(() => {
+      spawnWindow('design', 'System Design');
+    }, 100);
   };
 
   const handleInterviewComplete = (data: any) => {
@@ -269,7 +292,7 @@ export default function Page() {
         // Delay slightly to allow initial window to render
         setTimeout(() => {
           handleHelp();
-          try { localStorage.setItem('devussy_seen_help', '1'); } catch (e) {}
+          try { localStorage.setItem('devussy_seen_help', '1'); } catch (e) { }
         }, 300);
       }
     } catch (e) {
@@ -290,12 +313,31 @@ export default function Page() {
                   New Project
                 </CardTitle>
                 <CardDescription>
-                  Start a new project with an AI interview or skip directly to design.
+                  Interview → Project design → DevPlan phases → Handoff Markdown artifacts
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button
+                  className="w-full font-bold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0"
+                  size="lg"
+                  onClick={handleTryItNow}
+                >
+                  <Play className="mr-2 h-5 w-5 fill-current" />
+                  Try it now (One-click sample)
+                </Button>
+
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or Start Fresh</span>
+                  </div>
+                </div>
+
+                <Button
                   className="w-full font-bold"
+                  variant="outline"
                   size="lg"
                   onClick={handleStartInterview}
                 >
@@ -303,7 +345,7 @@ export default function Page() {
                   Start Interactive Interview
                 </Button>
 
-                <div className="relative">
+                <div className="relative py-2">
                   <div className="absolute inset-0 flex items-center">
                     <span className="w-full border-t" />
                   </div>
@@ -341,7 +383,7 @@ export default function Page() {
                   />
                 </div>
               </CardContent>
-              <CardFooter>
+              <CardFooter className="flex flex-col gap-2">
                 <Button
                   className="w-full"
                   variant="secondary"
@@ -350,6 +392,9 @@ export default function Page() {
                 >
                   Skip Interview & Initialize <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
+                <p className="text-xs text-center text-muted-foreground mt-2">
+                  Works with OpenAI / generic OpenAI-compatible / Requesty / Aether / AgentRouter
+                </p>
               </CardFooter>
             </Card>
           </div>
@@ -369,6 +414,7 @@ export default function Page() {
             languages={languages.split(',').map(l => l.trim()).filter(Boolean)}
             modelConfig={getEffectiveConfig('design')}
             onDesignComplete={handleDesignComplete}
+            autoRun={isAutoRun}
           />
         );
       case 'plan':
@@ -377,6 +423,7 @@ export default function Page() {
             design={design}
             onPlanApproved={handlePlanApproved}
             modelConfig={getEffectiveConfig('plan')}
+            autoRun={isAutoRun}
           />
         );
       case 'execute':
@@ -386,6 +433,7 @@ export default function Page() {
             projectName={projectName}
             modelConfig={getEffectiveConfig('execute')}
             onComplete={handlePhaseComplete}
+            autoRun={isAutoRun}
           />
         );
       case 'handoff':
@@ -450,7 +498,7 @@ export default function Page() {
                   checked={dontShowHelpAgain}
                   onChange={(e) => {
                     const v = e.target.checked;
-                    try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) {}
+                    try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) { }
                     setDontShowHelpAgain(v);
                   }}
                 />
@@ -473,6 +521,7 @@ export default function Page() {
     <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
       {/* Global Header / Toolbar (Optional) */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+        <ThemeToggle />
         <CheckpointManager
           currentState={{
             projectName,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus } from "lucide-react";
@@ -11,13 +11,15 @@ interface PlanViewProps {
     design: any;
     modelConfig: ModelConfig;
     onPlanApproved: (plan: any) => void;
+    autoRun?: boolean;
 }
 
-export const PlanView: React.FC<PlanViewProps> = ({
+export const PlanView = ({
     design,
     modelConfig,
-    onPlanApproved
-}) => {
+    onPlanApproved,
+    autoRun = false
+}: PlanViewProps) => {
     const [plan, setPlan] = useState<any>(null);
     const [planContent, setPlanContent] = useState("");  // Track streaming content
     const [phases, setPhases] = useState<PhaseData[]>([]);  // Parsed phases
@@ -94,7 +96,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
         }
 
         console.log('[PlanView] Parsed', phases.length, 'phases from text');
-        phases.forEach(p => console.log(`  Phase ${p.number}: ${p.title} (${p.description?.length || 0} chars)`));
+        phases.forEach((p: PhaseData) => console.log(`  Phase ${p.number}: ${p.title} (${p.description?.length || 0} chars)`));
 
         return phases;
     };
@@ -167,7 +169,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
                             // Display streaming content as it arrives
                             if (data.content) {
-                                setPlanContent(prev => prev + data.content);
+                                setPlanContent((prev: string) => prev + data.content);
                             }
 
                             if (data.done && data.plan) {
@@ -181,7 +183,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                                 console.log('[PlanView] Using', finalPhases.length, 'phases');
                                 setPhases(finalPhases);
                                 // Expand all phases by default
-                                setExpandedPhases(new Set(finalPhases.map(p => p.number)));
+                                setExpandedPhases(new Set(finalPhases.map((p: PhaseData) => p.number)));
                                 return; // Stop reading
                             }
 
@@ -278,7 +280,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
         // Reconstruct plan with updated phases
         const updatedPlan = {
             ...plan,
-            phases: phases.map(p => ({
+            phases: phases.map((p: PhaseData) => ({
                 number: p.number,
                 title: p.title,
                 description: p.description,
@@ -291,6 +293,16 @@ export const PlanView: React.FC<PlanViewProps> = ({
         });
         onPlanApproved(updatedPlan);
     };
+
+    // Auto-approve effect
+    useEffect(() => {
+        if (autoRun && plan && !isLoading && phases.length > 0) {
+            const timer = setTimeout(() => {
+                handleApprove();
+            }, 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [autoRun, plan, isLoading, phases]);
 
     return (
         <div className="flex flex-col h-full">

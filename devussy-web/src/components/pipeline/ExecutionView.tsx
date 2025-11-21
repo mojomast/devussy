@@ -26,16 +26,18 @@ interface ExecutionViewProps {
     onComplete: (detailedPlan?: any) => void;
     onExecutionStateChange?: (phases: PhaseStatus[]) => void;  // Emit phase state for checkpoints
     initialPhases?: PhaseStatus[];  // Restore from checkpoint
+    autoRun?: boolean;
 }
 
-export const ExecutionView: React.FC<ExecutionViewProps> = ({
+export const ExecutionView = ({
     plan,
     projectName,
     modelConfig,
     onComplete,
     onExecutionStateChange,
-    initialPhases
-}) => {
+    initialPhases,
+    autoRun = false
+}: ExecutionViewProps) => {
     const [viewMode, setViewMode] = useState<'grid' | 'tabs'>('grid');
     const [concurrency, setConcurrency] = useState<number>(modelConfig.concurrency || 3);
     const [selectedTab, setSelectedTab] = useState<number>(1);
@@ -50,7 +52,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         return {
             ...plan,
             phases: plan.phases.map((originalPhase: any) => {
-                const executedPhase = phases.find(p => p.number === originalPhase.number);
+                const executedPhase = phases.find((p: PhaseStatus) => p.number === originalPhase.number);
                 if (executedPhase && executedPhase.detailedPhase) {
                     return executedPhase.detailedPhase;
                 }
@@ -75,7 +77,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
     const scrollContainerRefs = useRef<Map<number, HTMLDivElement>>(new Map());
     const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
     const phaseOutputBuffers = useRef<Map<number, string>>(new Map());
-    const updateTimers = useRef<Map<number, NodeJS.Timeout>>(new Map());
+    const updateTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
     // Initialize phases from plan or restore from checkpoint
     useEffect(() => {
@@ -86,8 +88,8 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             // Only initialize if we don't have phases OR if the plan has changed significantly
             // AND we haven't started execution yet.
             // This prevents resetting state when "Proceed to Handoff" updates the plan prop.
-            setPhases(prev => {
-                if (prev.length > 0 && prev.some(p => p.status !== 'queued' || p.output)) {
+            setPhases((prev: PhaseStatus[]) => {
+                if (prev.length > 0 && prev.some((p: PhaseStatus) => p.status !== 'queued' || p.output)) {
                     console.log('[ExecutionView] Preserving existing execution state');
                     return prev;
                 }
@@ -99,7 +101,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                     output: '',
                     progress: 0
                 }));
-                console.log('[ExecutionView] Initialized phases:', initialPhases.map(p => ({ number: p.number, title: p.title })));
+                console.log('[ExecutionView] Initialized phases:', initialPhases.map((p: PhaseStatus) => ({ number: p.number, title: p.title })));
                 return initialPhases;
             });
         }
@@ -114,7 +116,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 
     // Auto-scroll for each phase - scroll to bottom when content updates
     useEffect(() => {
-        phases.forEach(phase => {
+        phases.forEach((phase: PhaseStatus) => {
             if (phase.status === 'running') {
                 const scrollContainer = scrollContainerRefs.current.get(phase.number);
                 if (scrollContainer) {
@@ -150,13 +152,13 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         const initialOutput = `Starting Phase ${phase.number}: ${phase.title}...\n\n`;
         phaseOutputBuffers.current.set(phase.number, initialOutput);
 
-        setPhases(prev => {
-            const updated = prev.map(p =>
+        setPhases((prev: PhaseStatus[]) => {
+            const updated = prev.map((p: PhaseStatus) =>
                 p.number === phase.number
                     ? { ...p, status: 'running' as const, output: initialOutput }
                     : p
             );
-            console.log('[executePhase] Updated phases:', updated.map(p => ({ number: p.number, status: p.status })));
+            console.log('[executePhase] Updated phases:', updated.map((p: PhaseStatus) => ({ number: p.number, status: p.status })));
             return updated;
         });
 
@@ -264,7 +266,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 
                                     const timer = setTimeout(() => {
                                         const bufferedContent = phaseOutputBuffers.current.get(phase.number) || '';
-                                        setPhases(prev => prev.map(p =>
+                                        setPhases((prev: PhaseStatus[]) => prev.map((p: PhaseStatus) =>
                                             p.number === phase.number
                                                 ? { ...p, output: bufferedContent }
                                                 : p
@@ -302,7 +304,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 
                                     // Final state update with buffered content AND detailed phase data
                                     const finalOutput = phaseOutputBuffers.current.get(phase.number) || '';
-                                    setPhases(prev => prev.map(p =>
+                                    setPhases((prev: PhaseStatus[]) => prev.map((p: PhaseStatus) =>
                                         p.number === phase.number
                                             ? {
                                                 ...p,
@@ -346,7 +348,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 
                     // Final state update with buffered content
                     const finalOutput = phaseOutputBuffers.current.get(phase.number) || '';
-                    setPhases(prev => prev.map(p =>
+                    setPhases((prev: PhaseStatus[]) => prev.map((p: PhaseStatus) =>
                         p.number === phase.number
                             ? { ...p, status: 'complete', progress: 100, output: finalOutput }
                             : p
@@ -378,14 +380,14 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
             phaseOutputBuffers.current.delete(phase.number);
 
             if (err.name === 'AbortError') {
-                setPhases(prev => prev.map(p =>
+                setPhases((prev: PhaseStatus[]) => prev.map((p: PhaseStatus) =>
                     p.number === phase.number
                         ? { ...p, status: 'queued' as const, output: currentOutput + '\n[Paused]' }
                         : p
                 ));
             } else {
                 console.error(`Phase ${phase.number} execution error:`, err);
-                setPhases(prev => prev.map(p =>
+                setPhases((prev: PhaseStatus[]) => prev.map((p: PhaseStatus) =>
                     p.number === phase.number
                         ? { ...p, status: 'failed' as const, error: err.message || 'Unknown error', output: currentOutput + `\n\n[ERROR]: ${err.message}` }
                         : p
@@ -402,7 +404,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         setIsPaused(false);
 
         // Start ALL phases immediately
-        const promises = phases.map(phase => {
+        const promises = phases.map((phase: PhaseStatus) => {
             console.log('[ExecutionView] Starting phase', phase.number);
             return executePhase(phase).catch(err => {
                 console.error('[ExecutionView] Phase', phase.number, 'failed:', err);
@@ -417,14 +419,15 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
         setIsExecuting(false);
 
         // Check if all phases completed successfully - use effect to avoid setState during render
-        const allComplete = phases.every(p => p.status === 'complete');
+        const allComplete = phases.every((p: PhaseStatus) => p.status === 'complete');
         console.log('[ExecutionView] All complete?', allComplete);
 
-        // We disable auto-advance to allow user to review output and manually proceed
-        // if (allComplete && onComplete) {
-        //     const detailedPlan = buildDetailedPlan();
-        //     setTimeout(() => onComplete(detailedPlan), 0);
-        // }
+        // Auto-advance if enabled
+        if (autoRun && allComplete && onComplete) {
+            console.log('[ExecutionView] Auto-advancing to handoff...');
+            const detailedPlan = buildDetailedPlan();
+            setTimeout(() => onComplete(detailedPlan), 2000); // 2s delay for visual confirmation
+        }
     };
 
     const togglePause = () => {
@@ -555,13 +558,13 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
                         phases.length <= 6 ? 'grid-cols-3' :
                             'grid-cols-4'
                         }`} style={{ gridAutoRows: '1fr' }}>
-                        {phases.map(phase => renderPhaseColumn(phase))}
+                        {phases.map((phase: PhaseStatus) => renderPhaseColumn(phase))}
                     </div>
                 ) : (
                     <div className="h-full flex flex-col">
                         {/* Tab Headers */}
                         <div className="flex gap-2 p-4 border-b border-border overflow-x-auto">
-                            {phases.map(phase => (
+                            {phases.map((phase: PhaseStatus) => (
                                 <Button
                                     key={phase.number}
                                     variant={selectedTab === phase.number ? 'default' : 'outline'}
@@ -577,7 +580,7 @@ export const ExecutionView: React.FC<ExecutionViewProps> = ({
 
                         {/* Tab Content */}
                         <div className="flex-1 overflow-hidden p-4">
-                            {phases.filter(p => p.number === selectedTab).map(phase => renderPhaseColumn(phase))}
+                            {phases.filter((p: PhaseStatus) => p.number === selectedTab).map((phase: PhaseStatus) => renderPhaseColumn(phase))}
                         </div>
                     </div>
                 )}

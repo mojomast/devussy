@@ -79,16 +79,13 @@
 }
 
 .dark {
-  --background: #1B222C; /* dark background matching devussy_logo_minimal.png */
-  /* Deep dark blue/black */
+  --background: #1B222C;
   --foreground: oklch(0.98 0.02 260);
   --card: oklch(0.15 0.06 260);
-  /* Slightly lighter dark blue */
   --card-foreground: oklch(0.98 0.02 260);
   --popover: oklch(0.15 0.06 260);
   --popover-foreground: oklch(0.98 0.02 260);
   --primary: oklch(0.65 0.25 265);
-  /* Neon Blue/Purple */
   --primary-foreground: oklch(0.10 0.05 260);
   --secondary: oklch(0.25 0.10 260);
   --secondary-foreground: oklch(0.98 0.02 260);
@@ -198,12 +195,122 @@
   position: fixed;
   inset: 0;
   z-index: 0;
-  /* Updated to use user-provided PNG if present; fallback to existing SVG */
-  /* Use the underscore filename in the public folder and avoid spaces. */
   background-image: url('/devussy_logo_minimal.png'), url('/devussy-logo-bg.svg');
   background-repeat: no-repeat;
   background-position: center center;
   background-size: 55% auto;
   opacity: 0.12;
   pointer-events: none;
+}
+
+/* ===== THEME SYSTEM ===== */
+
+/* Theme: Default (same as .dark) */
+[data-theme="default"] {
+  --background: #1B222C;
+  --foreground: oklch(0.98 0.02 260);
+  --card: oklch(0.15 0.06 260);
+  --card-foreground: oklch(0.98 0.02 260);
+  --popover: oklch(0.15 0.06 260);
+  --popover-foreground: oklch(0.98 0.02 260);
+  --primary: oklch(0.65 0.25 265);
+  --primary-foreground: oklch(0.10 0.05 260);
+  --secondary: oklch(0.25 0.10 260);
+  --secondary-foreground: oklch(0.98 0.02 260);
+  --muted: oklch(0.25 0.10 260);
+  --muted-foreground: oklch(0.70 0.05 260);
+  --accent: oklch(0.25 0.10 260);
+  --accent-foreground: oklch(0.98 0.02 260);
+  --destructive: oklch(0.6 0.25 25);
+  --border: oklch(0.30 0.10 260);
+  --input: oklch(0.30 0.10 260);
+  --ring: oklch(0.65 0.25 265);
+}
+
+/* Theme: Terminal (Matrix green) */
+[data-theme="terminal"] {
+  --background: #000000;
+  --foreground: #00ff00;
+  --card: #0a0e0a;
+  --card-foreground: #00ff00;
+  --popover: #0a0e0a;
+  --popover-foreground: #00ff00;
+  --primary: #00ff00;
+  --primary-foreground: #000000;
+  --secondary: #003300;
+  --secondary-foreground: #00ff00;
+  --muted: #003300;
+  --muted-foreground: #00aa00;
+  --accent: #004400;
+  --accent-foreground: #00ff00;
+  --destructive: #ff0000;
+  --border: #00ff00;
+  --input: #003300;
+  --ring: #00ff00;
+}
+
+/* Terminal theme: monospace fonts and green glow */
+[data-theme="terminal"] * {
+  font-family: 'Courier New', monospace !important;
+  text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+[data-theme="terminal"] .window-frame {
+  border: 1px solid var(--border);
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+}
+
+[data-theme="terminal"] button {
+  box-shadow: 0 0 5px rgba(0, 255, 0, 0.2);
+}
+
+/* Theme: Bliss (Windows XP) */
+[data-theme="bliss"] {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: rgba(255, 255, 255, 0.95);
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #0054e3;
+  --primary-foreground: #ffffff;
+  --secondary: #ece9d8;
+  --secondary-foreground: #000000;
+  --muted: #f0f0f0;
+  --muted-foreground: #666666;
+  --accent: #316ac5;
+  --accent-foreground: #ffffff;
+  --destructive: #c42b1c;
+  --border: #003c74;
+  --input: #ffffff;
+  --ring: #0054e3;
+}
+
+/* Bliss theme: background image */
+[data-theme="bliss"] body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/bliss-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Bliss theme: XP-style windows */
+[data-theme="bliss"] .window-frame {
+  border: 2px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="bliss"] .window-header {
+  background: linear-gradient(to bottom, #0054e3 0%, #0041b8 100%);
+  border-radius: 6px 6px 0 0;
+  padding: 4px 8px;
 }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Download, Github, CheckCircle, Loader2 } from "lucide-react";
+import { Download, Github, CheckCircle, Loader2, FileText, Code, List, Terminal } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import JSZip from 'jszip';
 
@@ -15,17 +15,21 @@ interface HandoffViewProps {
     modelConfig: ModelConfig;
 }
 
-export const HandoffView: React.FC<HandoffViewProps> = ({
+export const HandoffView = ({
     design,
     plan,
     modelConfig
-}) => {
+}: HandoffViewProps) => {
     const [handoffContent, setHandoffContent] = useState<string>("");
     const [isGenerating, setIsGenerating] = useState(false);
     const [githubToken, setGithubToken] = useState("");
     const [repoName, setRepoName] = useState("");
     const [isPushing, setIsPushing] = useState(false);
     const [pushResult, setPushResult] = useState<string | null>(null);
+
+    // Tab state
+    const [activeTab, setActiveTab] = useState<'handoff' | 'design' | 'plan' | 'phases'>('handoff');
+    const [selectedPhase, setSelectedPhase] = useState<number>(1);
 
     const generateHandoff = async () => {
         setIsGenerating(true);
@@ -174,6 +178,38 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
         return md;
     };
 
+    const getPhaseMarkdown = (phaseNum: number): string => {
+        if (!plan || !plan.phases) return "No phases found.";
+
+        const phase = plan.phases.find((p: any) => (p.number || p.phase_number) === phaseNum);
+        if (!phase) return "Phase not found.";
+
+        let content = `# Phase ${phaseNum}: ${phase.title || phase.name}\n\n`;
+        content += `## Description\n${phase.description || 'No description'}\n\n`;
+
+        if (phase.steps && phase.steps.length > 0) {
+            content += `## Steps\n\n`;
+            phase.steps.forEach((step: any, idx: number) => {
+                content += `### ${idx + 1}. ${step.title || step.name || `Step ${idx + 1}`}\n\n`;
+                if (step.description) {
+                    content += `${step.description}\n\n`;
+                }
+                if (step.details) {
+                    content += `**Details:**\n${step.details}\n\n`;
+                }
+                if (step.acceptance_criteria && step.acceptance_criteria.length > 0) {
+                    content += `**Acceptance Criteria:**\n`;
+                    step.acceptance_criteria.forEach((criteria: string) => {
+                        content += `- ${criteria}\n`;
+                    });
+                    content += `\n`;
+                }
+            });
+        }
+
+        return content;
+    };
+
     const handleDownload = async () => {
         const zip = new JSZip();
 
@@ -189,32 +225,7 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
                 const phaseNumber = phase.number || phase.phase_number;
                 const phaseTitle = (phase.title || phase.name || `Phase ${phaseNumber}`).replace(/[^a-z0-9]/gi, '_').toLowerCase();
                 const fileName = `phase_${phaseNumber}_${phaseTitle}.md`;
-
-                // Build phase document content
-                let content = `# Phase ${phaseNumber}: ${phase.title || phase.name}\n\n`;
-                content += `## Description\n${phase.description || 'No description'}\n\n`;
-
-                if (phase.steps && phase.steps.length > 0) {
-                    content += `## Steps\n\n`;
-                    phase.steps.forEach((step: any, idx: number) => {
-                        content += `### ${idx + 1}. ${step.title || step.name || `Step ${idx + 1}`}\n\n`;
-                        if (step.description) {
-                            content += `${step.description}\n\n`;
-                        }
-                        if (step.details) {
-                            content += `**Details:**\n${step.details}\n\n`;
-                        }
-                        if (step.acceptance_criteria && step.acceptance_criteria.length > 0) {
-                            content += `**Acceptance Criteria:**\n`;
-                            step.acceptance_criteria.forEach((criteria: string) => {
-                                content += `- ${criteria}\n`;
-                            });
-                            content += `\n`;
-                        }
-                    });
-                }
-
-                phasesFolder?.file(fileName, content);
+                phasesFolder?.file(fileName, getPhaseMarkdown(phaseNumber));
             });
         }
 
@@ -271,90 +282,168 @@ export const HandoffView: React.FC<HandoffViewProps> = ({
                     <CheckCircle className="h-5 w-5 text-green-500" />
                     Project Handoff
                 </h2>
-                <Button
-                    size="sm"
-                    onClick={handleDownload}
-                    disabled={!handoffContent}
+                <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        onClick={handleDownload}
+                        disabled={!handoffContent}
+                    >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download Artifacts
+                    </Button>
+                </div>
+            </div>
+
+            {/* Tabs Header */}
+            <div className="flex border-b border-border overflow-x-auto bg-muted/10">
+                <button
+                    className={`px-4 py-2 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'handoff' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('handoff')}
                 >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Artifacts
-                </Button>
+                    <Terminal className="h-4 w-4" />
+                    Handoff Instructions
+                </button>
+                <button
+                    className={`px-4 py-2 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'design' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('design')}
+                >
+                    <Code className="h-4 w-4" />
+                    Project Design
+                </button>
+                <button
+                    className={`px-4 py-2 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'plan' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('plan')}
+                >
+                    <List className="h-4 w-4" />
+                    Development Plan
+                </button>
+                <button
+                    className={`px-4 py-2 text-sm font-medium flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'phases' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => setActiveTab('phases')}
+                >
+                    <FileText className="h-4 w-4" />
+                    Phase Details
+                </button>
             </div>
 
             <ScrollArea className="flex-1 p-6">
-                <div className="grid gap-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Handoff Instructions</CardTitle>
-                            <CardDescription>
-                                Final summary and next steps for your project.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isGenerating ? (
-                                <div className="flex items-center justify-center p-8">
-                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                                </div>
-                            ) : (
-                                <div className="prose prose-invert max-w-none text-sm">
-                                    <pre className="whitespace-pre-wrap font-sans">
-                                        {handoffContent}
-                                    </pre>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Github className="h-5 w-5" />
-                                Push to GitHub
-                            </CardTitle>
-                            <CardDescription>
-                                Create a new repository and push your project code.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium">Repository Name</label>
-                                <Input
-                                    placeholder="my-awesome-project"
-                                    value={repoName}
-                                    onChange={(e) => setRepoName(e.target.value)}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium">Personal Access Token</label>
-                                <Input
-                                    type="password"
-                                    placeholder="ghp_..."
-                                    value={githubToken}
-                                    onChange={(e) => setGithubToken(e.target.value)}
-                                />
-                            </div>
-
-                            {pushResult && (
-                                <div className={`text-sm ${pushResult.includes("Success") ? "text-green-500" : "text-red-500"}`}>
-                                    {pushResult}
-                                </div>
-                            )}
-
-                            <Button
-                                className="w-full"
-                                onClick={handleGithubPush}
-                                disabled={isPushing || !repoName || !githubToken}
-                            >
-                                {isPushing ? (
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                {/* Handoff Tab */}
+                {activeTab === 'handoff' && (
+                    <div className="grid gap-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Handoff Instructions</CardTitle>
+                                <CardDescription>
+                                    Final summary and next steps for your project.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {isGenerating ? (
+                                    <div className="flex items-center justify-center p-8">
+                                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                    </div>
                                 ) : (
-                                    <Github className="h-4 w-4 mr-2" />
+                                    <div className="prose prose-invert max-w-none text-sm">
+                                        <pre className="whitespace-pre-wrap font-sans">
+                                            {handoffContent}
+                                        </pre>
+                                    </div>
                                 )}
-                                Create & Push
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Github className="h-5 w-5" />
+                                    Push to GitHub
+                                </CardTitle>
+                                <CardDescription>
+                                    Create a new repository and push your project code.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Repository Name</label>
+                                    <Input
+                                        placeholder="my-awesome-project"
+                                        value={repoName}
+                                        onChange={(e) => setRepoName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <label className="text-sm font-medium">Personal Access Token</label>
+                                    <Input
+                                        type="password"
+                                        placeholder="ghp_..."
+                                        value={githubToken}
+                                        onChange={(e) => setGithubToken(e.target.value)}
+                                    />
+                                </div>
+
+                                {pushResult && (
+                                    <div className={`text-sm ${pushResult.includes("Success") ? "text-green-500" : "text-red-500"}`}>
+                                        {pushResult}
+                                    </div>
+                                )}
+
+                                <Button
+                                    className="w-full"
+                                    onClick={handleGithubPush}
+                                    disabled={isPushing || !repoName || !githubToken}
+                                >
+                                    {isPushing ? (
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    ) : (
+                                        <Github className="h-4 w-4 mr-2" />
+                                    )}
+                                    Create & Push
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Design Tab */}
+                {activeTab === 'design' && (
+                    <div className="prose prose-invert max-w-none">
+                        <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
+                            {formatDesignAsMarkdown(design)}
+                        </pre>
+                    </div>
+                )}
+
+                {/* Plan Tab */}
+                {activeTab === 'plan' && (
+                    <div className="prose prose-invert max-w-none">
+                        <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
+                            {formatPlanAsMarkdown(plan)}
+                        </pre>
+                    </div>
+                )}
+
+                {/* Phases Tab */}
+                {activeTab === 'phases' && (
+                    <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2 pb-4 border-b border-border">
+                            {plan?.phases?.map((phase: any) => (
+                                <Button
+                                    key={phase.number || phase.phase_number}
+                                    variant={selectedPhase === (phase.number || phase.phase_number) ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setSelectedPhase(phase.number || phase.phase_number)}
+                                >
+                                    Phase {phase.number || phase.phase_number}
+                                </Button>
+                            ))}
+                        </div>
+                        <div className="prose prose-invert max-w-none">
+                            <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
+                                {getPhaseMarkdown(selectedPhase)}
+                            </pre>
+                        </div>
+                    </div>
+                )}
             </ScrollArea>
         </div>
     );

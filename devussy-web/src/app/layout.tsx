@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"] });
 
@@ -18,11 +19,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${jetbrainsMono.className} antialiased`}>
-        <div className="scanlines" />
-        <AppLayout>
-          {children}
-        </AppLayout>
+        <ThemeProvider>
+          <div className="scanlines" />
+          <AppLayout>
+            {children}
+          </AppLayout>
+        </ThemeProvider>
       </body>
     </html>
   );
 }
+
