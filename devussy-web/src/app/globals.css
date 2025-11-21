@@ -79,7 +79,7 @@
 }
 
 .dark {
-  --background: #0f1317; /* dark navy background to match the Devussy hero image */
+  --background: #1B222C; /* dark background matching devussy_logo_minimal.png */
   /* Deep dark blue/black */
   --foreground: oklch(0.98 0.02 260);
   --card: oklch(0.15 0.06 260);

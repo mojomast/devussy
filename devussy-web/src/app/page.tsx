@@ -470,7 +470,7 @@ export default function Page() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col relative bg-gradient-to-b from-background to-muted overflow-hidden">
+    <main className="flex min-h-screen flex-col relative bg-background overflow-hidden">
       {/* Global Header / Toolbar (Optional) */}
       <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
         <CheckpointManager
