@@ -1,4 +1,44 @@
 {
+  "project_design": {
+    "project_name": "TestApp",
+    "languages": [
+      "Python",
+      "TypeScript"
+    ],
+    "frameworks": [
+      "FastAPI",
+      "React"
+    ],
+    "apis": [
+      "OpenAI",
+      "Stripe"
+    ],
+    "requirements": "Build a scalable web app.",
+    "objectives": [
+      "High performance",
+      "User friendly"
+    ],
+    "tech_stack": [
+      "Python 3.11",
+      "React 18",
+      "PostgreSQL"
+    ],
+    "architecture_overview": "Microservices architecture with API gateway.",
+    "dependencies": [
+      "sqlalchemy",
+      "pydantic"
+    ],
+    "challenges": [
+      "Concurrency",
+      "Data consistency"
+    ],
+    "mitigations": [
+      "Use async/await",
+      "Use transactions"
+    ],
+    "complexity": "Medium",
+    "estimated_phases": 5
+  },
   "repo_context": {
     "project_type": "python",
     "structure": {
@@ -31,18 +71,73 @@
         "poetry"
       ]
     },
-    "project_name": "ExistingApp",
-    "description": "An existing app",
+    "project_name": "TestApp",
+    "description": "A test application",
     "version": "1.0.0",
-    "author": "Dev"
+    "author": "Test Author"
   },
-  "phase_number": 1,
-  "phase_title": "Setup",
-  "phase_description": "Initialize the project.",
-  "project_name": "SuperApp",
-  "tech_stack": [
-    "Python",
-    "Git"
+  "phases": [
+    {
+      "id": "setup",
+      "name": "Project Setup",
+      "goal": "Initialize the project structure and dependencies",
+      "steps": [
+        "Create virtual environment",
+        "Install dependencies",
+        "Set up project structure"
+      ],
+      "dependencies": [
+        "python3.11",
+        "poetry"
+      ],
+      "acceptance_criteria": [
+        "Project runs without errors",
+        "All dependencies installed"
+      ]
+    },
+    {
+      "id": "backend",
+      "name": "Backend Development",
+      "goal": "Implement FastAPI backend with database integration",
+      "steps": [
+        "Create database models",
+        "Implement API endpoints",
+        "Add authentication"
+      ],
+      "dependencies": [
+        "setup"
+      ],
+      "acceptance_criteria": [
+        "API endpoints functional",
+        "Database operations work"
+      ]
+    },
+    {
+      "id": "frontend",
+      "name": "Frontend Development",
+      "goal": "Build React frontend with TypeScript",
+      "steps": [
+        "Create React components",
+        "Implement API integration",
+        "Add styling"
+      ],
+      "dependencies": [
+        "backend"
+      ],
+      "acceptance_criteria": [
+        "UI renders correctly",
+        "API calls work"
+      ]
+    }
   ],
-  "code_samples": "print('hello')"
+  "llm_config": {
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "max_tokens": 4000
+  },
+  "runtime_config": {
+    "environment": "development",
+    "database_url": "postgresql://localhost/testapp"
+  },
+  "detail_level": "verbose"
 }

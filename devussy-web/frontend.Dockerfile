@@ -7,6 +7,11 @@ RUN npm ci
 
 # Copy app source and build
 COPY . .
+
+# Build arguments
+ARG NEXT_PUBLIC_IRC_WS_URL
+ARG NEXT_PUBLIC_IRC_CHANNEL
+
 RUN npm run build
 
 FROM node:20-alpine AS runner

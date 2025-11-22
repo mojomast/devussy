@@ -4,12 +4,17 @@ services:
     build:
       context: .
       dockerfile: frontend.Dockerfile
+      args:
+        - NEXT_PUBLIC_IRC_WS_URL=${NEXT_PUBLIC_IRC_WS_URL:-ws://localhost:8080}
+        - NEXT_PUBLIC_IRC_CHANNEL=${NEXT_PUBLIC_IRC_CHANNEL:-#devussy-chat}
     working_dir: /app
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - USE_LOCAL_API=${USE_LOCAL_API:-false}
+      - NEXT_PUBLIC_IRC_WS_URL=ws://localhost:8080
+      - NEXT_PUBLIC_IRC_CHANNEL=#devussy-chat
     depends_on:
       - streaming-server
 
@@ -43,5 +48,30 @@ services:
     depends_on:
       - frontend
       - streaming-server
+
+  irc-server:
+    image: inspircd/inspircd-docker:latest
+    container_name: devussy-irc-server
+    ports:
+      - "6667:6667"
+    volumes:
+      - ./irc/conf:/inspircd/conf
+      - ./irc/logs:/inspircd/logs
+      - ./irc/data:/inspircd/data
+    command: ["/inspircd/conf/inspircd.conf"]
+    restart: unless-stopped
+
+  irc-gateway:
+    image: kiwiirc/webircgateway:latest
+    container_name: devussy-irc-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - GATEWAY_CONFIG=/kiwiirc/webircgateway.conf
+    volumes:
+      - ./irc/gateway.conf:/kiwiirc/webircgateway.conf
+    depends_on:
+      - irc-server
+    restart: unless-stopped
 
 # Note: this is a minimal template. For production, build optimized images and avoid mounting the whole source tree.
