@@ -475,7 +475,7 @@ export default function Page() {
           <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
             <h1 className="text-2xl font-bold mb-4">Devussy Studio Help</h1>
             <div className="rounded-md p-3 bg-background/80 text-sm text-muted-foreground mb-4">
-              <strong className="text-primary">Public preview:</strong> This web demo contains a baked-in API for testing and prototyping. It is a public preview and is under active development. Please avoid putting any sensitive secrets here. Thank you for trying Devussy Studio.
+              <strong className="text-primary">Public Demo:</strong> This is a limited time public demo for Devussy. It is in constant development and things may break at times, but we're working on it! Please avoid putting any sensitive secrets here. Thank you for trying Devussy Studio.
             </div>
 
             <h2 className="text-xl font-semibold mt-6 mb-3">Getting Started</h2>
@@ -516,6 +516,9 @@ export default function Page() {
             </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>
             <p>Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your project for detailed technical documentation.</p>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">Credits</h2>
+            <p>Created by <strong>Kyle Durepos</strong>.</p>
 
             <div className="mt-6 flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm">
