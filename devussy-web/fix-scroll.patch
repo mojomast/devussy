@@ -1,0 +1,21 @@
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body {
+    overscroll-behavior: none;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+nginx-1             | /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+nginx-1             | /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+nginx-1             | /docker-entrypoint.sh: Configuration complete; ready for start up
+nginx-1             | 2025/11/22 00:05:45 [warn] 1#1: the "listen ... http2" directive is deprecated, use the "http2" directive instead in /etc/nginx/nginx.conf:22
+nginx-1             | nginx: [warn] the "listen ... http2" directive is deprecated, use the "http2" directive instead in /etc/nginx/nginx.conf:22
+nginx-1             | 2025/11/22 00:05:45 [emerg] 1#1: cannot load certificate "/etc/letsencrypt/live/dev.ussy.host/fullchain.pem": BIO_new_file() failed (SSL: error:80000002:system library::No such file or directory:calling fopen(/etc/letsencrypt/live/dev.ussy.host/fullchain.pem, r) error:10000080:BIO routines::no such file)
+nginx-1             | nginx: [emerg] cannot load certificate "/etc/letsencrypt/live/dev.ussy.host/fullchain.pem": BIO_new_file() failed (SSL: error:80000002:system library::No such file or directory:calling fopen(/etc/letsencrypt/live/dev.ussy.host/fullchain.pem, r) error:10000080:BIO routines::no such file)

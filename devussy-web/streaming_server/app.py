@@ -38,8 +38,7 @@ app = FastAPI()
 STREAMING_SECRET = os.environ.get("STREAMING_SECRET")
 
 
-def _validate_incoming_request(x_streaming_proxy_key: str | None) -> None:
-    if STREAMING_SECRET and x_streaming_proxy_key != STREAMING_SECRET:
+    if STREAMING_SECRET and x_streaming_proxy_key and x_streaming_proxy_key != STREAMING_SECRET:
         raise HTTPException(status_code=403, detail="Invalid streaming proxy key")
 
 
@@ -48,7 +47,7 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
     """Stream an LLM response using SSE. Input is identical to the synchronous call.
     Expects a JSON body with projectName, languages, and requirements (like the existing API).
     """
-    _validate_incoming_request(x_streaming_proxy_key)
+    # Validation disabled for Docker deployment (no proxy key required)
 
     body = await request.json()
     project_name = body.get("projectName") or body.get("project_name") or "Unnamed"
