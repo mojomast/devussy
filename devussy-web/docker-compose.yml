@@ -12,6 +12,34 @@ services:
       - USE_LOCAL_API=${USE_LOCAL_API:-false}
     depends_on:
       - streaming-server
+      - irc-server
+      - irc-gateway
+
+  irc-server:
+    image: inspircd/inspircd-docker:latest
+    container_name: devussy-irc-server
+    ports:
+      - "6667:6667"
+      - "6697:6697"
+    volumes:
+      - ./irc/conf:/inspircd/conf
+      - ./irc/logs:/inspircd/logs
+      - ./irc/data:/inspircd/data
+    command: ["/inspircd/conf/inspircd.conf"]
+    restart: unless-stopped
+
+  irc-gateway:
+    image: kiwiirc/webircgateway:latest
+    container_name: devussy-irc-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - GATEWAY_CONFIG=/kiwiirc/webircgateway.conf
+    volumes:
+      - ./irc/gateway.conf:/kiwiirc/webircgateway.conf
+    depends_on:
+      - irc-server
+    restart: unless-stopped
 
   streaming-server:
     build:

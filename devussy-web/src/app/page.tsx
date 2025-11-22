@@ -16,9 +16,10 @@ import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipelin
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { IrcView } from "@/components/pipeline/IrcView";
 import { useTheme } from "@/components/theme/ThemeProvider";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc';
 
 interface WindowState {
   id: string;
@@ -148,6 +149,8 @@ export default function Page() {
         return { width: 700, height: 600 };
       case 'model-settings':
         return { width: 500, height: 650 };
+      case 'irc':
+        return { width: 800, height: 600 };
       default:
         return { width: 600, height: 400 };
     }
@@ -171,6 +174,7 @@ export default function Page() {
     setWindows(prev => [...prev, newWindow]);
     setNextZIndex(prev => prev + 1);
     setActiveWindowId(id);
+    return newWindow;
   };
 
   const closeWindow = (id: string) => {
@@ -300,6 +304,23 @@ export default function Page() {
     spawnWindow('model-settings', 'AI Model Settings');
   };
 
+  const handleOpenIrc = () => {
+    // Prevent duplicate IRC windows
+    const existing = windows.find(w => w.type === 'irc');
+    if (existing) {
+      focusWindow(existing.id);
+      if (existing.isMinimized) {
+        toggleMinimize(existing.id);
+      }
+      return;
+    }
+    const ircWindow = spawnWindow('irc', 'IRC Chat - #devussy');
+    // Start minimized to avoid disrupting UX
+    setTimeout(() => {
+      toggleMinimize(ircWindow.id);
+    }, 100);
+  };
+
   // Auto-open Help modal on the first visit (unless dismissed)
   useEffect(() => {
     try {
@@ -314,6 +335,18 @@ export default function Page() {
       }
     } catch (e) {
       // localStorage might be unavailable; ignore silently
+    }
+  }, []);
+
+  // Auto-launch IRC (minimized) on page load
+  useEffect(() => {
+    try {
+      // Delay to ensure page is fully loaded
+      setTimeout(() => {
+        handleOpenIrc();
+      }, 1000);
+    } catch (e) {
+      console.error('Failed to auto-launch IRC:', e);
     }
   }, []);
 
@@ -470,6 +503,8 @@ export default function Page() {
             isWindowMode={true}
           />
         );
+      case 'irc':
+        return <IrcView />;
       case 'help':
         return (
           <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
@@ -551,6 +586,15 @@ export default function Page() {
       {/* Global Header / Toolbar (Optional) */}
       {theme !== 'bliss' && (
         <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleOpenIrc}
+            className="text-muted-foreground hover:text-white"
+            title="Open IRC Chat"
+          >
+            <MessageSquare className="h-4 w-4" />
+          </Button>
           <ThemeToggle />
           <CheckpointManager
             currentState={{
@@ -604,6 +648,7 @@ export default function Page() {
         onNewProject={handleNewProject}
         onHelp={handleHelp}
         onOpenModelSettings={handleOpenModelSettings}
+        onOpenIrc={handleOpenIrc}
         currentState={{
           projectName,
           languages,

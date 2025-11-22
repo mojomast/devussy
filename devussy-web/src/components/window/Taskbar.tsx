@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from "@/utils";
-import { Layout, HelpCircle, Plus, Power, Settings } from "lucide-react";
+import { Layout, HelpCircle, Plus, Power, Settings, MessageSquare } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
@@ -16,6 +16,7 @@ interface TaskbarProps {
     onNewProject?: () => void;
     onHelp?: () => void;
     onOpenModelSettings?: () => void;
+    onOpenIrc?: () => void;
     // Props for Start Menu options
     currentState?: any;
     onLoadCheckpoint?: (data: any) => void;
@@ -32,6 +33,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     onNewProject,
     onHelp,
     onOpenModelSettings,
+    onOpenIrc,
     currentState,
     onLoadCheckpoint,
     modelConfigs,
@@ -112,6 +114,14 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                                     <div className="flex flex-col">
                                         <span className="font-bold text-sm">Help & Support</span>
                                         <span className="text-[10px] text-gray-500 group-hover:text-white/80">Get assistance</span>
+                                    </div>
+                                </button>
+
+                                <button onClick={() => { onOpenIrc?.(); setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
+                                    <MessageSquare className="h-8 w-8 text-green-600 group-hover:text-white" />
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-sm">IRC Chat</span>
+                                        <span className="text-[10px] text-gray-500 group-hover:text-white/80">Join #devussy channel</span>
                                     </div>
                                 </button>
 
