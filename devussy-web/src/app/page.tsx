@@ -17,8 +17,9 @@ import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import IrcClient from '@/components/addons/irc/IrcClient';
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc';
 
 interface WindowState {
   id: string;
@@ -148,13 +149,15 @@ export default function Page() {
         return { width: 700, height: 600 };
       case 'model-settings':
         return { width: 500, height: 650 };
+      case 'irc':
+        return { width: 800, height: 600 };
       default:
         return { width: 600, height: 400 };
     }
   };
 
   // Window Management Functions
-  const spawnWindow = (type: WindowType, title: string, props?: Record<string, any>) => {
+  const spawnWindow = (type: WindowType, title: string, props?: Record<string, any>, options?: { isMinimized?: boolean }) => {
     const id = `${type}-${Date.now()}`;
     const offset = windows.length * 30;
     const size = getWindowSize(type);
@@ -164,13 +167,16 @@ export default function Page() {
       title,
       position: { x: 100 + offset, y: 100 + offset },
       zIndex: nextZIndex,
+      isMinimized: options?.isMinimized,
       props,
       size
     };
 
     setWindows(prev => [...prev, newWindow]);
     setNextZIndex(prev => prev + 1);
-    setActiveWindowId(id);
+    if (!options?.isMinimized) {
+        setActiveWindowId(id);
+    }
   };
 
   const closeWindow = (id: string) => {
@@ -299,6 +305,34 @@ export default function Page() {
     }
     spawnWindow('model-settings', 'AI Model Settings');
   };
+
+  const handleOpenIrc = (options?: { isMinimized?: boolean }) => {
+    const existing = windows.find(w => w.type === 'irc');
+    if (existing) {
+        if (!options?.isMinimized) {
+            focusWindow(existing.id);
+            if (existing.isMinimized) {
+                toggleMinimize(existing.id);
+            }
+        }
+        return;
+    }
+    spawnWindow('irc', 'IRC Chat – #devussy-chat', undefined, options);
+  };
+
+  // Auto-launch IRC (always, minimized)
+  useEffect(() => {
+      try {
+          // Check preference, default to true if not set, or just always do it per requirements
+          const autoLaunch = localStorage.getItem('devussy_auto_launch_irc');
+          if (autoLaunch !== 'false') {
+              // Delay to let page load
+              setTimeout(() => {
+                  handleOpenIrc({ isMinimized: true });
+              }, 500);
+          }
+      } catch (e) { }
+  }, []);
 
   // Auto-open Help modal on the first visit (unless dismissed)
   useEffect(() => {
@@ -541,6 +575,8 @@ export default function Page() {
             </div>
           </div>
         );
+      case 'irc':
+        return <IrcClient />;
       default:
         return null;
     }
@@ -604,6 +640,7 @@ export default function Page() {
         onNewProject={handleNewProject}
         onHelp={handleHelp}
         onOpenModelSettings={handleOpenModelSettings}
+        onOpenIrc={() => handleOpenIrc()}
         currentState={{
           projectName,
           languages,

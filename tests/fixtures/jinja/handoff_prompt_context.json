@@ -1,0 +1,97 @@
+{
+    "project_design": {
+        "project_name": "TestApp",
+        "languages": [
+            "Python",
+            "TypeScript"
+        ],
+        "frameworks": [
+            "FastAPI",
+            "React"
+        ],
+        "apis": [
+            "OpenAI",
+            "Stripe"
+        ],
+        "requirements": "Build a scalable web app.",
+        "objectives": [
+            "High performance",
+            "User friendly"
+        ],
+        "tech_stack": [
+            "Python 3.11",
+            "React 18",
+            "PostgreSQL"
+        ],
+        "architecture_overview": "Microservices architecture with API gateway.",
+        "dependencies": [
+            "sqlalchemy",
+            "pydantic"
+        ],
+        "challenges": [
+            "Concurrency",
+            "Data consistency"
+        ],
+        "mitigations": [
+            "Use async/await",
+            "Use transactions"
+        ],
+        "complexity": "Medium",
+        "estimated_phases": 5
+    },
+    "repo_context": {
+        "project_type": "python",
+        "structure": {
+            "source_dirs": [
+                "src"
+            ],
+            "test_dirs": [
+                "tests"
+            ],
+            "config_dirs": [
+                "config"
+            ],
+            "has_ci": true
+        },
+        "dependencies": {
+            "python": [
+                "fastapi",
+                "uvicorn"
+            ]
+        },
+        "metrics": {
+            "total_files": 42,
+            "total_lines": 1337
+        },
+        "patterns": {
+            "test_frameworks": [
+                "pytest"
+            ],
+            "build_tools": [
+                "poetry"
+            ]
+        },
+        "project_name": "TestApp",
+        "description": "A test application",
+        "version": "1.0.0",
+        "author": "Test Author"
+    },
+    "links": {
+        "design_doc": "docs/design.md",
+        "devplan_doc": "docs/devplan.md"
+    },
+    "open_questions": [
+        "Should we use GraphQL or REST?",
+        "What authentication system to implement?"
+    ],
+    "llm_config": {
+        "model": "gpt-4",
+        "temperature": 0.7,
+        "max_tokens": 4000
+    },
+    "runtime_config": {
+        "environment": "development",
+        "database_url": "postgresql://localhost/testapp"
+    },
+    "detail_level": "normal"
+}

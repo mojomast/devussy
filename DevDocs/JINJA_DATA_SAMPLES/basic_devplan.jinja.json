@@ -31,13 +31,13 @@
         "poetry"
       ]
     },
-    "project_name": "ExistingApp",
-    "description": "An existing app",
+    "project_name": "TestApp",
+    "description": "A test application",
     "version": "1.0.0",
-    "author": "Dev"
+    "author": "Test Author"
   },
   "project_design": {
-    "project_name": "SuperApp",
+    "project_name": "TestApp",
     "languages": [
       "Python",
       "TypeScript"
@@ -60,7 +60,7 @@
       "React 18",
       "PostgreSQL"
     ],
-    "architecture_overview": "Microservices architecture...",
+    "architecture_overview": "Microservices architecture with API gateway.",
     "dependencies": [
       "sqlalchemy",
       "pydantic"
@@ -76,8 +76,9 @@
     "complexity": "Medium",
     "estimated_phases": 5
   },
-  "code_samples": "def hello(): pass",
+  "code_samples": "def hello_world():\n    print('Hello, World!')",
   "interactive_session": {
     "question_count": 5
-  }
+  },
+  "detail_level": "verbose"
 }
