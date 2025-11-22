@@ -70,6 +70,10 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
     config.llm.streaming_enabled = True
 
     llm_client = create_llm_client(config)
+    # Explicitly set streaming_enabled on the client instance to ensure it's picked up
+    # This fixes the issue where LLMClient checks config.streaming_enabled but we set config.llm.streaming_enabled
+    llm_client.streaming_enabled = True
+
     generator = ProjectDesignGenerator(llm_client)
 
     async def event_generator():
@@ -589,8 +593,14 @@ async def plan_detail(request: Request):
     if model_config.get('temperature') is not None:
         config.llm.temperature = float(model_config.get('temperature'))
 
+    # Force streaming enabled for this endpoint
+    config.llm.streaming_enabled = True
+
     async def event_generator():
         llm_client = create_llm_client(config)
+        # Explicitly set streaming_enabled on the client instance
+        llm_client.streaming_enabled = True
+
         concurrency_manager = ConcurrencyManager(config)
         generator = DetailedDevPlanGenerator(llm_client, concurrency_manager)
         queue: asyncio.Queue = asyncio.Queue()
