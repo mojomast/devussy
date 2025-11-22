@@ -106,6 +106,10 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
                         requirements=requirements,
                         streaming_handler=streaming_handler,
                     )
+                except Exception as e:
+                    # Log the error and push it to the queue so the client knows something went wrong
+                    print(f"ERROR in run_generation: {e}")
+                    await queue.put(None) # Signal end of stream on error for now
                 finally:
                     # Ensure the queue gets termination signal if generator finishes with no completion handler
                     await queue.put(None)
@@ -118,6 +122,8 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
                 if token is None:
                     break
                 yield f"data: {json.dumps({'content': token})}\n\n"
+                # Yield a newline to flush the buffer immediately
+                yield ":\n\n"
 
         except asyncio.CancelledError:
             # client disconnected
