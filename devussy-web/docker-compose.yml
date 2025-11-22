@@ -62,14 +62,14 @@ services:
     restart: unless-stopped
 
   irc-gateway:
-    image: kiwiirc/webircgateway:latest
+    build:
+      context: ./irc
+      dockerfile: webircgateway.Dockerfile
     container_name: devussy-irc-gateway
     ports:
       - "8080:8080"
-    environment:
-      - GATEWAY_CONFIG=/kiwiirc/webircgateway.conf
     volumes:
-      - ./irc/gateway.conf:/kiwiirc/webircgateway.conf
+      - ./irc/gateway.conf:/config/gateway.conf
     depends_on:
       - irc-server
     restart: unless-stopped
