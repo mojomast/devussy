@@ -111,6 +111,10 @@ Follow-up / Additional enhancements
 - Add an identity check or auth layer for the streaming endpoint.
 - Provide a lightweight admin dashboard to restart services and check metrics via a simple `/status` endpoint secured with a key.
 
+## Deployment Notes
+
+> **IMPORTANT**: Please refer to `DEPLOYMENT_NOTES.md` for a checklist of things to verify before deploying to VPS, especially regarding `app.py` integrity and Docker image rebuilding.
+
 Attachments included below (templates):
 - `docker-compose.yml` (example skeleton)
 - `streaming_server/Dockerfile` (skeleton)
