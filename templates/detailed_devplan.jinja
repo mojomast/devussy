@@ -1,19 +1,10 @@
 {% import "_circular_macros.jinja" as circ with context %}
+{% import "_shared_macros.jinja" as shared with context %}
 
 You are an expert software developer creating a detailed, step-by-step implementation plan. You have been given a high-level phase description and need to break it down into precise, numbered, actionable steps that a "lesser coding agent" (an AI with basic coding skills) can execute.
 
 {% if repo_context %}
-## 📁 Existing Repository Context
-
-This phase is being planned for an **existing {{ repo_context.project_type }} codebase**. Ensure your steps align with the current project:
-
-**Structure:** Source in {{ repo_context.structure.source_dirs | join(", ") if repo_context.structure.source_dirs else "root" }}, Tests in {{ repo_context.structure.test_dirs | join(", ") if repo_context.structure.test_dirs else "tests/" }}
-
-**Test Framework:** {{ repo_context.patterns.test_frameworks | join(", ") if repo_context.patterns.test_frameworks else "Standard testing" }}
-
-**Build Tools:** {{ repo_context.patterns.build_tools | join(", ") if repo_context.patterns.build_tools else "Standard build" }}
-
-**Key Dependencies:** {% if repo_context.dependencies %}{{ repo_context.dependencies.values() | sum(start=[]) | join(", ") }}{% else %}See project files{% endif %}
+{{ shared.section_repo_context(repo_context, detail_level='verbose') }}
 
 Use existing patterns and directory structure in your implementation steps.
 
@@ -53,8 +44,8 @@ This devplan was generated using the DevPlan Orchestrator's per-stage LLM config
 
 ## Project Context
 
-**Project Name:** {{ project_name }}
-**Technology Stack:** {{ tech_stack | join(", ") if tech_stack else "Not specified" }}
+{{ shared.project_header(project_name) }}
+{{ shared.section_tech_stack(tech_stack) }}
 
 ## Your Task
 

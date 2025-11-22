@@ -1,36 +1,10 @@
 {% import "_circular_macros.jinja" as circ with context %}
+{% import "_shared_macros.jinja" as shared with context %}
 
 You are an expert project manager and software architect. You have been given a project design document and need to create a high-level development plan that breaks the project into logical phases.
 
 {% if repo_context %}
-## 📁 Existing Repository Context
-
-This devplan is being generated for an **existing codebase**. Use this context to tailor your plan to fit the current project structure and patterns:
-
-**Project Type:** {{ repo_context.project_type }}
-
-**Structure:**
-- Source directories: {{ repo_context.structure.source_dirs | join(", ") if repo_context.structure.source_dirs else "None detected" }}
-- Test directories: {{ repo_context.structure.test_dirs | join(", ") if repo_context.structure.test_dirs else "None detected" }}
-- Config directories: {{ repo_context.structure.config_dirs | join(", ") if repo_context.structure.config_dirs else "None detected" }}
-- CI/CD: {{ "Yes" if repo_context.structure.has_ci else "No" }}
-
-**Dependencies:**
-{% if repo_context.dependencies %}
-{% for ecosystem, deps in repo_context.dependencies.items() %}
-- {{ ecosystem }}: {{ deps | join(", ") }}
-{% endfor %}
-{% else %}
-- No dependencies detected
-{% endif %}
-
-**Code Metrics:**
-- Total files: {{ repo_context.metrics.total_files }}
-- Total lines: {{ repo_context.metrics.total_lines }}
-
-**Detected Patterns:**
-- Test frameworks: {{ repo_context.patterns.test_frameworks | join(", ") if repo_context.patterns.test_frameworks else "None detected" }}
-- Build tools: {{ repo_context.patterns.build_tools | join(", ") if repo_context.patterns.build_tools else "None detected" }}
+{{ shared.section_repo_context(repo_context, detail_level='verbose') }}
 
 **Important:** Your devplan should respect the existing project structure, follow detected patterns, and integrate smoothly with the current codebase.
 
@@ -64,30 +38,20 @@ This project was defined through an interactive guided questionnaire. The user p
 
 ## Project Design
 
-**Project Name:** {{ project_design.project_name }}
+{{ shared.project_header(project_design.project_name) }}
 
-### Objectives
-{% for obj in project_design.objectives %}
-- {{ obj }}
-{% endfor %}
+{{ shared.section_objectives(project_design.objectives) }}
 
-### Technology Stack
-{% for tech in project_design.tech_stack %}
-- {{ tech }}
-{% endfor %}
+{{ shared.section_tech_stack(project_design.tech_stack) }}
 
-### Architecture Overview
-{{ project_design.architecture_overview }}
+{{ shared.section_architecture(project_design.architecture_overview) }}
 
 ### Key Dependencies
 {% for dep in project_design.dependencies %}
 - {{ dep }}
 {% endfor %}
 
-### Challenges
-{% for challenge in project_design.challenges %}
-- {{ challenge }}
-{% endfor %}
+{{ shared.section_challenges(project_design.challenges, project_design.mitigations) }}
 
 {% if project_design.complexity %}
 ### Complexity Assessment

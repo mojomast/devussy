@@ -1,0 +1,40 @@
+{
+  "timestamp": "2023-01-01",
+  "devplan": {
+    "project_name": "SuperApp",
+    "estimated_duration": "2 weeks",
+    "project_summary": "A great app.",
+    "phases": [
+      {
+        "number": 1,
+        "name": "Setup",
+        "completed": true,
+        "description": "Setup phase",
+        "steps": [
+          {
+            "number": "1.1",
+            "title": "Init Git",
+            "completed": true,
+            "description": "Run git init",
+            "deliverables": [
+              ".git"
+            ],
+            "commit_message": "Initial commit"
+          }
+        ],
+        "completed_steps": 1
+      }
+    ],
+    "current_phase": {
+      "number": 2,
+      "name": "Core"
+    },
+    "next_task": "Implement login",
+    "milestones": [],
+    "external_dependencies": [],
+    "internal_dependencies": [],
+    "success_criteria": [
+      "It works"
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{# _shared_macros.jinja #}
+
+{% macro project_header(project_name, detail_level='normal') -%}
+# Project: {{ project_name }}
+{%- endmacro %}
+
+{% macro section_objectives(objectives) -%}
+### Objectives
+{% if objectives %}
+{% for obj in objectives %}
+- {{ obj }}
+{% endfor %}
+{% else %}
+- No objectives specified.
+{% endif %}
+{%- endmacro %}
+
+{% macro section_tech_stack(tech_stack) -%}
+### Technology Stack
+{% if tech_stack %}
+{% for tech in tech_stack %}
+- {{ tech }}
+{% endfor %}
+{% else %}
+- None specified
+{% endif %}
+{%- endmacro %}
+
+{% macro section_challenges(challenges, mitigations) -%}
+### Challenges & Mitigations
+{% if challenges %}
+{% for challenge in challenges %}
+- **Challenge**: {{ challenge }}
+  {% if mitigations and loop.index0 < mitigations|length %}
+  - *Mitigation*: {{ mitigations[loop.index0] }}
+  {% endif %}
+{% endfor %}
+{% else %}
+- No specific challenges identified.
+{% endif %}
+{%- endmacro %}
+
+{% macro section_repo_context(repo_context, detail_level='normal') -%}
+{% if repo_context %}
+### Repository Context
+- **Type**: {{ repo_context.project_type }}
+- **Files**: {{ repo_context.metrics.total_files }}
+- **Lines**: {{ repo_context.metrics.total_lines }}
+{% if repo_context.description %}
+- **Description**: {{ repo_context.description }}
+{% endif %}
+{% if repo_context.version %}
+- **Version**: {{ repo_context.version }}
+{% endif %}
+{% if repo_context.author %}
+- **Author**: {{ repo_context.author }}
+{% endif %}
+
+{% if detail_level == 'verbose' and repo_context.dependencies %}
+#### Dependencies
+{% for ecosystem, deps in repo_context.dependencies.items() %}
+- **{{ ecosystem }}**: {{ deps | join(", ") }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro section_architecture(architecture_overview) -%}
+### Architecture Overview
+{{ architecture_overview | default("No architecture overview provided.") }}
+{%- endmacro %}

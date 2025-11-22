@@ -1,0 +1,13 @@
+{
+  "original_prompt": "Design a system...",
+  "drones": [
+    {
+      "id": "A",
+      "content": "Proposal A..."
+    },
+    {
+      "id": "B",
+      "content": "Proposal B..."
+    }
+  ]
+}

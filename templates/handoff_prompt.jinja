@@ -1,16 +1,11 @@
-﻿# Handoff Prompt: {{ project_name }}
+﻿{% import "_shared_macros.jinja" as shared with context %}
+# Handoff Prompt: {{ project_name }}
 <!-- HANDOFF_VERSION: 2.0 -->
 
 > **QuickStart:** Read QUICK_STATUS → Read PHASE_TASKS → Execute → Update anchors → Handoff
 
 {% if repo_context %}
-## 📁 Repository Context
-
-**Project Type:** {{ repo_context.project_type }} | **Files:** {{ repo_context.metrics.total_files }} | **Lines:** {{ repo_context.metrics.total_lines }}
-
-**Structure:** {{ repo_context.structure.source_dirs | join(", ") if repo_context.structure.source_dirs else "src/" }} (source), {{ repo_context.structure.test_dirs | join(", ") if repo_context.structure.test_dirs else "tests/" }} (tests)
-
-**Testing:** {{ repo_context.patterns.test_frameworks | join(", ") if repo_context.patterns.test_frameworks else "Standard" }} | **Build:** {{ repo_context.patterns.build_tools | join(", ") if repo_context.patterns.build_tools else "Standard" }}
+{{ shared.section_repo_context(repo_context, detail_level='normal') }}
 
 {% if code_samples %}
 

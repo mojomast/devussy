@@ -1,0 +1,45 @@
+{
+  "project_name": "SuperApp",
+  "repo_context": {
+    "project_type": "python",
+    "structure": {
+      "source_dirs": [
+        "src"
+      ],
+      "test_dirs": [
+        "tests"
+      ],
+      "config_dirs": [
+        "config"
+      ],
+      "has_ci": true
+    },
+    "dependencies": {
+      "python": [
+        "fastapi",
+        "uvicorn"
+      ]
+    },
+    "metrics": {
+      "total_files": 42,
+      "total_lines": 1337
+    },
+    "patterns": {
+      "test_frameworks": [
+        "pytest"
+      ],
+      "build_tools": [
+        "poetry"
+      ]
+    },
+    "project_name": "ExistingApp",
+    "description": "An existing app",
+    "version": "1.0.0",
+    "author": "Dev"
+  },
+  "current_phase_number": 2,
+  "current_phase_name": "Core Logic",
+  "next_task_id": "2.1",
+  "next_task_description": "Implement auth",
+  "blockers": "None"
+}

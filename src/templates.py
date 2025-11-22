@@ -34,4 +34,33 @@ def load_template(name: str) -> Template:
 
 def render_template(name: str, context: dict[str, Any]) -> str:
     """Render the named template with provided context."""
+    # DEV: Log context to JSON
+    try:
+        import json
+        from datetime import datetime
+        
+        log_dir = Path(__file__).resolve().parents[1] / "DevDocs" / "JINJA_DATA_SAMPLES"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        safe_name = name.replace("/", "_").replace("\\", "_")
+        log_file = log_dir / f"{safe_name}.json"
+        
+        def default_serializer(obj):
+            if isinstance(obj, datetime):
+                return obj.isoformat()
+            try:
+                return obj.model_dump()
+            except AttributeError:
+                pass
+            try:
+                return obj.dict()
+            except AttributeError:
+                pass
+            return str(obj)
+
+        with open(log_file, "w", encoding="utf-8") as f:
+            json.dump(context, f, indent=2, default=default_serializer)
+    except Exception as e:
+        print(f"Warning: Failed to log Jinja context: {e}")
+
     return load_template(name).render(**context)

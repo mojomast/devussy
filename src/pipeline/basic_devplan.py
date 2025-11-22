@@ -53,6 +53,7 @@ class BasicDevPlanGenerator:
         context = {
             "project_design": project_design,
             "task_group_size": task_group_size,
+            "detail_level": llm_kwargs.get("detail_level", "normal"),  # Control template verbosity
         }
         
         # Add repo context if available

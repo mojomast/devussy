@@ -185,6 +185,7 @@ class DetailedDevPlanGenerator:
             "project_name": project_name,
             "tech_stack": tech_stack,
             "task_group_size": task_group_size,
+            "detail_level": llm_kwargs.get("detail_level", "normal"),  # Control template verbosity
         }
         
         # Add repo context if available

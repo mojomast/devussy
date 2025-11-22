@@ -75,6 +75,7 @@ class HandoffPromptGenerator:
             "next_task_id": next_task_id,
             "next_task_description": next_task_description,
             "blockers": kwargs.get("blockers", "None known"),
+            "detail_level": kwargs.get("detail_level", "normal"),  # Control template verbosity
         }
         
         # Add repo context if available

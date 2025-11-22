@@ -224,6 +224,10 @@ class AppConfig(BaseModel):
         default=5, ge=1, description="Maximum concurrent API requests"
     )
     streaming_enabled: bool = Field(default=False, description="Enable token streaming")
+    detail_level: str = Field(
+        default="normal",
+        description="Template detail level: 'short', 'normal', or 'verbose'"
+    )
     output_dir: Path = Field(
         default=Path("./docs"), description="Output directory for documentation"
     )
@@ -248,6 +252,16 @@ class AppConfig(BaseModel):
         if v_upper not in allowed:
             raise ValueError(f"Log level must be one of {sorted(allowed)}, got: {v}")
         return v_upper
+
+    @field_validator("detail_level")
+    @classmethod
+    def validate_detail_level(cls, v: str) -> str:
+        """Validate and normalize detail level."""
+        allowed = {"short", "normal", "verbose"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(f"Detail level must be one of {sorted(allowed)}, got: {v}")
+        return v_lower
 
     def get_llm_config_for_stage(self, stage: str) -> LLMConfig:
         """Return the effective LLM config for a pipeline stage.
