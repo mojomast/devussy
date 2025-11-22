@@ -15,6 +15,8 @@ import requests
 from src.git_manager import GitManager
 import os
 import asyncio
+from pathlib import Path
+import aiohttp
 
 from src.config import load_config
 from src.clients.factory import create_llm_client
@@ -28,26 +30,22 @@ from src.concurrency import ConcurrencyManager
 import os
 import glob
 import time
-from pathlib import Path
-import aiohttp
-from src.clients.factory import create_llm_client
-from src.pipeline.project_design import ProjectDesignGenerator
+
+# Optional secret for proxy authentication
+STREAMING_SECRET = os.getenv("STREAMING_SECRET")
+
+def _validate_incoming_request(x_streaming_proxy_key: str | None) -> None:
+    """Validate the proxy key if a secret is configured.
+    In local Docker deployments the secret is often unset, so the check is skipped.
+    """
+    if STREAMING_SECRET and x_streaming_proxy_key != STREAMING_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid streaming proxy key")
 
 app = FastAPI()
 
-STREAMING_SECRET = os.environ.get("STREAMING_SECRET")
-
-
-    if STREAMING_SECRET and x_streaming_proxy_key and x_streaming_proxy_key != STREAMING_SECRET:
-        raise HTTPException(status_code=403, detail="Invalid streaming proxy key")
-
-
 @app.post("/api/design/stream")
 async def design_stream(request: Request, x_streaming_proxy_key: str | None = Header(None)):
-    """Stream an LLM response using SSE. Input is identical to the synchronous call.
-    Expects a JSON body with projectName, languages, and requirements (like the existing API).
-    """
-    # Validation disabled for Docker deployment (no proxy key required)
+    _validate_incoming_request(x_streaming_proxy_key)
 
     body = await request.json()
     project_name = body.get("projectName") or body.get("project_name") or "Unnamed"
@@ -72,10 +70,6 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
     config.llm.streaming_enabled = True
 
     llm_client = create_llm_client(config)
-    # Explicitly set streaming_enabled on the client instance to ensure it's picked up
-    # This fixes the issue where LLMClient checks config.streaming_enabled but we set config.llm.streaming_enabled
-    llm_client.streaming_enabled = True
-
     generator = ProjectDesignGenerator(llm_client)
 
     async def event_generator():
@@ -588,15 +582,9 @@ async def plan_detail(request: Request):
         config.llm.model = model_config.get('model')
     if model_config.get('temperature') is not None:
         config.llm.temperature = float(model_config.get('temperature'))
-    
-    # Force streaming enabled for this endpoint
-    config.llm.streaming_enabled = True
 
     async def event_generator():
         llm_client = create_llm_client(config)
-        # Explicitly set streaming_enabled on the client instance
-        llm_client.streaming_enabled = True
-        
         concurrency_manager = ConcurrencyManager(config)
         generator = DetailedDevPlanGenerator(llm_client, concurrency_manager)
         queue: asyncio.Queue = asyncio.Queue()
