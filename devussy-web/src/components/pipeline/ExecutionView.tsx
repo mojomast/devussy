@@ -398,6 +398,8 @@ export const ExecutionView = ({
         }
     };
 
+    const hasAutoCompleted = useRef(false);
+
     const startExecution = async () => {
         console.log('[ExecutionView] Starting execution with', phases.length, 'phases - STARTING ALL AT ONCE');
         setIsExecuting(true);
@@ -423,8 +425,9 @@ export const ExecutionView = ({
         console.log('[ExecutionView] All complete?', allComplete);
 
         // Auto-advance if enabled
-        if (autoRun && allComplete && onComplete) {
+        if (autoRun && allComplete && onComplete && !hasAutoCompleted.current) {
             console.log('[ExecutionView] Auto-advancing to handoff...');
+            hasAutoCompleted.current = true;
             const detailedPlan = buildDetailedPlan();
             setTimeout(() => onComplete(detailedPlan), 2000); // 2s delay for visual confirmation
         }

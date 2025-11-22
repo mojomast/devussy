@@ -133,10 +133,13 @@ export const DesignView = ({
         };
     }, [projectName, requirements, JSON.stringify(languages), modelConfig]);
 
+    const hasAutoAdvanced = React.useRef(false);
+
     // Auto-advance when complete
     useEffect(() => {
-        if (autoRun && !isGenerating && designContent) {
+        if (autoRun && !isGenerating && designContent && !hasAutoAdvanced.current) {
             const timer = setTimeout(() => {
+                hasAutoAdvanced.current = true;
                 // Pass the design data or construct it from content if structured data is missing
                 onDesignComplete(designData || { raw_llm_response: designContent, project_name: projectName });
             }, 1500);

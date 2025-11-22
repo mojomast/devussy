@@ -294,10 +294,13 @@ export const PlanView = ({
         onPlanApproved(updatedPlan);
     };
 
+    const hasAutoApproved = React.useRef(false);
+
     // Auto-approve effect
     useEffect(() => {
-        if (autoRun && plan && !isLoading && phases.length > 0) {
+        if (autoRun && plan && !isLoading && phases.length > 0 && !hasAutoApproved.current) {
             const timer = setTimeout(() => {
+                hasAutoApproved.current = true;
                 handleApprove();
             }, 1500);
             return () => clearTimeout(timer);
