@@ -75,8 +75,9 @@ export default function IrcClient({
     const [demoMode, setDemoMode] = useState(false);
 
     // Multi-conversation state
+    const STATUS_TAB = 'Status';
     const [conversations, setConversations] = useState<Record<string, Conversation>>({});
-    const [activeTab, setActiveTab] = useState<string>(defaultChannel);
+    const [activeTab, setActiveTab] = useState<string>(STATUS_TAB);
 
     const [nick, setNick] = useState(initialNick);
     const [inputValue, setInputValue] = useState('');
@@ -94,22 +95,39 @@ export default function IrcClient({
             ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/irc/`
             : 'ws://localhost:8080/webirc/websocket/');
 
-    // Ensure default channel exists in state
+    // Ensure Status tab and default channel exist in state
     useEffect(() => {
         setConversations(prev => {
-            if (prev[defaultChannel]) return prev;
-            return {
-                ...prev,
-                [defaultChannel]: {
+            const needsStatus = !prev[STATUS_TAB];
+            const needsDefault = !prev[defaultChannel];
+
+            if (!needsStatus && !needsDefault) return prev;
+
+            const updates: Record<string, Conversation> = { ...prev };
+
+            if (needsStatus) {
+                updates[STATUS_TAB] = {
+                    name: STATUS_TAB,
+                    type: 'channel',
+                    messages: [],
+                    users: [],
+                    unreadCount: 0
+                };
+            }
+
+            if (needsDefault) {
+                updates[defaultChannel] = {
                     name: defaultChannel,
                     type: 'channel',
                     messages: [],
                     users: [],
                     unreadCount: 0
-                }
-            };
+                };
+            }
+
+            return updates;
         });
-    }, [defaultChannel]);
+    }, [defaultChannel, STATUS_TAB]);
 
     // Auto-scroll logic
     useEffect(() => {
@@ -148,12 +166,10 @@ export default function IrcClient({
         });
     }, [activeTab]);
 
-    // Helper to add system message to ACTIVE tab
+    // Helper to add system message to Status tab
     const addSystemMessage = useCallback((content: string, type: IrcMessage['type'] = 'system') => {
         setConversations(prev => {
-            // If we have no conversations, maybe just log or add to a 'System' tab? 
-            // For now add to whatever is active or default
-            const target = activeTab || defaultChannel;
+            const target = STATUS_TAB;
             const existing = prev[target] || {
                 name: target,
                 type: 'channel',
@@ -181,7 +197,7 @@ export default function IrcClient({
                 }
             };
         });
-    }, [activeTab, defaultChannel]);
+    }, [STATUS_TAB]);
 
     // Parse IRC Message
     const parseIrcMessage = (raw: string): IrcMessage => {
@@ -309,13 +325,13 @@ export default function IrcClient({
                             }
                         }
 
-                        // Just dump into active tab for now
+                        // Just dump into Status tab
                         if (msg.command === '376' || msg.command === '422') {
                             // End of MOTD -> Auto Join
                             socket.send(`JOIN ${defaultChannel}\r\n`);
                         }
-                        // Add to active or default channel to be visible
-                        addMessage(activeTab || defaultChannel, { ...msg, type: 'system', content: msg.params.slice(1).join(' ') });
+                        // Add to Status tab to be visible
+                        addMessage(STATUS_TAB, { ...msg, type: 'system', content: msg.params.slice(1).join(' ') });
                     }
                     // 2. Names List (353)
                     else if (msg.command === '353') {
@@ -645,7 +661,7 @@ export default function IrcClient({
 
     const closeTab = (e: React.MouseEvent, tabName: string) => {
         e.stopPropagation();
-        if (tabName === defaultChannel) return; // Don't close main
+        if (tabName === STATUS_TAB || tabName === defaultChannel) return; // Don't close Status or main
 
         if (conversations[tabName]?.type === 'channel') {
             ws?.send(`PART ${tabName}\r\n`);
@@ -704,7 +720,7 @@ export default function IrcClient({
 
                     {/* Tabs */}
                     <div className="flex items-center gap-1 px-2 pt-2 overflow-x-auto">
-                        {Object.keys(conversations).map(name => (
+                        {[STATUS_TAB, ...Object.keys(conversations).filter(k => k !== STATUS_TAB)].map(name => (
                             <div
                                 key={name}
                                 onClick={() => setActiveTab(name)}
@@ -717,7 +733,7 @@ export default function IrcClient({
                                 {conversations[name].unreadCount > 0 && (
                                     <span className="bg-red-500 text-white text-[10px] px-1 rounded-full">{conversations[name].unreadCount}</span>
                                 )}
-                                {name !== defaultChannel && (
+                                {name !== STATUS_TAB && name !== defaultChannel && (
                                     <X
                                         className="h-3 w-3 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white rounded"
                                         onClick={(e) => closeTab(e, name)}
