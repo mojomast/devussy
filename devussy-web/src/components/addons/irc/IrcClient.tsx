@@ -457,10 +457,10 @@ export default function IrcClient({
         });
       };
 
-      socket.onclose = () => {
-        console.log('IRC Disconnected');
+      socket.onclose = (event) => {
+        console.log('IRC Disconnected. Code:', event.code, 'Reason:', event.reason, 'WasClean:', event.wasClean);
         setConnected(false);
-        addSystemMessage('Disconnected from server', 'error');
+        addSystemMessage(`Disconnected from server (Code: ${event.code})`, 'error');
         
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current++;
@@ -473,7 +473,7 @@ export default function IrcClient({
       };
       
       socket.onerror = (err) => {
-          console.error("WebSocket error:", err);
+          console.error("WebSocket error event:", err);
       };
 
       setWs(socket);
