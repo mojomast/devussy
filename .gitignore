@@ -116,3 +116,4 @@ yarn-error.log*
 .yarn/
 dist/
 .vite/
+devussy-web/streaming_server/analytics.db

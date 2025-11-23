@@ -107,6 +107,17 @@ def log_user_input(
     requirements: Optional[str] = None,
     languages: Optional[str] = None,
 ):
+    # Normalize languages to a string for SQLite storage
+    if languages is None:
+        normalized_languages = None
+    elif isinstance(languages, (list, tuple, set)):
+        try:
+            normalized_languages = ", ".join(str(lang) for lang in languages)
+        except Exception:
+            normalized_languages = str(languages)
+    else:
+        normalized_languages = str(languages)
+
     conn = get_connection()
     with conn:
         conn.execute(
@@ -116,7 +127,7 @@ def log_user_input(
                 input_type,
                 project_name,
                 sanitize_requirements(requirements or ''),
-                languages,
+                normalized_languages,
             ),
         )
     conn.close()
