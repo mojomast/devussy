@@ -99,6 +99,19 @@ http://localhost:3000
 ### HiveMind Mode 🐝 NEW
 A multi-agent swarm generation system that provides diverse perspectives on any phase:
 
+### IRC Chat 💬 NEW
+Real-time collaboration directly within the Devussy interface:
+- **Native WebSocket Support**: Connects directly to InspIRCd via secure WebSocket.
+- **Multi-Channel Support**: Join multiple channels and private message users.
+- **Persistent State**: Remembers your nickname and recent messages.
+- **Auto-Retry**: Automatically handles nickname collisions and reconnections.
+- **Demo Mode**: Fallback mode for UI testing when server is unavailable.
+
+**How It Works:**
+- Click "IRC Chat" in the Taskbar or Start Menu.
+- Enter a nickname (or use the generated one).
+- Start chatting in `#devussy-chat`.
+
 **How It Works:**
 - Click "🐝 Hive Mode" on any phase card (available for all statuses)
 - Opens a 4-pane real-time streaming window:

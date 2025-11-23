@@ -4,36 +4,35 @@ This directory contains the configuration and documentation for the Devussy IRC 
 
 ## Components
 
-1.  **IRC Server**: InspIRCd (Dockerized) running on port 6667 (internal).
-2.  **IRC Gateway**: KiwiIRC WebIRC Gateway (Dockerized) running on port 8080 (mapped to host).
-3.  **IRC Client**: A React component (`IrcClient.tsx`) integrated into the Devussy frontend.
+1.  **IRC Server**: InspIRCd (Dockerized) running on port 6667 (internal) and 8080 (WebSocket).
+2.  **IRC Client**: A React component (`IrcClient.tsx`) integrated into the Devussy frontend.
 
 ## Setup
 
 The IRC services are defined in `docker-compose.yml`. To start them:
 
 ```bash
-docker-compose up -d irc-server irc-gateway
+docker-compose up -d ircd
 ```
 
 Ensure your `.env` file (or environment) has the following variables for the frontend:
 
 ```
-NEXT_PUBLIC_IRC_WS_URL=ws://localhost:8080
-NEXT_PUBLIC_IRC_CHANNEL=#devussy
+NEXT_PUBLIC_IRC_WS_URL=wss://dev.ussy.host/ws/irc/
+NEXT_PUBLIC_IRC_CHANNEL=#devussy-chat
 ```
 
 ## Configuration
 
-### InspIRCd (`conf/inspircd.conf`)
-- Configured to listen on 6667.
-- Loads `m_webirc.so` for gateway integration.
-- **Important**: The `<cgihost>` password must match the gateway configuration.
+### InspIRCd (`conf/inspircd_v2.conf`)
+- **Modules**: Loads `m_websocket.so` and `m_sha1.so` (required for handshake).
+- **Ports**: Listens on 6667 (IRC) and 8080 (WebSocket).
+- **DNS**: DNS resolution is disabled to prevent issues with Docker hostnames.
+- **Ping Frequency**: Set to 15s to quickly detect and remove ghost connections.
 
-### WebIRC Gateway (`gateway.conf`)
-- Listens on 8080 for WebSocket connections.
-- Forwards to `irc-server:6667`.
-- Uses the configured WebIRC password.
+### Nginx Proxy
+- Proxies WebSocket connections from `/ws/irc/` to `ircd:8080`.
+- Handles SSL termination.
 
 ## Usage
 
@@ -50,5 +49,8 @@ If the IRC server is unreachable, the client will automatically switch to "Demo 
 
 ## Troubleshooting
 
-- **Connection Refused**: Ensure `irc-gateway` container is running and port 8080 is accessible.
-- **Demo Mode only**: Check browser console for WebSocket errors. Ensure `NEXT_PUBLIC_IRC_WS_URL` matches your setup.
+- **Connection Refused**: Ensure `ircd` container is running and port 8080 is accessible.
+- **503 Service Unavailable**: Check Nginx logs. Ensure Nginx can resolve the `ircd` hostname.
+- **Nickname in Use**: The client automatically handles this by appending an underscore (`_`) to your nickname and retrying.
+- **Ghost Users**: If you reload the page, your previous session might stay active for ~15 seconds until the server times it out.
+
