@@ -50,17 +50,12 @@ services:
       - streaming-server
 
   irc-server:
-    image: linuxserver/ngircd:latest
+    image: jgoerzen/ircd-hybrid:latest
     container_name: devussy-irc-server
     ports:
       - "6667:6667"
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=UTC
     volumes:
-      - ./irc/ngircd.conf:/config/ngircd.conf
-      - ./irc/logs:/config/logs
+      - ./irc/ircd.conf:/etc/ircd-hybrid/ircd.conf
     restart: unless-stopped
 
   irc-gateway:
