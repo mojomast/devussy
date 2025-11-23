@@ -285,14 +285,16 @@ export default function IrcClient({
         const lines = event.data.split('\r\n');
         lines.forEach((line: string) => {
           if (!line) return;
-          
-          if (line.startsWith('PING')) {
-            const response = `PONG ${line.slice(5)}\r\n`;
+
+          const msg = parseIrcMessage(line);
+
+          // Handle server PING (with or without prefix)
+          if (msg.command === 'PING') {
+            const cookie = msg.params[0] ? `:${msg.params[0]}` : '';
+            const response = `PONG ${cookie}\r\n`;
             socket.send(response);
             return;
           }
-
-          const msg = parseIrcMessage(line);
 
           // --- Logic for State Updates ---
 

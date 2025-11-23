@@ -50,13 +50,15 @@ services:
       - streaming-server
 
   ircd:
-    image: alpine:latest
+    image: inspircd/inspircd-docker:latest
     container_name: devussy-ircd
     ports:
       - "6667:6667"
-    environment:
-      - TZ=UTC
-    command: ["sh", "-c", "apk add --no-cache socat tzdata && cp /usr/share/zoneinfo/UTC /etc/localtime && socat TCP-LISTEN:6667,reuseaddr,fork EXEC:'/bin/sh -c \"echo \":$$(date +%s)devussy 001 * :Welcome to Devussy IRC\"; while read line; do echo \":irc.devussy.local PING :$$(date +%s)\"; sleep 30; done\"'"]
+    volumes:
+      - ./irc/conf:/inspircd/conf
+      - ./irc/conf.d:/inspircd/conf/conf.d
+      - ./irc/logs:/inspircd/logs
+      - ./irc/data:/inspircd/data
     restart: unless-stopped
 
   irc-gateway:
