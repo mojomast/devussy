@@ -54,11 +54,6 @@ services:
     container_name: devussy-ircd
     ports:
       - "6667:6667"
-    volumes:
-      - ./irc/conf:/inspircd/conf
-      - ./irc/conf.d:/inspircd/conf/conf.d
-      - ./irc/logs:/inspircd/logs
-      - ./irc/data:/inspircd/data
     restart: unless-stopped
 
   irc-gateway:
