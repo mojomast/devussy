@@ -68,8 +68,8 @@ services:
       - "8080:8080"
     volumes:
       - ./irc/gateway.conf:/config/gateway.conf
-    depends_on:
-      - irc-server
     restart: unless-stopped
+    depends_on:
+      - ircd
 
 # Note: this is a minimal template. For production, build optimized images and avoid mounting the whole source tree.
