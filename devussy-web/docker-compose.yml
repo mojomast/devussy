@@ -55,10 +55,8 @@ services:
     ports:
       - "6667:6667"
     volumes:
-      - ./irc/conf:/inspircd/conf
       - ./irc/logs:/inspircd/logs
       - ./irc/data:/inspircd/data
-    command: ["/inspircd/conf/inspircd.conf"]
     restart: unless-stopped
 
   irc-gateway:
