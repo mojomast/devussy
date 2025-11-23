@@ -32,7 +32,6 @@ services:
       - "8000:8000"
     environment:
       - REQUESTY_API_KEY=${REQUESTY_API_KEY}
-      - STREAMING_SECRET=${STREAMING_SECRET}
       - LLM_PROVIDER=requesty
       - PYTHONPATH=/app:/app/devussy-web
 
