@@ -40,6 +40,13 @@ Devussy turns a short project idea into a complete, actionable development plan.
 - New **Streaming Options** menu in Settings lets you toggle phases individually without touching config files.
 - Concurrency controls now live in Settings as well (max concurrent API requests / phases).
 
+**📊 Backend web analytics (server-side, opt-out supported)**
+
+- Added a lightweight **server-side analytics module** behind the FastAPI streaming server.
+- Tracks anonymized sessions (hashed IP + user-agent), API calls (endpoint, method, status, latency, sizes), and design inputs for the web UI.
+- All analytics are kept **on the server only** (SQLite), with a simple `/api/analytics/overview` endpoint for internal inspection.
+- Users can set a **“Disable anonymous usage analytics for this browser”** toggle in the Help window, which writes a `devussy_analytics_optout` cookie; when set, both the middleware and design endpoint completely skip analytics logging.
+
 **🧱 Under-the-hood fixes**
 
 - Hardened `LLMInterviewManager` to be explicitly mode-aware (`initial` vs `design_review`).

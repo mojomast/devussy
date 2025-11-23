@@ -59,6 +59,21 @@ export default function Page() {
     try { return localStorage.getItem('devussy_help_dismissed') === '1'; } catch (e) { return false; }
   });
 
+  const [analyticsOptOut, setAnalyticsOptOut] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';').map(c => c.trim());
+      const cookie = cookies.find(c => c.startsWith('devussy_analytics_optout='));
+      if (cookie) {
+        const value = (cookie.split('=')[1] || '').toLowerCase();
+        if (value === '1' || value === 'true' || value === 'yes') {
+          setAnalyticsOptOut(true);
+        }
+      }
+    } catch (e) { }
+  }, []);
+
   // IRC nickname (from localStorage)
   const [ircNick, setIrcNick] = useState<string>(() => {
     try { return localStorage.getItem('devussy_irc_nick') || 'Guest'; } catch (e) { return 'Guest'; }
@@ -573,18 +588,36 @@ export default function Page() {
             <p>Created by <strong>Kyle Durepos</strong>.</p>
 
             <div className="mt-6 flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={dontShowHelpAgain}
-                  onChange={(e) => {
-                    const v = e.target.checked;
-                    try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) { }
-                    setDontShowHelpAgain(v);
-                  }}
-                />
-                Don't show this again
-              </label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={dontShowHelpAgain}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) { }
+                      setDontShowHelpAgain(v);
+                    }}
+                  />
+                  Don't show this again
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={analyticsOptOut}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      try {
+                        const expires = new Date();
+                        expires.setFullYear(expires.getFullYear() + 1);
+                        document.cookie = `devussy_analytics_optout=${v ? '1' : '0'}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+                      } catch (err) { }
+                      setAnalyticsOptOut(v);
+                    }}
+                  />
+                  Disable anonymous usage analytics for this browser
+                </label>
+              </div>
               <div>
                 <Button variant="secondary" onClick={() => closeWindow(window.id)}>
                   Close

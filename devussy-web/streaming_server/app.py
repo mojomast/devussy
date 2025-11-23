@@ -6,7 +6,11 @@ and streams events using Server-Sent Events (SSE). It uses the existing
 starting point and will need additional validation and tests.
 """
 
+import time
 from fastapi import FastAPI, Request, Header, HTTPException
+import uuid
+from starlette.middleware.base import BaseHTTPMiddleware
+from .analytics import init_db, log_session, log_api_call, log_user_input, get_overview
 from fastapi.responses import StreamingResponse, JSONResponse
 import json
 import tempfile
@@ -43,6 +47,60 @@ def _validate_incoming_request(x_streaming_proxy_key: str | None) -> None:
 
 app = FastAPI()
 
+# Initialize analytics DB on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+
+# Middleware to log each request and response
+class AnalyticsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        analytics_opt_out = request.cookies.get("devussy_analytics_optout")
+        if analytics_opt_out and analytics_opt_out.lower() in ("1", "true", "yes"):
+            return await call_next(request)
+        # Session handling: use cookie or generate new
+        session_id = request.cookies.get("devussy_session_id")
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        # Attach session to request state so route handlers can reuse it
+        request.state.session_id = session_id
+        # Log session (IP hashing)
+        client_ip = request.client.host if request.client else "0.0.0.0"
+        user_agent = request.headers.get("user-agent")
+        log_session(session_id, client_ip, user_agent)
+        # Record request details
+        start = time.time()
+        request_body = await request.body()
+        request_size = len(request_body)
+        # Process request
+        response = await call_next(request)
+        # Record response details (duration until response object is ready)
+        duration_ms = (time.time() - start) * 1000
+        # Try to infer response size from Content-Length header if present
+        content_length = response.headers.get("content-length")
+        try:
+            response_size = int(content_length) if content_length is not None else 0
+        except ValueError:
+            response_size = 0
+        # Determine model used from response header if provided
+        model_used = response.headers.get("x-model-used")
+        # Log API call
+        log_api_call(
+            session_id=session_id,
+            endpoint=str(request.url.path),
+            method=request.method,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+            request_size=request_size,
+            response_size=response_size,
+            model_used=model_used,
+        )
+        # Set session cookie in response
+        response.set_cookie(key="devussy_session_id", value=session_id, httponly=True, samesite="lax")
+        return response
+
+app.add_middleware(AnalyticsMiddleware)
+
 @app.post("/api/design/stream")
 async def design_stream(request: Request, x_streaming_proxy_key: str | None = Header(None)):
     _validate_incoming_request(x_streaming_proxy_key)
@@ -51,6 +109,21 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
     project_name = body.get("projectName") or body.get("project_name") or "Unnamed"
     languages = body.get("languages", [])
     requirements = body.get("requirements") or body.get("description", "")
+    # Log user input for analytics
+    analytics_opt_out = request.cookies.get("devussy_analytics_optout")
+    if not (analytics_opt_out and analytics_opt_out.lower() in ("1", "true", "yes")):
+        session_id = getattr(
+            request.state,
+            "session_id",
+            request.cookies.get("devussy_session_id") or "unknown",
+        )
+        log_user_input(
+            session_id=session_id,
+            input_type="design_input",
+            project_name=project_name,
+            requirements=requirements,
+            languages=languages,
+        )
 
     # Load config
     config = load_config()
@@ -141,6 +214,11 @@ async def design_stream_alias(request: Request, x_streaming_proxy_key: str | Non
     """Alias for `/api/design/stream` kept for backwards compatibility with the frontend which hits `/api/design` for SSE streaming."""
     _validate_incoming_request(x_streaming_proxy_key)
     return await design_stream(request, x_streaming_proxy_key)
+
+# Analytics overview endpoint
+@app.get("/api/analytics/overview")
+async def analytics_overview():
+    return get_overview()
 
 @app.post("/api/design/hivemind")
 async def design_hivemind(request: Request):
