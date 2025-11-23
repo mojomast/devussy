@@ -53,6 +53,7 @@ services:
     container_name: devussy-ircd
     ports:
       - "6667:6667"
+      - "8080:8080"
     volumes:
       - ./irc/conf:/inspircd/conf
       - ./irc/logs:/inspircd/logs
