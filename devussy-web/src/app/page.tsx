@@ -17,9 +17,9 @@ import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
-import IrcClient from '@/components/addons/irc/IrcClient';
+import { AppRegistry } from "@/apps/AppRegistry";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc';
+type WindowType = keyof typeof AppRegistry;
 
 interface WindowState {
   id: string;
@@ -151,46 +151,29 @@ export default function Page() {
 
     setTimeout(() => {
       if (data.stage === 'handoff') {
-        spawnWindow('handoff', 'Project Handoff');
+        spawnAppWindow('handoff', 'Project Handoff');
       } else if (data.stage === 'execute' && data.plan) {
-        spawnWindow('execute', 'Execution Phase');
+        spawnAppWindow('execute', 'Execution Phase');
       } else if (data.stage === 'plan' && data.design) {
-        spawnWindow('plan', 'Development Plan');
+        spawnAppWindow('plan', 'Development Plan');
       } else if (data.stage === 'design') {
-        spawnWindow('design', 'System Design');
+        spawnAppWindow('design', 'System Design');
       } else if (data.stage === 'interview') {
-        spawnWindow('interview', 'Requirements Interview');
+        spawnAppWindow('interview', 'Requirements Interview');
       } else {
         // Default to init if unknown or incomplete
-        spawnWindow('init', 'Devussy Studio');
+        spawnAppWindow('init', 'Devussy Studio');
       }
     }, 100);
   };
 
   // Window Management Functions
   const getWindowSize = (type: WindowType): { width: number; height: number } => {
-    switch (type) {
-      case 'init':
-        return { width: 800, height: 750 };  // Fits form content comfortably
-      case 'interview':
-        return { width: 700, height: 600 };
-      case 'design':
-        return { width: 800, height: 700 };
-      case 'plan':
-        return { width: 900, height: 750 };
-      case 'execute':
-        return { width: 1200, height: 800 };  // Wide for multi-column
-      case 'handoff':
-        return { width: 900, height: 800 };
-      case 'help':
-        return { width: 700, height: 600 };
-      case 'model-settings':
-        return { width: 500, height: 650 };
-      case 'irc':
-        return { width: 800, height: 600 };
-      default:
-        return { width: 600, height: 400 };
+    const appDef = AppRegistry[type];
+    if (appDef && appDef.defaultSize) {
+      return appDef.defaultSize;
     }
+    return { width: 600, height: 400 };
   };
 
   // Window Management Functions
@@ -214,6 +197,10 @@ export default function Page() {
     if (!options?.isMinimized) {
       setActiveWindowId(id);
     }
+  };
+
+  const spawnAppWindow = (appId: WindowType, title: string, props?: Record<string, any>, options?: { isMinimized?: boolean }) => {
+    spawnWindow(appId, title, props, options);
   };
 
   const closeWindow = (id: string) => {
@@ -252,12 +239,12 @@ export default function Page() {
   // Pipeline Handlers
   const handleStartInterview = () => {
     setIsAutoRun(false);
-    spawnWindow('interview', 'Requirements Interview');
+    spawnAppWindow('interview', 'Requirements Interview');
   };
 
   const handleSkipInterview = () => {
     if (projectName && requirements) {
-      spawnWindow('design', 'System Design');
+      spawnAppWindow('design', 'System Design');
     }
   };
 
@@ -272,7 +259,7 @@ export default function Page() {
 
     // Start the pipeline immediately
     setTimeout(() => {
-      spawnWindow('design', 'System Design');
+      spawnAppWindow('design', 'System Design');
     }, 100);
   };
 
@@ -281,12 +268,12 @@ export default function Page() {
     setRequirements(data.requirements || "");
     setLanguages(data.primary_language || "");
 
-    spawnWindow('design', 'System Design');
+    spawnAppWindow('design', 'System Design');
   };
 
   const handleDesignComplete = (designData: any) => {
     setDesign(designData);
-    spawnWindow('plan', 'Development Plan');
+    spawnAppWindow('plan', 'Development Plan');
   };
 
   const handlePlanApproved = (planData: any) => {
@@ -299,7 +286,7 @@ export default function Page() {
       });
     }
     setPlan(planData);
-    spawnWindow('execute', 'Execution Phase');
+    spawnAppWindow('execute', 'Execution Phase');
   };
 
   const handlePhaseComplete = (detailedPlan?: any) => {
@@ -308,13 +295,13 @@ export default function Page() {
       console.log('[page.tsx] Updating plan with detailed phases');
       setPlan(detailedPlan);
     }
-    spawnWindow('handoff', 'Project Handoff');
+    spawnAppWindow('handoff', 'Project Handoff');
   };
 
 
 
   const handleNewProject = () => {
-    spawnWindow('init', 'New Project');
+    spawnAppWindow('init', 'New Project');
   };
 
   const handleHelp = () => {
@@ -327,7 +314,7 @@ export default function Page() {
       }
       return;
     }
-    spawnWindow('help', 'Devussy Studio Help');
+    spawnAppWindow('help', 'Devussy Studio Help');
   };
 
   const handleOpenModelSettings = () => {
@@ -340,7 +327,7 @@ export default function Page() {
       }
       return;
     }
-    spawnWindow('model-settings', 'AI Model Settings');
+    spawnAppWindow('model-settings', 'AI Model Settings');
   };
 
   const handleOpenIrc = (options?: { isMinimized?: boolean }) => {
@@ -354,7 +341,7 @@ export default function Page() {
       }
       return;
     }
-    spawnWindow('irc', 'IRC Chat – #devussy-chat', undefined, options);
+    spawnAppWindow('irc', 'IRC Chat – #devussy-chat', undefined, options);
   };
 
   // Auto-launch IRC (always, minimized)
@@ -375,7 +362,7 @@ export default function Page() {
   // This effect is no longer needed
 
   // Render Content based on Window Type
-  const renderWindowContent = (window: WindowState) => {
+  const renderAppContent = (window: WindowState) => {
     switch (window.type) {
       case 'init':
         return (
@@ -626,10 +613,22 @@ export default function Page() {
             </div>
           </div>
         );
-      case 'irc':
-        return <IrcClient />;
-      default:
+      case 'irc': {
+        const appDef = AppRegistry[window.type];
+        if (appDef && appDef.component) {
+          const Component = appDef.component as React.FC<any>;
+          return <Component {...(window.props || {})} />;
+        }
         return null;
+      }
+      default: {
+        const appDef = AppRegistry[window.type];
+        if (appDef && appDef.component) {
+          const Component = appDef.component as React.FC<any>;
+          return <Component {...(window.props || {})} />;
+        }
+        return null;
+      }
     }
   };
 
@@ -710,7 +709,7 @@ export default function Page() {
           className="absolute"
           style={{ zIndex: window.zIndex }}
         >
-          {renderWindowContent(window)}
+          {renderAppContent(window)}
         </WindowFrame>
       ))}
 
@@ -730,6 +729,42 @@ export default function Page() {
         onHelp={handleHelp}
         onOpenModelSettings={handleOpenModelSettings}
         onOpenIrc={() => handleOpenIrc()}
+        onOpenApp={(appId) => {
+          switch (appId) {
+            case 'init':
+              handleNewProject();
+              break;
+            case 'interview':
+              handleStartInterview();
+              break;
+            case 'design':
+              spawnAppWindow('design', 'System Design');
+              break;
+            case 'plan':
+              spawnAppWindow('plan', 'Development Plan');
+              break;
+            case 'execute':
+              spawnAppWindow('execute', 'Execution Phase');
+              break;
+            case 'handoff':
+              spawnAppWindow('handoff', 'Project Handoff');
+              break;
+            case 'help':
+              handleHelp();
+              break;
+            case 'model-settings':
+              handleOpenModelSettings();
+              break;
+            case 'irc':
+              handleOpenIrc();
+              break;
+            default: {
+              const appDef = AppRegistry[appId as WindowType];
+              const title = appDef?.name || 'Devussy App';
+              spawnAppWindow(appId as WindowType, title);
+            }
+          }
+        }}
         currentState={{
           projectName,
           languages,

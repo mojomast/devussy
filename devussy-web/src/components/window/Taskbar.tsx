@@ -7,6 +7,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { ModelSettings, ModelConfigs, PipelineStage } from "@/components/pipeline/ModelSettings";
+import { AppRegistry } from "@/apps/AppRegistry";
 
 interface TaskbarProps {
     windows: Array<{ id: string; title: string; type: string }>;
@@ -23,6 +24,7 @@ interface TaskbarProps {
     modelConfigs?: ModelConfigs;
     onModelConfigsChange?: (configs: ModelConfigs) => void;
     activeStage?: PipelineStage;
+    onOpenApp?: (appId: string) => void;
     ircNick?: string;
 }
 
@@ -40,6 +42,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     modelConfigs,
     onModelConfigsChange,
     activeStage,
+    onOpenApp,
     ircNick = 'Guest'
 }) => {
     const { theme } = useTheme();
@@ -103,7 +106,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                             <div className="flex-1 p-2 flex flex-col gap-1 bg-white">
                                 <div className="text-xs text-gray-500 font-bold px-2 mb-1 uppercase tracking-wider">Most Used</div>
 
-                                <button onClick={() => { onNewProject?.(); setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
+                                <button onClick={() => { if (onOpenApp) { onOpenApp('init'); } else { onNewProject?.(); } setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
                                     <Plus className="h-8 w-8 text-gray-600 group-hover:text-white" />
                                     <div className="flex flex-col">
                                         <span className="font-bold text-sm">New Project</span>
@@ -111,7 +114,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                                     </div>
                                 </button>
 
-                                <button onClick={() => { onHelp?.(); setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
+                                <button onClick={() => { if (onOpenApp) { onOpenApp('help'); } else { onHelp?.(); } setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
                                     <HelpCircle className="h-8 w-8 text-blue-600 group-hover:text-white" />
                                     <div className="flex flex-col">
                                         <span className="font-bold text-sm">Help & Support</span>
@@ -119,7 +122,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                                     </div>
                                 </button>
 
-                                <button onClick={() => { onOpenIrc?.(); setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
+                                <button onClick={() => { if (onOpenApp) { onOpenApp('irc'); } else { onOpenIrc?.(); } setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
                                     <MessageSquare className="h-8 w-8 text-green-600 group-hover:text-white" />
                                     <div className="flex flex-col">
                                         <span className="font-bold text-sm">IRC Chat</span>
@@ -129,8 +132,47 @@ export const Taskbar: React.FC<TaskbarProps> = ({
 
                                 <div className="mt-auto border-t border-gray-200 pt-2">
                                     <div className="text-xs text-gray-500 font-bold px-2 mb-1 uppercase tracking-wider">All Programs</div>
-                                    <div className="flex items-center justify-center p-2 bg-blue-50 rounded border border-blue-100 text-blue-800 text-xs font-bold cursor-pointer hover:bg-blue-100">
-                                        All Programs <span className="ml-1">▶</span>
+                                    <div className="max-h-[220px] overflow-y-auto pr-1">
+                                        {Object.values(AppRegistry)
+                                            .filter(app => app.startMenuCategory && app.startMenuCategory !== "Most Used")
+                                            .sort((a, b) => {
+                                                const aCat = a.startMenuCategory || "";
+                                                const bCat = b.startMenuCategory || "";
+                                                if (aCat === bCat) {
+                                                    return a.name.localeCompare(b.name);
+                                                }
+                                                return aCat.localeCompare(bCat);
+                                            })
+                                            .map(app => (
+                                                <button
+                                                    key={app.id}
+                                                    onClick={() => {
+                                                        if (onOpenApp) {
+                                                            onOpenApp(app.id);
+                                                        } else {
+                                                            if (app.id === 'init') {
+                                                                onNewProject?.();
+                                                            } else if (app.id === 'help') {
+                                                                onHelp?.();
+                                                            } else if (app.id === 'irc') {
+                                                                onOpenIrc?.();
+                                                            }
+                                                        }
+                                                        setIsStartMenuOpen(false);
+                                                    }}
+                                                    className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#316AC5] hover:text-white text-left text-xs text-gray-800 transition-colors"
+                                                >
+                                                    <div className="h-6 w-6 flex items-center justify-center text-gray-600">
+                                                        {app.icon}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">{app.name}</span>
+                                                        {app.startMenuCategory && (
+                                                            <span className="text-[10px] text-gray-500">{app.startMenuCategory}</span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            ))}
                                     </div>
                                 </div>
                             </div>
@@ -253,7 +295,13 @@ export const Taskbar: React.FC<TaskbarProps> = ({
 
             {/* New Project Button */}
             <button
-                onClick={onNewProject}
+                onClick={() => {
+                    if (onOpenApp) {
+                        onOpenApp('init');
+                    } else {
+                        onNewProject?.();
+                    }
+                }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
                 title="New Project"
             >
@@ -263,7 +311,13 @@ export const Taskbar: React.FC<TaskbarProps> = ({
 
             {/* Help Button */}
             <button
-                onClick={onHelp}
+                onClick={() => {
+                    if (onOpenApp) {
+                        onOpenApp('help');
+                    } else {
+                        onHelp?.();
+                    }
+                }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
                 title="Help"
             >
@@ -273,7 +327,13 @@ export const Taskbar: React.FC<TaskbarProps> = ({
 
             {/* IRC Button */}
             <button
-                onClick={onOpenIrc}
+                onClick={() => {
+                    if (onOpenApp) {
+                        onOpenApp('irc');
+                    } else {
+                        onOpenIrc?.();
+                    }
+                }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
                 title="IRC Chat"
             >
