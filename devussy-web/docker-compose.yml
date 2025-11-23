@@ -13,7 +13,6 @@ services:
     environment:
       - NODE_ENV=production
       - USE_LOCAL_API=${USE_LOCAL_API:-false}
-      - NEXT_PUBLIC_IRC_WS_URL=ws://localhost:8080
       - NEXT_PUBLIC_IRC_CHANNEL=#devussy-chat
     depends_on:
       - streaming-server

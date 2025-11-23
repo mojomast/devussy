@@ -91,7 +91,7 @@ export default function IrcClient({
   const wsUrl =
     process.env.NEXT_PUBLIC_IRC_WS_URL ||
     (typeof window !== 'undefined'
-      ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/irc/webirc/websocket/`
+      ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/irc/`
       : 'ws://localhost:8080/webirc/websocket/');
 
   // Ensure default channel exists in state
