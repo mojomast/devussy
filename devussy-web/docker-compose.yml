@@ -49,9 +49,9 @@ services:
       - frontend
       - streaming-server
 
-  irc-server:
+  ircd:
     image: alpine:latest
-    container_name: devussy-irc-server
+    container_name: devussy-ircd
     ports:
       - "6667:6667"
     environment:
