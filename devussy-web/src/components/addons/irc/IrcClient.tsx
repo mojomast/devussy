@@ -318,6 +318,11 @@ export default function IrcClient({
     if (savedNick) {
         setNick(savedNick);
         setNewNickInput(savedNick);
+    } else {
+        const randomNick = `Guest${Math.floor(1000 + Math.random() * 9000)}`;
+        setNick(randomNick);
+        setNewNickInput(randomNick);
+        localStorage.setItem('devussy_irc_nick', randomNick);
     }
 
     // Load persisted messages
