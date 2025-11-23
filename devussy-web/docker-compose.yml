@@ -50,14 +50,17 @@ services:
       - streaming-server
 
   irc-server:
-    image: ergonlogic/inspircd:latest
+    image: linuxserver/ngircd:latest
     container_name: devussy-irc-server
     ports:
       - "6667:6667"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
     volumes:
-      - ./irc/conf/inspircd.conf:/etc/inspircd/inspircd.conf
-      - ./irc/logs:/var/log/inspircd
-      - ./irc/data:/var/lib/inspircd
+      - ./irc/ngircd.conf:/config/ngircd.conf
+      - ./irc/logs:/config/logs
     restart: unless-stopped
 
   irc-gateway:
