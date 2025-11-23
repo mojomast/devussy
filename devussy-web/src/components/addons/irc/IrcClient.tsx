@@ -300,6 +300,15 @@ export default function IrcClient({
 
                     // 1. Numeric / System
                     if (['001', '002', '003', '004', '005', '251', '252', '253', '254', '255', '366', '372', '376', '422'].includes(msg.command)) {
+                        // Capture Nick from 001
+                        if (msg.command === '001' && msg.params[0]) {
+                            const assignedNick = msg.params[0];
+                            if (assignedNick !== nick) {
+                                setNick(assignedNick);
+                                localStorage.setItem('devussy_irc_nick', assignedNick);
+                            }
+                        }
+
                         // Just dump into active tab for now
                         if (msg.command === '376' || msg.command === '422') {
                             // End of MOTD -> Auto Join
@@ -616,6 +625,24 @@ export default function IrcClient({
         }
     };
 
+    const handleUserClick = (targetNick: string) => {
+        if (targetNick === nick) return;
+        setConversations(prev => {
+            if (prev[targetNick]) return prev;
+            return {
+                ...prev,
+                [targetNick]: {
+                    name: targetNick,
+                    type: 'pm',
+                    messages: [],
+                    users: [],
+                    unreadCount: 0
+                }
+            };
+        });
+        setActiveTab(targetNick);
+    };
+
     const closeTab = (e: React.MouseEvent, tabName: string) => {
         e.stopPropagation();
         if (tabName === defaultChannel) return; // Don't close main
@@ -755,7 +782,11 @@ export default function IrcClient({
                     <ScrollArea className="flex-1 p-2">
                         <div className="space-y-1">
                             {conversations[activeTab]?.users.sort((a, b) => a.nick.localeCompare(b.nick)).map((user) => (
-                                <div key={user.nick} className="text-sm flex items-center gap-1 font-mono">
+                                <div
+                                    key={user.nick}
+                                    className="text-sm flex items-center gap-1 font-mono cursor-pointer hover:bg-white/10 p-0.5 rounded"
+                                    onClick={() => handleUserClick(user.nick)}
+                                >
                                     <span className="text-muted-foreground w-3 text-center">{user.modes}</span>
                                     <span className={getUserColor(user.nick)}>{user.nick}</span>
                                 </div>
