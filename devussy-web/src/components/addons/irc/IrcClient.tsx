@@ -273,7 +273,6 @@ export default function IrcClient({
       const socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
-        console.log('IRC Connected');
         setConnected(true);
         reconnectAttempts.current = 0;
         addSystemMessage('Connected to IRC Gateway');
@@ -286,7 +285,6 @@ export default function IrcClient({
         const lines = event.data.split('\r\n');
         lines.forEach((line: string) => {
           if (!line) return;
-          console.log('IN:', line);
           
           if (line.startsWith('PING')) {
             const response = `PONG ${line.slice(5)}\r\n`;
@@ -457,10 +455,10 @@ export default function IrcClient({
         });
       };
 
-      socket.onclose = (event) => {
-        console.log('IRC Disconnected. Code:', event.code, 'Reason:', event.reason, 'WasClean:', event.wasClean);
+      socket.onclose = () => {
+        console.log('IRC Disconnected');
         setConnected(false);
-        addSystemMessage(`Disconnected from server (Code: ${event.code})`, 'error');
+        addSystemMessage('Disconnected from server', 'error');
         
         if (reconnectAttempts.current < maxReconnectAttempts) {
           reconnectAttempts.current++;
@@ -473,7 +471,7 @@ export default function IrcClient({
       };
       
       socket.onerror = (err) => {
-          console.error("WebSocket error event:", err);
+          console.error("WebSocket error:", err);
       };
 
       setWs(socket);
