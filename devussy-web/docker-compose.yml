@@ -59,6 +59,7 @@ services:
       - ./irc/logs:/inspircd/logs
       - ./irc/data:/inspircd/data
       - ./irc/conf.d:/inspircd/conf.d
+      - ./irc/conf/inspircd.conf:/inspircd/conf/inspircd.conf
     restart: unless-stopped
 
   irc-gateway:
