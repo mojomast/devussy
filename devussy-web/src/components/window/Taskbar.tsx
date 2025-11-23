@@ -23,6 +23,7 @@ interface TaskbarProps {
     modelConfigs?: ModelConfigs;
     onModelConfigsChange?: (configs: ModelConfigs) => void;
     activeStage?: PipelineStage;
+    ircNick?: string;
 }
 
 export const Taskbar: React.FC<TaskbarProps> = ({
@@ -38,7 +39,8 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     onLoadCheckpoint,
     modelConfigs,
     onModelConfigsChange,
-    activeStage
+    activeStage,
+    ircNick = 'Guest'
 }) => {
     const { theme } = useTheme();
     const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
@@ -92,7 +94,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                             <div className="h-10 w-10 rounded-full bg-white border-2 border-white/40 overflow-hidden flex items-center justify-center">
                                 <img src="/devussy_logo_minimal.png" alt="User" className="h-8 w-8 object-contain" />
                             </div>
-                            <span className="text-white font-bold text-lg drop-shadow-md">Devussy User</span>
+                            <span className="text-white font-bold text-lg drop-shadow-md">{ircNick}</span>
                         </div>
 
                         {/* Body */}

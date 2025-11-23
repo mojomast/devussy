@@ -36,9 +36,9 @@ export default function Page() {
   const { theme } = useTheme();
   // Window State Management
   const [windows, setWindows] = useState<WindowState[]>([
-    { id: 'init-1', type: 'init', title: 'Devussy Studio', position: { x: 50, y: 50 }, zIndex: 10 }
+    { id: 'help-1', type: 'help', title: 'Devussy Studio Help', position: { x: 50, y: 50 }, zIndex: 10, size: { width: 700, height: 600 } }
   ]);
-  const [activeWindowId, setActiveWindowId] = useState<string>('init-1');
+  const [activeWindowId, setActiveWindowId] = useState<string>('help-1');
   const [nextZIndex, setNextZIndex] = useState(20);
 
   // Project State (Shared across windows)
@@ -58,6 +58,28 @@ export default function Page() {
   const [dontShowHelpAgain, setDontShowHelpAgain] = useState<boolean>(() => {
     try { return localStorage.getItem('devussy_help_dismissed') === '1'; } catch (e) { return false; }
   });
+
+  // IRC nickname (from localStorage)
+  const [ircNick, setIrcNick] = useState<string>(() => {
+    try { return localStorage.getItem('devussy_irc_nick') || 'Guest'; } catch (e) { return 'Guest'; }
+  });
+
+  // Listen for IRC nick changes
+  useEffect(() => {
+    const handleStorage = () => {
+      try {
+        const nick = localStorage.getItem('devussy_irc_nick');
+        if (nick) setIrcNick(nick);
+      } catch (e) { }
+    };
+    window.addEventListener('storage', handleStorage);
+    // Also poll for changes since same-tab changes don't trigger storage event
+    const interval = setInterval(handleStorage, 1000);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Model Configuration
   const [modelConfigs, setModelConfigs] = useState<ModelConfigs>({
@@ -175,7 +197,7 @@ export default function Page() {
     setWindows(prev => [...prev, newWindow]);
     setNextZIndex(prev => prev + 1);
     if (!options?.isMinimized) {
-        setActiveWindowId(id);
+      setActiveWindowId(id);
     }
   };
 
@@ -309,47 +331,33 @@ export default function Page() {
   const handleOpenIrc = (options?: { isMinimized?: boolean }) => {
     const existing = windows.find(w => w.type === 'irc');
     if (existing) {
-        if (!options?.isMinimized) {
-            focusWindow(existing.id);
-            if (existing.isMinimized) {
-                toggleMinimize(existing.id);
-            }
+      if (!options?.isMinimized) {
+        focusWindow(existing.id);
+        if (existing.isMinimized) {
+          toggleMinimize(existing.id);
         }
-        return;
+      }
+      return;
     }
     spawnWindow('irc', 'IRC Chat – #devussy-chat', undefined, options);
   };
 
   // Auto-launch IRC (always, minimized)
   useEffect(() => {
-      try {
-          // Check preference, default to true if not set, or just always do it per requirements
-          const autoLaunch = localStorage.getItem('devussy_auto_launch_irc');
-          if (autoLaunch !== 'false') {
-              // Delay to let page load
-              setTimeout(() => {
-                  handleOpenIrc({ isMinimized: true });
-              }, 500);
-          }
-      } catch (e) { }
+    try {
+      // Check preference, default to true if not set, or just always do it per requirements
+      const autoLaunch = localStorage.getItem('devussy_auto_launch_irc');
+      if (autoLaunch !== 'false') {
+        // Delay to let page load
+        setTimeout(() => {
+          handleOpenIrc({ isMinimized: true });
+        }, 500);
+      }
+    } catch (e) { }
   }, []);
 
-  // Auto-open Help modal on the first visit (unless dismissed)
-  useEffect(() => {
-    try {
-      const dismissed = localStorage.getItem('devussy_help_dismissed');
-      const seen = localStorage.getItem('devussy_seen_help');
-      if (!dismissed && !seen) {
-        // Delay slightly to allow initial window to render
-        setTimeout(() => {
-          handleHelp();
-          try { localStorage.setItem('devussy_seen_help', '1'); } catch (e) { }
-        }, 300);
-      }
-    } catch (e) {
-      // localStorage might be unavailable; ignore silently
-    }
-  }, []);
+  // Help window is now shown by default on startup (init state changed above)
+  // This effect is no longer needed
 
   // Render Content based on Window Type
   const renderWindowContent = (window: WindowState) => {
@@ -523,6 +531,15 @@ export default function Page() {
               <li><strong>Execute</strong> - Generate code for each phase</li>
               <li><strong>Handoff</strong> - Export project and push to GitHub</li>
             </ol>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">IRC Chat Addon</h2>
+            <p>Devussy now includes a built-in IRC client accessible via the taskbar or desktop icon.</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Join <code className="bg-gray-800 px-2 py-1 rounded">#devussy-chat</code> to chat with other users</li>
+              <li>Click on usernames to start private messages</li>
+              <li>Server logs are collected in the <strong>Status</strong> tab</li>
+              <li>Your IRC nickname is saved automatically</li>
+            </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Circular Stateless Development</h2>
             <p>Devussy enables <strong>agent-agnostic, stateless development</strong> where any AI agent can pick up where another left off.</p>
 
@@ -546,7 +563,8 @@ export default function Page() {
               <li>Use <strong>checkpoints</strong> to save your progress at any stage</li>
               <li>Edit phases in the Plan view before execution</li>
               <li>Adjust <strong>concurrency</strong> in settings to control parallel execution</li>
-              <li>Windows can be minimized but not closed - find them in the taskbar</li>
+              <li>Windows can be minimized - find them in the taskbar</li>
+              <li>Use the <strong>Start Menu</strong> (Bliss theme) or taskbar to access all features</li>
             </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>
             <p>Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your project for detailed technical documentation.</p>
@@ -586,40 +604,40 @@ export default function Page() {
     <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
       {/* Desktop Icons */}
       {theme === 'bliss' && (
-          <div className="absolute top-4 left-4 z-0 flex flex-col gap-6 p-4">
-              {/* My Computer */}
-              <button 
-                className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
-                onDoubleClick={handleNewProject}
-              >
-                  <div className="w-12 h-12 relative">
-                      <img src="/devussy_logo_minimal.png" className="w-full h-full object-contain drop-shadow-md" />
-                  </div>
-                  <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
-                      My Computer
-                  </span>
-              </button>
+        <div className="absolute top-4 left-4 z-0 flex flex-col gap-6 p-4">
+          {/* My Computer */}
+          <button
+            className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
+            onDoubleClick={handleNewProject}
+          >
+            <div className="w-12 h-12 relative">
+              <img src="/devussy_logo_minimal.png" className="w-full h-full object-contain drop-shadow-md" />
+            </div>
+            <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
+              My Computer
+            </span>
+          </button>
 
-              {/* mIRC */}
-              <button 
-                className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
-                onDoubleClick={() => handleOpenIrc()}
-              >
-                  <div className="w-12 h-12 relative bg-white/10 rounded-lg border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
-                      {/* Custom mIRC-like icon since we don't have the asset */}
-                      <div className="relative w-8 h-8">
-                          <div className="absolute inset-0 bg-red-500 rounded-full transform -rotate-12 opacity-80"></div>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                              <MessageSquare className="text-white w-5 h-5 transform rotate-12" fill="currentColor" />
-                          </div>
-                          <div className="absolute -bottom-1 -right-1 bg-green-500 w-3 h-3 rounded-full border-2 border-white"></div>
-                      </div>
-                  </div>
-                  <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
-                      mIRC
-                  </span>
-              </button>
-          </div>
+          {/* mIRC */}
+          <button
+            className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
+            onDoubleClick={() => handleOpenIrc()}
+          >
+            <div className="w-12 h-12 relative bg-white/10 rounded-lg border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
+              {/* Custom mIRC-like icon since we don't have the asset */}
+              <div className="relative w-8 h-8">
+                <div className="absolute inset-0 bg-red-500 rounded-full transform -rotate-12 opacity-80"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <MessageSquare className="text-white w-5 h-5 transform rotate-12" fill="currentColor" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-green-500 w-3 h-3 rounded-full border-2 border-white"></div>
+              </div>
+            </div>
+            <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
+              mIRC
+            </span>
+          </button>
+        </div>
       )}
 
       {/* Global Header / Toolbar (Optional) */}
@@ -691,6 +709,7 @@ export default function Page() {
         modelConfigs={modelConfigs}
         onModelConfigsChange={setModelConfigs}
         activeStage={getActiveStage()}
+        ircNick={ircNick}
       />
     </main>
   );
