@@ -13,6 +13,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
 
 interface IrcMessage {
   id: string;
@@ -24,6 +25,7 @@ interface IrcMessage {
   type: 'message' | 'notice' | 'join' | 'part' | 'nick' | 'system' | 'error';
   sender?: string;
   content?: string;
+  target?: string; // Channel or Nick
 }
 
 interface IrcUser {
@@ -31,9 +33,17 @@ interface IrcUser {
   modes: string;
 }
 
+interface Conversation {
+  name: string;
+  type: 'channel' | 'pm';
+  messages: IrcMessage[];
+  users: IrcUser[]; // Only relevant for channels
+  unreadCount: number;
+}
+
 interface IrcClientProps {
   initialNick?: string;
-  channel?: string;
+  defaultChannel?: string;
 }
 
 const IRC_COLORS = [
@@ -58,13 +68,16 @@ const getUserColor = (nick: string) => {
 
 export default function IrcClient({
   initialNick = 'Guest',
-  channel = process.env.NEXT_PUBLIC_IRC_CHANNEL || '#devussy-chat',
+  defaultChannel = process.env.NEXT_PUBLIC_IRC_CHANNEL || '#devussy-chat',
 }: IrcClientProps) {
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
-  const [messages, setMessages] = useState<IrcMessage[]>([]);
-  const [users, setUsers] = useState<IrcUser[]>([]);
+  
+  // Multi-conversation state
+  const [conversations, setConversations] = useState<Record<string, Conversation>>({});
+  const [activeTab, setActiveTab] = useState<string>(defaultChannel);
+  
   const [nick, setNick] = useState(initialNick);
   const [inputValue, setInputValue] = useState('');
   const [newNickInput, setNewNickInput] = useState(initialNick);
@@ -74,13 +87,31 @@ export default function IrcClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 3;
+  
   const wsUrl =
     process.env.NEXT_PUBLIC_IRC_WS_URL ||
     (typeof window !== 'undefined'
       ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/irc/webirc/websocket/`
       : 'ws://localhost:8080/webirc/websocket/');
 
-  // Auto-scroll to bottom when user is already near the bottom
+  // Ensure default channel exists in state
+  useEffect(() => {
+      setConversations(prev => {
+          if (prev[defaultChannel]) return prev;
+          return {
+              ...prev,
+              [defaultChannel]: {
+                  name: defaultChannel,
+                  type: 'channel',
+                  messages: [],
+                  users: [],
+                  unreadCount: 0
+              }
+          };
+      });
+  }, [defaultChannel]);
+
+  // Auto-scroll logic
   useEffect(() => {
     const container = scrollRef.current;
     if (!container || !messagesEndRef.current) return;
@@ -91,29 +122,69 @@ export default function IrcClient({
     if (distanceFromBottom < 80) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [conversations, activeTab]); // Trigger on msg updates
 
-  // Helper to add system message
+  // Helper to add message to a specific conversation
+  const addMessage = useCallback((target: string, msg: IrcMessage) => {
+      setConversations(prev => {
+          const convName = target;
+          // Create if not exists (e.g. PM)
+          const existing = prev[convName] || {
+              name: convName,
+              type: target.startsWith('#') ? 'channel' : 'pm',
+              messages: [],
+              users: [],
+              unreadCount: 0
+          };
+
+          return {
+              ...prev,
+              [convName]: {
+                  ...existing,
+                  messages: [...existing.messages, msg],
+                  unreadCount: (target !== activeTab) ? existing.unreadCount + 1 : 0
+              }
+          };
+      });
+  }, [activeTab]);
+
+  // Helper to add system message to ACTIVE tab
   const addSystemMessage = useCallback((content: string, type: IrcMessage['type'] = 'system') => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Math.random().toString(36).substr(2, 9),
-        timestamp: new Date().toLocaleTimeString(),
-        prefix: 'system',
-        command: 'SYSTEM',
-        params: [],
-        raw: '',
-        type,
-        sender: 'System',
-        content,
-      },
-    ]);
-  }, []);
+    setConversations(prev => {
+        // If we have no conversations, maybe just log or add to a 'System' tab? 
+        // For now add to whatever is active or default
+        const target = activeTab || defaultChannel;
+        const existing = prev[target] || {
+            name: target,
+            type: 'channel',
+            messages: [],
+            users: [],
+            unreadCount: 0
+        };
+        
+        return {
+            ...prev,
+            [target]: {
+                ...existing,
+                messages: [...existing.messages, {
+                    id: Math.random().toString(36).substr(2, 9),
+                    timestamp: new Date().toLocaleTimeString(),
+                    prefix: 'system',
+                    command: 'SYSTEM',
+                    params: [],
+                    raw: '',
+                    type,
+                    sender: 'System',
+                    content,
+                    target
+                }]
+            }
+        };
+    });
+  }, [activeTab, defaultChannel]);
 
   // Parse IRC Message
   const parseIrcMessage = (raw: string): IrcMessage => {
-    // Simple IRC parser
     let str = raw.trim();
     let prefix = '';
     let command = '';
@@ -151,27 +222,31 @@ export default function IrcClient({
       }
     }
 
-    // Determine high-level type and content
     let type: IrcMessage['type'] = 'system';
     let content = '';
     let sender = prefix.split('!')[0] || prefix;
+    let target = '';
 
     if (command === 'PRIVMSG') {
       type = 'message';
+      target = params[0];
       content = params[1] || '';
     } else if (command === 'JOIN') {
       type = 'join';
-      content = `${sender} joined the channel`;
+      target = params[0].replace(/^:/, ''); // Should be channel
+      content = `${sender} joined ${target}`;
     } else if (command === 'PART' || command === 'QUIT') {
       type = 'part';
-      content = `${sender} left the channel`;
+      target = params[0]; // Often channel for PART
+      content = `${sender} left: ${params[1] || 'Quit'}`;
     } else if (command === 'NICK') {
       type = 'nick';
       content = `${sender} is now known as ${params[0]}`;
     } else if (command === 'NOTICE') {
       type = 'notice';
+      target = params[0];
       content = params[1] || '';
-    } else if (command === '433') { // ERR_NICKNAMEINUSE
+    } else if (command === '433') {
         type = 'error';
         content = `Nickname ${params[1]} is already in use.`;
     }
@@ -186,6 +261,7 @@ export default function IrcClient({
       type,
       sender,
       content,
+      target
     };
   };
 
@@ -202,7 +278,6 @@ export default function IrcClient({
         reconnectAttempts.current = 0;
         addSystemMessage('Connected to IRC Gateway');
         
-        // Register
         socket.send(`NICK ${nick}\r\n`);
         socket.send(`USER ${nick} 0 * :${nick}\r\n`);
       };
@@ -213,7 +288,6 @@ export default function IrcClient({
           if (!line) return;
           console.log('IN:', line);
           
-          // Handle PING/PONG immediately
           if (line.startsWith('PING')) {
             const response = `PONG ${line.slice(5)}\r\n`;
             socket.send(response);
@@ -222,60 +296,163 @@ export default function IrcClient({
 
           const msg = parseIrcMessage(line);
 
-          // Filter out some numeric replies to reduce noise, but keep important ones
-          if (['001', '002', '003', '004', '005', '251', '252', '253', '254', '255', '366'].includes(msg.command)) {
-             // Log silently or minimal
-          } else if (msg.command === '376' || msg.command === '422') { // End of MOTD or No MOTD
-             // Auto-join channel after welcome
-             socket.send(`JOIN ${channel}\r\n`);
-             addSystemMessage(`Joined ${channel}`);
-          } else if (msg.command === '353') { // RPL_NAMREPLY
-             // Update user list
-             // params: [target, type, channel, names]
-             if (msg.params[3]) {
-                 const names = msg.params[3].split(' ').filter(n => n).map(n => {
-                     let mode = '';
-                     let name = n;
-                     if (['@', '+', '%'].includes(n[0])) {
-                         mode = n[0];
-                         name = n.slice(1);
-                     }
-                     return { nick: name, modes: mode };
-                 });
-                 setUsers(prev => {
-                     // Simple merge or replace? RPL_NAMREPLY can be multiple lines.
-                     // For simplicity, we'll just append and dedup later or reset on join.
-                     // A proper implementation tracks 353 sequence and 366 end of names.
-                     // Here we just add them.
-                     const existing = new Set(prev.map(u => u.nick));
-                     const newUsers = names.filter(u => !existing.has(u.nick));
-                     return [...prev, ...newUsers];
-                 });
+          // --- Logic for State Updates ---
+
+          // 1. Numeric / System
+          if (['001', '002', '003', '004', '005', '251', '252', '253', '254', '255', '366', '372', '376', '422'].includes(msg.command)) {
+             // Just dump into active tab for now
+             if (msg.command === '376' || msg.command === '422') {
+                 // End of MOTD -> Auto Join
+                 socket.send(`JOIN ${defaultChannel}\r\n`);
              }
-          } else if (msg.command === 'JOIN') {
+             // Add to active or default channel to be visible
+             addMessage(activeTab || defaultChannel, { ...msg, type: 'system', content: msg.params.slice(1).join(' ') });
+          }
+          // 2. Names List (353)
+          else if (msg.command === '353') { 
+             const channelName = msg.params[2];
+             const names = msg.params[3].split(' ').filter(n => n).map(n => {
+                 let mode = '';
+                 let name = n;
+                 if (['@', '+', '%'].includes(n[0])) {
+                     mode = n[0];
+                     name = n.slice(1);
+                 }
+                 return { nick: name, modes: mode };
+             });
+             setConversations(prev => {
+                 const c = prev[channelName];
+                 if (!c) return prev;
+                 // Merge names
+                 const existing = new Set(c.users.map(u => u.nick));
+                 const newUsers = names.filter(u => !existing.has(u.nick));
+                 return { ...prev, [channelName]: { ...c, users: [...c.users, ...newUsers] } };
+             });
+          }
+          // 3. JOIN
+          else if (msg.command === 'JOIN') {
+              const channelName = msg.target || msg.params[0];
               if (msg.sender === nick) {
-                  // We joined, clear users to rebuild list
-                  setUsers([]); 
+                  // We joined a channel -> Create tab if missing, clear users
+                  setConversations(prev => ({
+                      ...prev,
+                      [channelName]: {
+                          name: channelName,
+                          type: 'channel',
+                          messages: [...(prev[channelName]?.messages || []), msg],
+                          users: [], // Reset user list, wait for 353 or add self
+                          unreadCount: 0
+                      }
+                  }));
+                  // Switch to it if we just joined? Maybe.
+                  setActiveTab(channelName);
               } else {
-                  setUsers(prev => [...prev, { nick: msg.sender || 'Unknown', modes: '' }]);
+                  // Someone else joined
+                  setConversations(prev => {
+                      const c = prev[channelName];
+                      if (!c) return prev;
+                      return {
+                          ...prev,
+                          [channelName]: {
+                              ...c,
+                              messages: [...c.messages, msg],
+                              users: [...c.users, { nick: msg.sender || 'Unknown', modes: '' }]
+                          }
+                      };
+                  });
               }
-              setMessages(prev => [...prev, msg]);
-          } else if (msg.command === 'PART' || msg.command === 'QUIT') {
-              setUsers(prev => prev.filter(u => u.nick !== msg.sender));
-              setMessages(prev => [...prev, msg]);
-          } else if (msg.command === 'NICK') {
+          }
+          // 4. PART / QUIT
+          else if (msg.command === 'PART') {
+              const channelName = msg.target || msg.params[0];
+              if (msg.sender === nick) {
+                  // We left? Close tab? Or just show we left.
+                  // For now just show message.
+                  addMessage(channelName, msg);
+              } else {
+                  setConversations(prev => {
+                      const c = prev[channelName];
+                      if (!c) return prev;
+                      return {
+                          ...prev,
+                          [channelName]: {
+                              ...c,
+                              messages: [...c.messages, msg],
+                              users: c.users.filter(u => u.nick !== msg.sender)
+                          }
+                      };
+                  });
+              }
+          }
+          else if (msg.command === 'QUIT') {
+              // Remove from ALL channels
+              setConversations(prev => {
+                  const next = { ...prev };
+                  Object.keys(next).forEach(k => {
+                      if (next[k].type === 'channel') {
+                          const hasUser = next[k].users.some(u => u.nick === msg.sender);
+                          if (hasUser) {
+                              next[k] = {
+                                  ...next[k],
+                                  messages: [...next[k].messages, msg],
+                                  users: next[k].users.filter(u => u.nick !== msg.sender)
+                              };
+                          }
+                      }
+                  });
+                  return next;
+              });
+          }
+          // 5. PRIVMSG
+          else if (msg.command === 'PRIVMSG') {
+              if (msg.target === nick) {
+                  // PM received -> Open tab for SENDER
+                  const pmPartner = msg.sender || 'Unknown';
+                  addMessage(pmPartner, msg);
+              } else {
+                  // Channel message
+                  addMessage(msg.target || 'Unknown', msg);
+              }
+          }
+          // 6. NICK
+          else if (msg.command === 'NICK') {
                const oldNick = msg.sender;
-               const newNick = msg.params[0];
+               const newNickName = msg.params[0];
+               
                if (oldNick === nick) {
-                   setNick(newNick);
+                   setNick(newNickName); // Update local state only when server confirms!
+                   localStorage.setItem('devussy_irc_nick', newNickName);
                }
-               setUsers(prev => prev.map(u => u.nick === oldNick ? { ...u, nick: newNick } : u));
-               setMessages(prev => [...prev, msg]);
-          } else {
-              // Default handling
-              if (msg.content || msg.type === 'error') {
-                   setMessages(prev => [...prev, msg]);
-              }
+
+               // Update in all channels
+               setConversations(prev => {
+                   const next = { ...prev };
+                   Object.keys(next).forEach(k => {
+                       if (next[k].type === 'channel') {
+                           const userIdx = next[k].users.findIndex(u => u.nick === oldNick);
+                           if (userIdx !== -1) {
+                               const newUsers = [...next[k].users];
+                               newUsers[userIdx] = { ...newUsers[userIdx], nick: newNickName };
+                               next[k] = {
+                                   ...next[k],
+                                   users: newUsers,
+                                   messages: [...next[k].messages, msg]
+                               };
+                           }
+                       } else if (k === oldNick) {
+                           // Rename PM tab? Complex. For now just log.
+                           next[k] = {
+                               ...next[k],
+                               messages: [...next[k].messages, msg]
+                           };
+                       }
+                   });
+                   return next;
+               });
+          }
+          // 7. Error
+          else if (msg.type === 'error') {
+              addSystemMessage(`Error: ${msg.content}`);
           }
         });
       };
@@ -283,7 +460,6 @@ export default function IrcClient({
       socket.onclose = () => {
         console.log('IRC Disconnected');
         setConnected(false);
-        setUsers([]);
         addSystemMessage('Disconnected from server', 'error');
         
         if (reconnectAttempts.current < maxReconnectAttempts) {
@@ -291,14 +467,13 @@ export default function IrcClient({
           addSystemMessage(`Reconnecting in 2s... (Attempt ${reconnectAttempts.current}/${maxReconnectAttempts})`);
           setTimeout(connect, 2000);
         } else {
-          addSystemMessage('Could not connect to IRC server. Switching to Demo Mode.');
+          addSystemMessage('Could not connect. Switching to Demo Mode.');
           setDemoMode(true);
         }
       };
       
       socket.onerror = (err) => {
           console.error("WebSocket error:", err);
-          // onclose will trigger
       };
 
       setWs(socket);
@@ -310,10 +485,10 @@ export default function IrcClient({
         console.error("Connection failed", e);
         setDemoMode(true);
     }
-  }, [nick, channel, wsUrl, demoMode, addSystemMessage]);
+  }, [nick, defaultChannel, wsUrl, demoMode, addSystemMessage, addMessage, activeTab]); // activeTab dep is okay-ish for system msg
 
+  // Initial load
   useEffect(() => {
-    // Load persisted nick
     const savedNick = localStorage.getItem('devussy_irc_nick');
     if (savedNick) {
         setNick(savedNick);
@@ -325,14 +500,6 @@ export default function IrcClient({
         localStorage.setItem('devussy_irc_nick', randomNick);
     }
 
-    // Load persisted messages
-    try {
-        const savedMessages = localStorage.getItem('devussy_irc_messages');
-        if (savedMessages) {
-            setMessages(JSON.parse(savedMessages));
-        }
-    } catch (e) {}
-
     if (!demoMode) {
         const cleanup = connect();
         return () => {
@@ -341,104 +508,81 @@ export default function IrcClient({
     }
   }, [connect, demoMode]);
 
-  // Persist messages
-  useEffect(() => {
-      if (messages.length > 0) {
-          const recent = messages.slice(-50);
-          localStorage.setItem('devussy_irc_messages', JSON.stringify(recent));
-      }
-  }, [messages]);
-
-  // Demo Mode Simulation
-  useEffect(() => {
-    if (demoMode) {
-      addSystemMessage('*** DEMO MODE ACTIVATED ***');
-      setConnected(true);
-      setUsers([
-          { nick: 'System', modes: '@' },
-          { nick: 'User1', modes: '' },
-          { nick: 'User2', modes: '' },
-          { nick, modes: '' }
-      ]);
-      
-      const interval = setInterval(() => {
-          const randomUser = `User${Math.floor(Math.random() * 5) + 1}`;
-          const randomMsgs = [
-              "Hello world!",
-              "Is the pipeline running?",
-              "Check the logs.",
-              "Nice update!",
-              "brb coffee"
-          ];
-          const text = randomMsgs[Math.floor(Math.random() * randomMsgs.length)];
-          
-          setMessages(prev => [...prev, {
-              id: Math.random().toString(36).substr(2, 9),
-              timestamp: new Date().toLocaleTimeString(),
-              prefix: `${randomUser}!user@host`,
-              command: 'PRIVMSG',
-              params: [channel, text],
-              raw: '',
-              type: 'message',
-              sender: randomUser,
-              content: text
-          }]);
-      }, 5000);
-
-      return () => clearInterval(interval);
-    }
-  }, [demoMode, channel, nick, addSystemMessage]);
-
-
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputValue.trim()) return;
 
-    if (demoMode) {
-        setMessages(prev => [...prev, {
-            id: Math.random().toString(36).substr(2, 9),
-            timestamp: new Date().toLocaleTimeString(),
-            prefix: `${nick}!user@host`,
-            command: 'PRIVMSG',
-            params: [channel, inputValue],
-            raw: '',
-            type: 'message',
-            sender: nick,
-            content: inputValue
-        }]);
-    } else if (ws && connected) {
-        if (inputValue.startsWith('/')) {
-            // Handle slash commands
-            const parts = inputValue.slice(1).split(' ');
-            const cmd = parts[0].toUpperCase();
-            if (cmd === 'NICK') {
-                const newName = parts[1];
-                if (newName) {
-                    ws.send(`NICK ${newName}\r\n`);
-                }
-            } else if (cmd === 'JOIN') {
-                ws.send(`JOIN ${parts[1]}\r\n`);
-            } else if (cmd === 'PART') {
-                ws.send(`PART ${parts[1] || channel}\r\n`);
-            } else if (cmd === 'ME') {
-                ws.send(`PRIVMSG ${channel} :\u0001ACTION ${parts.slice(1).join(' ')}\u0001\r\n`);
-            } else {
-                addSystemMessage(`Unknown command: ${cmd}`);
+    const currentTabType = conversations[activeTab]?.type || 'channel';
+
+    if (inputValue.startsWith('/')) {
+        const parts = inputValue.slice(1).split(' ');
+        const cmd = parts[0].toUpperCase();
+        
+        if (cmd === 'NICK') {
+            ws?.send(`NICK ${parts[1]}\r\n`);
+        } else if (cmd === 'JOIN') {
+            const channel = parts[1];
+            if (channel) ws?.send(`JOIN ${channel}\r\n`);
+        } else if (cmd === 'PART') {
+            const target = parts[1] || activeTab;
+            ws?.send(`PART ${target}\r\n`);
+            // Optionally close tab locally
+            setConversations(prev => {
+                const next = { ...prev };
+                delete next[target];
+                return next;
+            });
+            if (activeTab === target) setActiveTab(defaultChannel);
+        } else if (cmd === 'MSG' || cmd === 'QUERY') {
+            const target = parts[1];
+            const msg = parts.slice(2).join(' ');
+            if (target && msg) {
+                ws?.send(`PRIVMSG ${target} :${msg}\r\n`);
+                // Optimistically add to PM tab
+                addMessage(target, {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toLocaleTimeString(),
+                    prefix: `${nick}!me@here`,
+                    command: 'PRIVMSG',
+                    params: [target, msg],
+                    raw: '',
+                    type: 'message',
+                    sender: nick,
+                    content: msg,
+                    target
+                });
+                setActiveTab(target);
             }
+        } else if (cmd === 'HELP') {
+            addSystemMessage(`Available commands:
+/NICK <newname> - Change nickname
+/JOIN <#channel> - Join a channel
+/PART [#channel] - Leave current or specific channel
+/MSG <nick> <message> - Send private message
+/ME <action> - Send action
+/HELP - Show this help`);
+        } else if (cmd === 'ME') {
+             ws?.send(`PRIVMSG ${activeTab} :\u0001ACTION ${parts.slice(1).join(' ')}\u0001\r\n`);
+             // Optimistic add?
         } else {
-            ws.send(`PRIVMSG ${channel} :${inputValue}\r\n`);
-            // Own messages are not echoed by IRC servers usually, so we add it manually
-            setMessages(prev => [...prev, {
-                id: Math.random().toString(36).substr(2, 9),
+            addSystemMessage(`Unknown command: ${cmd}`);
+        }
+    } else {
+        if (ws && connected) {
+            ws.send(`PRIVMSG ${activeTab} :${inputValue}\r\n`);
+            // Optimistically add OWN message to current tab
+            addMessage(activeTab, {
+                id: Date.now().toString(),
                 timestamp: new Date().toLocaleTimeString(),
-                prefix: `${nick}!user@host`,
+                prefix: `${nick}!me@host`, // Mock prefix
                 command: 'PRIVMSG',
-                params: [channel, inputValue],
+                params: [activeTab, inputValue],
                 raw: '',
                 type: 'message',
                 sender: nick,
-                content: inputValue
-            }]);
+                content: inputValue,
+                target: activeTab
+            });
         }
     }
     setInputValue('');
@@ -446,49 +590,93 @@ export default function IrcClient({
 
   const handleChangeNick = () => {
       if (newNickInput && newNickInput !== nick) {
-          if (demoMode) {
-              setNick(newNickInput);
-              addSystemMessage(`You are now known as ${newNickInput}`);
-          } else if (ws && connected) {
+          if (ws && connected) {
               ws.send(`NICK ${newNickInput}\r\n`);
+              // Do NOT setNick here. Wait for server confirmation.
           }
-          localStorage.setItem('devussy_irc_nick', newNickInput);
           setIsNickDialogOpen(false);
       }
+  };
+
+  const closeTab = (e: React.MouseEvent, tabName: string) => {
+      e.stopPropagation();
+      if (tabName === defaultChannel) return; // Don't close main
+      
+      if (conversations[tabName]?.type === 'channel') {
+          ws?.send(`PART ${tabName}\r\n`);
+      }
+      
+      setConversations(prev => {
+          const next = { ...prev };
+          delete next[tabName];
+          return next;
+      });
+      if (activeTab === tabName) setActiveTab(defaultChannel);
   };
 
   return (
     <div className="flex h-full w-full bg-background text-foreground overflow-hidden">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
-         <div className="p-2 border-b flex justify-between items-center bg-muted/20">
-             <div className="font-bold">{channel} {demoMode && <span className="text-xs bg-yellow-600 text-white px-1 rounded ml-2">DEMO</span>}</div>
-             <Dialog open={isNickDialogOpen} onOpenChange={setIsNickDialogOpen}>
-                 <DialogTrigger asChild>
-                     <Button variant="outline" size="sm">Change Nick</Button>
-                 </DialogTrigger>
-                 <DialogContent>
-                     <DialogHeader>
-                         <DialogTitle>Change Nickname</DialogTitle>
-                     </DialogHeader>
-                     <div className="py-4">
-                         <Input 
-                            value={newNickInput} 
-                            onChange={(e) => setNewNickInput(e.target.value)}
-                            placeholder="Enter new nickname"
-                         />
+         <div className="border-b bg-muted/20 flex flex-col">
+             <div className="p-2 flex justify-between items-center border-b border-white/10">
+                 <div className="font-bold flex items-center gap-2">
+                     <span>Devussy IRC</span>
+                     {demoMode && <span className="text-xs bg-yellow-600 text-white px-1 rounded">DEMO</span>}
+                     <span className="text-xs text-muted-foreground ml-2">({nick})</span>
+                 </div>
+                 <Dialog open={isNickDialogOpen} onOpenChange={setIsNickDialogOpen}>
+                     <DialogTrigger asChild>
+                         <Button variant="outline" size="sm" className="h-7 text-xs">Change Nick</Button>
+                     </DialogTrigger>
+                     <DialogContent>
+                         <DialogHeader>
+                             <DialogTitle>Change Nickname</DialogTitle>
+                         </DialogHeader>
+                         <div className="py-4">
+                             <Input 
+                                value={newNickInput} 
+                                onChange={(e) => setNewNickInput(e.target.value)}
+                                placeholder="Enter new nickname"
+                             />
+                         </div>
+                         <DialogFooter>
+                             <Button onClick={handleChangeNick}>Save</Button>
+                         </DialogFooter>
+                     </DialogContent>
+                 </Dialog>
+             </div>
+             
+             {/* Tabs */}
+             <div className="flex items-center gap-1 px-2 pt-2 overflow-x-auto">
+                 {Object.keys(conversations).map(name => (
+                     <div 
+                        key={name}
+                        onClick={() => setActiveTab(name)}
+                        className={`
+                            group flex items-center gap-2 px-3 py-1.5 rounded-t-md cursor-pointer text-sm border-t border-l border-r select-none
+                            ${activeTab === name ? 'bg-background border-border font-bold' : 'bg-muted/50 border-transparent opacity-70 hover:opacity-100'}
+                        `}
+                     >
+                         <span>{name}</span>
+                         {conversations[name].unreadCount > 0 && (
+                             <span className="bg-red-500 text-white text-[10px] px-1 rounded-full">{conversations[name].unreadCount}</span>
+                         )}
+                         {name !== defaultChannel && (
+                             <X 
+                                className="h-3 w-3 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white rounded" 
+                                onClick={(e) => closeTab(e, name)}
+                             />
+                         )}
                      </div>
-                     <DialogFooter>
-                         <Button onClick={handleChangeNick}>Save</Button>
-                     </DialogFooter>
-                 </DialogContent>
-             </Dialog>
+                 ))}
+             </div>
          </div>
          
          <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
              <div className="space-y-1">
-                 {messages.map((msg) => (
-                     <div key={msg.id} className="text-sm break-words font-mono">
+                 {conversations[activeTab]?.messages.map((msg, i) => (
+                     <div key={i} className="text-sm break-words font-mono">
                          <span className="text-muted-foreground text-xs mr-2">[{msg.timestamp}]</span>
                          {msg.type === 'message' && (
                              <>
@@ -522,7 +710,7 @@ export default function IrcClient({
                  <Input 
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
-                    placeholder={`Message ${channel}...`}
+                    placeholder={`Message ${activeTab}...`}
                     className="flex-1 font-mono"
                  />
                  <Button type="submit">Send</Button>
@@ -530,22 +718,24 @@ export default function IrcClient({
          </div>
       </div>
 
-      {/* User List Sidebar */}
-      <div className="w-48 border-l bg-muted/10 flex flex-col hidden md:flex">
-          <div className="p-2 border-b font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-              Users ({users.length})
-          </div>
-          <ScrollArea className="flex-1 p-2">
-              <div className="space-y-1">
-                  {users.sort((a,b) => a.nick.localeCompare(b.nick)).map((user) => (
-                      <div key={user.nick} className="text-sm flex items-center gap-1 font-mono">
-                          <span className="text-muted-foreground w-3 text-center">{user.modes}</span>
-                          <span className={getUserColor(user.nick)}>{user.nick}</span>
-                      </div>
-                  ))}
+      {/* User List Sidebar (Only for channels) */}
+      {conversations[activeTab]?.type === 'channel' && (
+          <div className="w-48 border-l bg-muted/10 flex flex-col hidden md:flex">
+              <div className="p-2 border-b font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                  Users ({conversations[activeTab]?.users.length || 0})
               </div>
-          </ScrollArea>
-      </div>
+              <ScrollArea className="flex-1 p-2">
+                  <div className="space-y-1">
+                      {conversations[activeTab]?.users.sort((a,b) => a.nick.localeCompare(b.nick)).map((user) => (
+                          <div key={user.nick} className="text-sm flex items-center gap-1 font-mono">
+                              <span className="text-muted-foreground w-3 text-center">{user.modes}</span>
+                              <span className={getUserColor(user.nick)}>{user.nick}</span>
+                          </div>
+                      ))}
+                  </div>
+              </ScrollArea>
+          </div>
+      )}
     </div>
   );
 }
