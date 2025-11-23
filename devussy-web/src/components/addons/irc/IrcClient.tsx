@@ -70,15 +70,25 @@ export default function IrcClient({
   const [newNickInput, setNewNickInput] = useState(initialNick);
   const [isNickDialogOpen, setIsNickDialogOpen] = useState(false);
   
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 3;
-  const wsUrl = process.env.NEXT_PUBLIC_IRC_WS_URL || 'ws://localhost:8080';
+  const wsUrl =
+    process.env.NEXT_PUBLIC_IRC_WS_URL ||
+    (typeof window !== 'undefined'
+      ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/irc/webirc/websocket/`
+      : 'ws://localhost:8080/webirc/websocket/');
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom when user is already near the bottom
   useEffect(() => {
-    if (messagesEndRef.current) {
+    const container = scrollRef.current;
+    if (!container || !messagesEndRef.current) return;
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    if (distanceFromBottom < 80) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
@@ -470,7 +480,7 @@ export default function IrcClient({
              </Dialog>
          </div>
          
-         <ScrollArea className="flex-1 p-4">
+         <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
              <div className="space-y-1">
                  {messages.map((msg) => (
                      <div key={msg.id} className="text-sm break-words font-mono">
@@ -500,7 +510,7 @@ export default function IrcClient({
                  ))}
                  <div ref={messagesEndRef} />
              </div>
-         </ScrollArea>
+         </div>
 
          <div className="p-2 border-t bg-muted/10">
              <form onSubmit={handleSendMessage} className="flex gap-2">
