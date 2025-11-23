@@ -583,7 +583,45 @@ export default function Page() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col relative bg-transparent">
+    <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
+      {/* Desktop Icons */}
+      {theme === 'bliss' && (
+          <div className="absolute top-4 left-4 z-0 flex flex-col gap-6 p-4">
+              {/* My Computer */}
+              <button 
+                className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
+                onDoubleClick={handleNewProject}
+              >
+                  <div className="w-12 h-12 relative">
+                      <img src="/devussy_logo_minimal.png" className="w-full h-full object-contain drop-shadow-md" />
+                  </div>
+                  <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
+                      My Computer
+                  </span>
+              </button>
+
+              {/* mIRC */}
+              <button 
+                className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
+                onDoubleClick={() => handleOpenIrc()}
+              >
+                  <div className="w-12 h-12 relative bg-white/10 rounded-lg border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
+                      {/* Custom mIRC-like icon since we don't have the asset */}
+                      <div className="relative w-8 h-8">
+                          <div className="absolute inset-0 bg-red-500 rounded-full transform -rotate-12 opacity-80"></div>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                              <MessageSquare className="text-white w-5 h-5 transform rotate-12" fill="currentColor" />
+                          </div>
+                          <div className="absolute -bottom-1 -right-1 bg-green-500 w-3 h-3 rounded-full border-2 border-white"></div>
+                      </div>
+                  </div>
+                  <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
+                      mIRC
+                  </span>
+              </button>
+          </div>
+      )}
+
       {/* Global Header / Toolbar (Optional) */}
       {theme !== 'bliss' && (
         <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
