@@ -60,17 +60,4 @@ services:
       - ./irc/data:/inspircd/data
     restart: unless-stopped
 
-  irc-gateway:
-    build:
-      context: ./irc
-      dockerfile: webircgateway.Dockerfile
-    container_name: devussy-irc-gateway
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./irc/gateway.conf:/config/gateway.conf
-    restart: unless-stopped
-    depends_on:
-      - ircd
-
 # Note: this is a minimal template. For production, build optimized images and avoid mounting the whole source tree.
