@@ -501,7 +501,10 @@ export default function IrcClient({
 
   const handleToggleConnection = () => {
       if (connected) {
-          ws?.close();
+          if (ws) {
+              ws.close();
+              setWs(null);
+          }
           setConnected(false);
           addSystemMessage('Disconnected from server (Manual)');
       } else {
