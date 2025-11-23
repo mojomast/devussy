@@ -57,6 +57,7 @@ services:
     volumes:
       - ./irc/logs:/inspircd/logs
       - ./irc/data:/inspircd/data
+      - ./irc/conf.d:/inspircd/conf.d
     restart: unless-stopped
 
   irc-gateway:
