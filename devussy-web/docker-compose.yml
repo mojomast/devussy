@@ -50,12 +50,13 @@ services:
       - streaming-server
 
   irc-server:
-    image: jgoerzen/ircd-hybrid:latest
+    image: alpine:latest
     container_name: devussy-irc-server
     ports:
       - "6667:6667"
-    volumes:
-      - ./irc/ircd.conf:/etc/ircd-hybrid/ircd.conf
+    environment:
+      - TZ=UTC
+    command: ["sh", "-c", "apk add --no-cache socat tzdata && cp /usr/share/zoneinfo/UTC /etc/localtime && socat TCP-LISTEN:6667,reuseaddr,fork EXEC:'/bin/sh -c \"echo \":$$(date +%s)devussy 001 * :Welcome to Devussy IRC\"; while read line; do echo \":irc.devussy.local PING :$$(date +%s)\"; sleep 30; done\"'"]
     restart: unless-stopped
 
   irc-gateway:
