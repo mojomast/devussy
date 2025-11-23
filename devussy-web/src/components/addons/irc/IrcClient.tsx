@@ -621,7 +621,7 @@ export default function IrcClient({
       <div className="flex-1 flex flex-col min-w-0">
          <div className="border-b bg-muted/20 flex flex-col">
              <div className="p-2 flex justify-between items-center border-b border-white/10">
-                     <div className="font-bold flex items-center gap-2">
+                 <div className="font-bold flex items-center gap-2">
                      <span>Devussy IRC</span>
                      {demoMode && <span className="text-xs bg-yellow-600 text-white px-1 rounded">DEMO</span>}
                      <span className="text-xs text-muted-foreground ml-2">({nick})</span>
@@ -637,24 +637,25 @@ export default function IrcClient({
                     </Button>
                     <Dialog open={isNickDialogOpen} onOpenChange={setIsNickDialogOpen}>
                         <DialogTrigger asChild>
-                         <Button variant="outline" size="sm" className="h-7 text-xs">Change Nick</Button>
-                     </DialogTrigger>
-                     <DialogContent>
-                         <DialogHeader>
-                             <DialogTitle>Change Nickname</DialogTitle>
-                         </DialogHeader>
-                         <div className="py-4">
-                             <Input 
-                                value={newNickInput} 
-                                onChange={(e) => setNewNickInput(e.target.value)}
-                                placeholder="Enter new nickname"
-                             />
-                         </div>
-                         <DialogFooter>
-                             <Button onClick={handleChangeNick}>Save</Button>
-                         </DialogFooter>
-                     </DialogContent>
-                 </Dialog>
+                            <Button variant="outline" size="sm" className="h-7 text-xs">Change Nick</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Change Nickname</DialogTitle>
+                            </DialogHeader>
+                            <div className="py-4">
+                                <Input 
+                                   value={newNickInput} 
+                                   onChange={(e) => setNewNickInput(e.target.value)}
+                                   placeholder="Enter new nickname"
+                                />
+                            </div>
+                            <DialogFooter>
+                                <Button onClick={handleChangeNick}>Save</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                 </div>
              </div>
              
              {/* Tabs */}
