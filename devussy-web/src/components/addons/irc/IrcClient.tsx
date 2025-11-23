@@ -720,27 +720,29 @@ export default function IrcClient({
 
                     {/* Tabs */}
                     <div className="flex items-center gap-1 px-2 pt-2 overflow-x-auto">
-                        {[STATUS_TAB, ...Object.keys(conversations).filter(k => k !== STATUS_TAB)].map(name => (
-                            <div
-                                key={name}
-                                onClick={() => setActiveTab(name)}
-                                className={`
+                        {[STATUS_TAB, ...Object.keys(conversations).filter(k => k !== STATUS_TAB)]
+                            .filter(name => conversations[name]) // Only show tabs that exist
+                            .map(name => (
+                                <div
+                                    key={name}
+                                    onClick={() => setActiveTab(name)}
+                                    className={`
                             group flex items-center gap-2 px-3 py-1.5 rounded-t-md cursor-pointer text-sm border-t border-l border-r select-none
                             ${activeTab === name ? 'bg-background border-border font-bold' : 'bg-muted/50 border-transparent opacity-70 hover:opacity-100'}
                         `}
-                            >
-                                <span>{name}</span>
-                                {conversations[name].unreadCount > 0 && (
-                                    <span className="bg-red-500 text-white text-[10px] px-1 rounded-full">{conversations[name].unreadCount}</span>
-                                )}
-                                {name !== STATUS_TAB && name !== defaultChannel && (
-                                    <X
-                                        className="h-3 w-3 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white rounded"
-                                        onClick={(e) => closeTab(e, name)}
-                                    />
-                                )}
-                            </div>
-                        ))}
+                                >
+                                    <span>{name}</span>
+                                    {conversations[name].unreadCount > 0 && (
+                                        <span className="bg-red-500 text-white text-[10px] px-1 rounded-full">{conversations[name].unreadCount}</span>
+                                    )}
+                                    {name !== STATUS_TAB && name !== defaultChannel && (
+                                        <X
+                                            className="h-3 w-3 opacity-0 group-hover:opacity-100 hover:bg-red-500 hover:text-white rounded"
+                                            onClick={(e) => closeTab(e, name)}
+                                        />
+                                    )}
+                                </div>
+                            ))}
                     </div>
                 </div>
 
