@@ -55,7 +55,7 @@ services:
       - "6667:6667"
       - "8080:8080"
     volumes:
-      - ./irc/conf:/inspircd/conf
+      - ./irc/conf/inspircd_v2.conf:/inspircd/conf/inspircd.conf
       - ./irc/logs:/inspircd/logs
       - ./irc/data:/inspircd/data
     restart: unless-stopped
