@@ -497,14 +497,17 @@ export default function IrcClient({
         setNewNickInput(randomNick);
         localStorage.setItem('devussy_irc_nick', randomNick);
     }
+  }, []);
 
-    if (!demoMode) {
-        const cleanup = connect();
-        return () => {
-            if (cleanup) cleanup();
-        };
-    }
-  }, [connect, demoMode]);
+  const handleToggleConnection = () => {
+      if (connected) {
+          ws?.close();
+          setConnected(false);
+          addSystemMessage('Disconnected from server (Manual)');
+      } else {
+          connect();
+      }
+  };
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -618,13 +621,22 @@ export default function IrcClient({
       <div className="flex-1 flex flex-col min-w-0">
          <div className="border-b bg-muted/20 flex flex-col">
              <div className="p-2 flex justify-between items-center border-b border-white/10">
-                 <div className="font-bold flex items-center gap-2">
+                     <div className="font-bold flex items-center gap-2">
                      <span>Devussy IRC</span>
                      {demoMode && <span className="text-xs bg-yellow-600 text-white px-1 rounded">DEMO</span>}
                      <span className="text-xs text-muted-foreground ml-2">({nick})</span>
                  </div>
-                 <Dialog open={isNickDialogOpen} onOpenChange={setIsNickDialogOpen}>
-                     <DialogTrigger asChild>
+                 <div className="flex items-center gap-2">
+                    <Button 
+                        variant={connected ? "destructive" : "default"} 
+                        size="sm" 
+                        className="h-7 text-xs"
+                        onClick={handleToggleConnection}
+                    >
+                        {connected ? "Disconnect" : "Connect"}
+                    </Button>
+                    <Dialog open={isNickDialogOpen} onOpenChange={setIsNickDialogOpen}>
+                        <DialogTrigger asChild>
                          <Button variant="outline" size="sm" className="h-7 text-xs">Change Nick</Button>
                      </DialogTrigger>
                      <DialogContent>
