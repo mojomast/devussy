@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useRef } from "react";
 import type { ShareLinkPayload } from "@/shareLinks";
+import type { AppContext } from "./appTypes";
 
 type EventPayloads = {
   planGenerated: {
@@ -30,6 +31,13 @@ type EventPayloads = {
   executionCompleted: {
     projectName?: string;
     plan?: any;
+    totalPhases?: number;
+  };
+  executionPhaseUpdated: {
+    projectName?: string;
+    phaseNumber: number;
+    phaseTitle?: string;
+    status: "queued" | "running" | "complete" | "failed";
     totalPhases?: number;
   };
   openShareLink: ShareLinkPayload;
@@ -93,6 +101,38 @@ export const useEventBus = (): EventBus => {
     throw new Error("useEventBus must be used within an EventBusProvider");
   }
   return bus;
+};
+
+export const createAppContext = (bus: EventBus): AppContext => {
+  let currentState: any = {};
+
+  return {
+    emit: (event: string, payload?: any) => {
+      bus.emit(event as EventKey, payload as any);
+    },
+    subscribe: (event: string, cb: (payload: any) => void) => {
+      return bus.subscribe(event as EventKey, cb as any);
+    },
+    getState: () => {
+      return currentState;
+    },
+    setState: (patch: any) => {
+      try {
+        if (typeof patch === "function") {
+          currentState = patch(currentState);
+        } else if (patch && typeof patch === "object" && !Array.isArray(patch)) {
+          currentState = {
+            ...currentState,
+            ...patch,
+          };
+        } else {
+          currentState = patch;
+        }
+      } catch (err) {
+        console.error("[AppContext] Failed to update shared state", err);
+      }
+    },
+  };
 };
 
 export type { EventBus };

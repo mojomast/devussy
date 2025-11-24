@@ -220,6 +220,18 @@ export const ExecutionView = ({
         });
 
         try {
+            bus.emit('executionPhaseUpdated', {
+                projectName,
+                phaseNumber: phase.number,
+                phaseTitle: phase.title,
+                status: 'running',
+                totalPhases: phases.length,
+            });
+        } catch (err) {
+            console.error('[ExecutionView] Failed to emit executionPhaseUpdated event (running)', err);
+        }
+
+        try {
             const backendUrl = `/api/plan/detail`;
             console.log('[executePhase] Fetching from', backendUrl, 'for phase', phase.number);
 
@@ -368,10 +380,21 @@ export const ExecutionView = ({
                                                 status: 'complete',
                                                 progress: 100,
                                                 output: finalOutput,
-                                                detailedPhase: data.phase // Store the detailed phase with steps
+                                                detailedPhase: data.phase
                                             }
                                             : p
                                     ));
+                                    try {
+                                        bus.emit('executionPhaseUpdated', {
+                                            projectName,
+                                            phaseNumber: phase.number,
+                                            phaseTitle: phase.title,
+                                            status: 'complete',
+                                            totalPhases: phases.length,
+                                        });
+                                    } catch (err) {
+                                        console.error('[ExecutionView] Failed to emit executionPhaseUpdated event (complete)', err);
+                                    }
                                     setCompletedCount(prev => prev + 1);
 
                                     // Clean up buffer
@@ -410,6 +433,17 @@ export const ExecutionView = ({
                             ? { ...p, status: 'complete', progress: 100, output: finalOutput }
                             : p
                     ));
+                    try {
+                        bus.emit('executionPhaseUpdated', {
+                            projectName,
+                            phaseNumber: phase.number,
+                            phaseTitle: phase.title,
+                            status: 'complete',
+                            totalPhases: phases.length,
+                        });
+                    } catch (err) {
+                        console.error('[ExecutionView] Failed to emit executionPhaseUpdated event (complete, implicit)', err);
+                    }
                     setCompletedCount(prev => prev + 1);
 
                     // Clean up buffer
@@ -449,6 +483,17 @@ export const ExecutionView = ({
                         ? { ...p, status: 'failed' as const, error: err.message || 'Unknown error', output: currentOutput + `\n\n[ERROR]: ${err.message}` }
                         : p
                 ));
+                try {
+                    bus.emit('executionPhaseUpdated', {
+                        projectName,
+                        phaseNumber: phase.number,
+                        phaseTitle: phase.title,
+                        status: 'failed',
+                        totalPhases: phases.length,
+                    });
+                } catch (emitErr) {
+                    console.error('[ExecutionView] Failed to emit executionPhaseUpdated event (failed)', emitErr);
+                }
             }
         } finally {
             abortControllersRef.current.delete(phase.number);

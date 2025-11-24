@@ -246,6 +246,46 @@ Write tests to ensure share links open correct windows and restore data correctl
 
 Test cross‑app events (e.g. pipeline sending notifications to IRC, or other apps).
 
+### 9.1. Implementation status – Python testing suite for app framework (v1)
+
+A **Python/pytest-based integration suite** now exercises the key features of the app framework and IRC integration. It focuses on:
+
+- The **share links workflow** (`generateShareLink`/`decodeSharePayload` helpers and the `/share` route wiring).
+- **EventBus/AppContext-driven notifications** for the interview/design/plan/execute lifecycle and their propagation into `IrcClient` + Status tab.
+- The **compose/nginx generator** (`devussy-web/scripts/generate-compose.ts`) and its generated compose/nginx fragments.
+- **Window manager & AppRegistry invariants**, including registry-driven app IDs, `WindowType`, and `singleInstance` semantics.
+
+Concrete integration modules under `tests/`:
+
+- `tests/integration/test_share_links_flow.py`
+  - Uses a small TypeScript harness (`devussy-web/scripts/src/shareLinks_harness.ts`) via `npx ts-node` to round-trip payloads through `generateShareLink`/`decodeSharePayload`.
+  - Asserts that valid payloads preserve `stage` and core fields (e.g. `projectName`) and that malformed or `stage`-less payloads decode to `null`.
+  - Statically verifies that the `/share` page uses `decodeSharePayload` and persists `devussy_share_payload` into `sessionStorage` before offering an "Open Devussy" button.
+- `tests/integration/test_event_bus_notifications.py`
+  - Parses `devussy-web/src/apps/eventBus.tsx` to extract typed event keys and asserts that each appears in at least one emit/subscribe site across `page.tsx`, `ExecutionView.tsx`, and `IrcClient.tsx`.
+  - Confirms that the pipeline emits `interviewCompleted`, `designCompleted`, and `planGenerated`, and that `ExecutionView` emits `executionStarted` / `executionCompleted`.
+  - Confirms that `IrcClient` subscribes to these lifecycle events and uses `addSystemMessage` so updates are mirrored into the Status tab.
+- `tests/integration/test_compose_generator.py`
+  - Runs `npm run generate:compose` in `devussy-web/` and asserts that `docker-compose.apps.generated.yml` and `nginx/conf.d/apps.generated.conf` are created.
+  - Verifies that the compose overlay declares the `irc_ircd` service with the expected InspIRCd image, ports, and volumes, plus a `frontend` env block with IRC-related env vars.
+  - Verifies that the nginx fragment adds a `/apps/irc/ws/` location proxying to `ircd:8080` with websocket headers.
+- `tests/integration/test_window_manager_registry.py`
+  - Asserts that `WindowType` in `page.tsx` is `keyof typeof AppRegistry`.
+  - Checks that `AppRegistry.ts` includes the expected core app IDs (`init`, `interview`, `design`, `plan`, `execute`, `handoff`, `help`, `model-settings`, `pipeline`, `irc`).
+  - Verifies that Help, IRC, and Model Settings apps are marked `singleInstance: true` and that `Taskbar` is driven via a generic `onOpenApp` handler that calls `spawnAppWindow`.
+
+Running the suite:
+
+- From the repo root:
+  - `pytest tests/integration/test_share_links_flow.py -v`
+  - `pytest tests/integration/test_event_bus_notifications.py -v`
+  - `pytest tests/integration/test_compose_generator.py -v`
+  - `pytest tests/integration/test_window_manager_registry.py -v`
+- Or all integration tests:
+  - `pytest tests/integration -v`
+
+This suite now serves as the **baseline regression harness** for the app framework. Future phases (additional apps, richer `AppContext` state, new event types) should extend these tests or add new integration modules rather than relying solely on manual verification.
+
 ## 10. Considerations and Safety
 
 Security: Exposing additional services via Nginx requires careful configuration (TLS termination, authentication where necessary). Never expose services that store secrets without proper access control. Avoid sharing API keys or tokens through share links.
@@ -262,10 +302,28 @@ By abstracting application metadata into a registry, introducing an event bus fo
 
 **Implementation status – Event Bus (extended):**
 
-- The global `EventBus` in `devussy-web/src/apps/eventBus.tsx` defines typed payloads for core cross-app events including `planGenerated`, `interviewCompleted`, `designCompleted`, `shareLinkGenerated`, `executionCompleted`, `openShareLink`, and now `executionStarted` (emitted when the Execution view begins running phases).
-- `ExecutionView` (`devussy-web/src/components/pipeline/ExecutionView.tsx`) emits `executionStarted` from `startExecution()` with `{ projectName, totalPhases }` before kicking off phase execution, and continues to emit `executionCompleted` when all phases finish.
-- `IrcClient` (`devussy-web/src/components/addons/irc/IrcClient.tsx`) subscribes to these events and mirrors them into `#devussy-chat` and the Status tab, including a system message when execution begins.
+- The global `EventBus` in `devussy-web/src/apps/eventBus.tsx` defines typed payloads for core cross-app events including `planGenerated`, `interviewCompleted`, `designCompleted`, `shareLinkGenerated`, `executionCompleted`, `openShareLink`, `executionStarted`, and now `executionPhaseUpdated` (emitted when individual execution phases change status).
+- `ExecutionView` (`devussy-web/src/components/pipeline/ExecutionView.tsx`) emits `executionStarted` from `startExecution()` with `{ projectName, totalPhases }` before kicking off phase execution, emits `executionPhaseUpdated` for each phase transition to `running` / `complete` / `failed`, and continues to emit `executionCompleted` when all phases finish.
+- `IrcClient` (`devussy-web/src/components/addons/irc/IrcClient.tsx`) subscribes to these events and mirrors them into `#devussy-chat` and the Status tab, including a high-level system message when execution begins and completes plus concise per-phase telemetry (start/complete/fail) in the Status tab.
+
+**Implementation status – AppContext wrapper (v2):**
+
+- `devussy-web/src/apps/eventBus.tsx` exposes a `createAppContext(bus)` helper that wraps the existing `EventBus` instance in an `AppContext` implementation. The adapter forwards `emit`/`subscribe` calls to the typed event bus and now maintains a shared in-memory `currentState` object behind:
+  - `getState(): any` – returns the current shared state value (initially `{}`).
+  - `setState(patch: any)` – accepts either:
+    - a functional updater `(prev) => next`,
+    - a shallow object (merged into the previous state), or
+    - any other value (which replaces the state entirely).
+- `devussy-web/src/app/page.tsx` derives a single `appContext` from the global bus inside `PageInner` and passes it into registry-driven apps via an `appContext` prop for:
+  - The `model-settings` app, alongside its existing model configuration props.
+  - The generic registry branch used for `help`, `irc`, `scratchpad`, and similar apps, together with `onClose` and window props.
+- `devussy-web/src/components/addons/irc/IrcClient.tsx` accepts an optional `appContext?: AppContext` prop and, when present, uses it for all event subscriptions. When no context is provided, it falls back to a small adapter over `useEventBus()`, preserving existing behaviour.
+
+This v2 wrapper keeps `AppContext` as a thin abstraction over the EventBus while adding a simple shared state bag that registry apps can use for cross-window coordination without touching the window manager.
 
 **Implementation status – Window manager & AppRegistry (incremental):**
 
 - The desktop IRC shortcut in `devussy-web/src/app/page.tsx` now derives its window title from `AppRegistry['irc'].name`, falling back to the previous hard-coded title. This keeps the behaviour identical while ensuring that app naming is consistently driven by the central registry.
+- A new `Scratchpad` app (`devussy-web/src/apps/scratchpad.tsx`) is registered in `AppRegistry` as a single-instance utility under the Devussy start menu category. It demonstrates a simple registry-driven window that:
+  - Renders inside the generic registry branch of `page.tsx`.
+  - Uses `AppContext.getState`/`setState` plus `localStorage` to persist a shared free-form notes field (`scratchpad`) that other apps can read if desired.

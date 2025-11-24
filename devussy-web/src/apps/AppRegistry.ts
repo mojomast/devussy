@@ -4,6 +4,7 @@ import IrcApp from "./irc";
 import PipelineApp from "./pipeline";
 import HelpApp from "./help";
 import ModelSettingsApp from "./modelSettings";
+import ScratchpadApp from "./scratchpad";
 import { MessageSquare, Sparkles, Layers, Code2, GitBranch, Zap } from "lucide-react";
 
 const InitApp: AppDefinition = {
@@ -69,5 +70,6 @@ export const AppRegistry: Record<string, AppDefinition> = {
   [HelpApp.id]: HelpApp,
   [ModelSettingsApp.id]: ModelSettingsApp,
   [PipelineApp.id]: PipelineApp,
+  [ScratchpadApp.id]: ScratchpadApp,
   [IrcApp.id]: IrcApp,
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
 import { useEventBus } from '@/apps/eventBus';
+import type { AppContext } from '@/apps/appTypes';
 import { decodeSharePayload } from '@/shareLinks';
 
 interface IrcMessage {
@@ -46,6 +47,7 @@ interface Conversation {
 interface IrcClientProps {
     initialNick?: string;
     defaultChannel?: string;
+    appContext?: AppContext;
 }
 
 const IRC_COLORS = [
@@ -121,12 +123,28 @@ function parseShareLinkFromText(text: string): {
 export default function IrcClient({
     initialNick = 'Guest',
     defaultChannel = process.env.NEXT_PUBLIC_IRC_CHANNEL || '#devussy-chat',
+    appContext,
 }: IrcClientProps) {
     const [ws, setWs] = useState<WebSocket | null>(null);
     const [connected, setConnected] = useState(false);
     const [demoMode, setDemoMode] = useState(false);
 
-    const bus = useEventBus();
+    const eventBus = useEventBus();
+    const bus: AppContext = useMemo(() => {
+        if (appContext) {
+            return appContext;
+        }
+        return {
+            emit: (event: string, payload?: any) => {
+                (eventBus as any).emit(event, payload);
+            },
+            subscribe: (event: string, cb: (payload: any) => void) => {
+                return (eventBus as any).subscribe(event, cb);
+            },
+            getState: () => undefined,
+            setState: (_patch: any) => { },
+        };
+    }, [appContext, eventBus]);
 
     // Multi-conversation state
     const STATUS_TAB = 'Status';
@@ -413,12 +431,54 @@ export default function IrcClient({
             }
         });
 
+        const unsubscribePhase = bus.subscribe('executionPhaseUpdated', (payload: any) => {
+            try {
+                if (!payload || typeof payload !== 'object') return;
+
+                const name =
+                    payload.projectName ||
+                    payload.project_name ||
+                    'a Devussy project';
+
+                const phaseNumber = payload.phaseNumber;
+                const title = payload.phaseTitle;
+                const status = payload.status;
+                const total = payload.totalPhases;
+
+                if (typeof phaseNumber !== 'number' || !status) {
+                    return;
+                }
+
+                const phaseLabel = title
+                    ? `phase ${phaseNumber} (${title})`
+                    : `phase ${phaseNumber}`;
+
+                const totalSuffix = total ? ` of ${total}` : '';
+
+                let content: string | null = null;
+                if (status === 'running') {
+                    content = `[Devussy] Execution started for ${phaseLabel}${totalSuffix} in ${name}.`;
+                } else if (status === 'complete') {
+                    content = `[Devussy] Execution completed for ${phaseLabel}${totalSuffix} in ${name}.`;
+                } else if (status === 'failed') {
+                    content = `[Devussy] Execution failed for ${phaseLabel}${totalSuffix} in ${name}.`;
+                }
+
+                if (content) {
+                    addSystemMessage(content);
+                }
+            } catch (err) {
+                console.error('[IrcClient] Failed to handle executionPhaseUpdated event', err);
+            }
+        });
+
         return () => {
             unsubscribeShare();
             unsubscribeExec();
             unsubscribeInterview();
             unsubscribeDesign();
             unsubscribeExecStarted();
+            unsubscribePhase();
         };
     }, [bus, defaultChannel, ws, connected, addMessage, addSystemMessage]);
 

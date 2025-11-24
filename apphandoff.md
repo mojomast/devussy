@@ -430,3 +430,98 @@ Pick one, define a small scope, and update this handoff.
 - **Remaining work / follow-ups:**
   - Future window-manager phases can continue moving non-pipeline apps toward fully registry-driven rendering and props, but those are out of scope for this small refinement.
 
+### Phase Log: AppContext wrapper on EventBus (STATUS: COMPLETE – v1)
+
+- **Code changes (frontend):**
+  - `devussy-web/src/apps/eventBus.tsx`:
+    - Added a `createAppContext(bus)` helper that wraps the existing typed `EventBus` in an `AppContext` implementation exposing `emit`, `subscribe`, `getState`, and `setState`. For now, `getState`/`setState` are no-ops, keeping this as a minimal adapter on top of the bus.
+  - `devussy-web/src/app/page.tsx`:
+    - Derives a shared `appContext` instance via `createAppContext(bus)` inside `PageInner` and passes it into registry-driven apps as an `appContext` prop.
+    - The `model-settings` branch now calls the registry component with `appContext={appContext}` in addition to the existing `configs`, `onConfigsChange`, and `activeStage` props.
+    - The generic registry branch that renders `help`, `irc`, and other simple apps now passes `appContext={appContext}` alongside `onClose` and any window props.
+  - `devussy-web/src/components/addons/irc/IrcClient.tsx`:
+    - Updated `IrcClient` to accept an optional `appContext?: AppContext` prop.
+    - Internally, it now prefers the provided `appContext` for `subscribe`/`emit` operations and falls back to a small adapter over `useEventBus()` when no context is supplied, so existing behaviour remains unchanged.
+
+- **Behavioural status:**
+  - No visible changes to the desktop, pipeline, or IRC behaviour. Cross-app events (`planGenerated`, `interviewCompleted`, `designCompleted`, `shareLinkGenerated`, `executionStarted`, `executionCompleted`, `openShareLink`) continue to flow exactly as before.
+  - Registry apps now have access to a unified `AppContext` wrapper on top of the global `EventBus`, which can be extended in later phases to include per-app or shared state without touching the window manager again.
+
+- **Remaining work / follow-ups:**
+  - Decide whether to introduce real `getState`/`setState` semantics (e.g. per-app state or shared global state) on top of the current no-op implementation.
+  - Gradually migrate other registry apps (e.g. Help, Model Settings) to lean on `AppContext` rather than importing `useEventBus` directly if they gain cross-app interactions in the future.
+
+### Phase Log: Python Testing Suite for App Framework & IRC Integration (STATUS: COMPLETE – v1)
+
+- **Scope covered:**
+  - **Share links flow**: encode/decode helpers and `/share` wiring.
+  - **EventBus / AppContext notifications**: lifecycle events emitted from the pipeline and consumed by `IrcClient` + Status tab.
+  - **Compose/nginx generator**: `scripts/generate-compose.ts` and its generated artifacts.
+  - **Window manager & AppRegistry invariants**: registry-driven app IDs, `WindowType`, and `singleInstance` semantics.
+
+- **Test modules implemented (integration level):**
+  - `tests/integration/test_share_links_flow.py`
+    - Uses a small TypeScript harness (`devussy-web/scripts/src/shareLinks_harness.ts`) via `npx ts-node` to round-trip payloads through `generateShareLink`/`decodeSharePayload`.
+    - Asserts that valid payloads preserve `stage`/`projectName` and that malformed or `stage`-less payloads decode to `null` instead of throwing.
+    - Statically verifies that the `/share` page uses `decodeSharePayload` and persists `devussy_share_payload` into `sessionStorage` before offering an "Open Devussy" button.
+  - `tests/integration/test_event_bus_notifications.py`
+    - Parses `devussy-web/src/apps/eventBus.tsx` to extract typed event keys and asserts that each has at least one emit or subscribe site in `page.tsx`, `ExecutionView.tsx`, or `IrcClient.tsx`.
+    - Confirms that `IrcClient` subscribes to `planGenerated`, `interviewCompleted`, `designCompleted`, `shareLinkGenerated`, `executionStarted`, and `executionCompleted`, and that pipeline/ExecutionView emit the corresponding events.
+  - `tests/integration/test_compose_generator.py`
+    - Runs the real `npm run generate:compose` workflow under `devussy-web/`.
+    - Asserts that `docker-compose.apps.generated.yml` and `nginx/conf.d/apps.generated.conf` are created.
+    - Verifies that the compose overlay contains the `irc_ircd` service with the expected InspIRCd image, ports, and volumes, plus a `frontend` env block with `NEXT_PUBLIC_IRC_WS_URL` and `NEXT_PUBLIC_IRC_CHANNEL`.
+    - Verifies that the nginx fragment defines a `/apps/irc/ws/` location proxying to `ircd:8080` with websocket headers.
+  - `tests/integration/test_window_manager_registry.py`
+    - Asserts that `WindowType` in `page.tsx` is defined as `keyof typeof AppRegistry`.
+    - Checks that `AppRegistry.ts` includes the expected core app IDs (`init`, `interview`, `design`, `plan`, `execute`, `handoff`, `help`, `model-settings`, `pipeline`, `irc`).
+    - Verifies that Help, IRC, and Model Settings apps are marked `singleInstance: true` in their app files.
+    - Confirms that `Taskbar` in `page.tsx` is driven by a generic `onOpenApp` handler which calls `spawnAppWindow(appId as WindowType, appDef.name)` instead of bespoke handlers.
+
+- **How to run the suite:**
+  - From the repo root (with dev dependencies installed):
+    - `pytest tests/integration/test_share_links_flow.py -v`
+    - `pytest tests/integration/test_event_bus_notifications.py -v`
+    - `pytest tests/integration/test_compose_generator.py -v`
+    - `pytest tests/integration/test_window_manager_registry.py -v`
+  - Or run all integration tests:
+    - `pytest tests/integration -v`
+
+- **Notes / follow-ups for future agents:**
+  - The current suite is intentionally lightweight and biased toward structural/contract checks rather than spinning up a full Next.js dev server.
+  - If you later introduce richer `AppContext` state, additional apps, or new event types, extend these tests (or add new ones in `tests/integration/`) to cover the new behaviour instead of relying solely on manual testing.
+  - If browser-level end-to-end tests become desirable, they should be added as a separate phase (for example using Playwright or a similar tool) so this Python-based suite remains fast and easy to run on the remote host.
+
+### Phase Log: AppContext State, Scratchpad App, and Execution Telemetry (STATUS: COMPLETE – v1)
+
+- **Code changes (frontend behaviour):**
+  - `devussy-web/src/apps/eventBus.tsx`:
+    - `createAppContext(bus)` now maintains a shared in-memory `currentState` object and provides real `getState`/`setState` semantics instead of no-ops.
+    - `setState(patch)` accepts either a partial object (merged into the existing state), a functional updater `(prev) => next`, or any other value (which replaces the state).
+    - `EventPayloads` now includes a typed `executionPhaseUpdated` event with `{ projectName?, phaseNumber, phaseTitle?, status, totalPhases? }`.
+  - `devussy-web/src/components/pipeline/ExecutionView.tsx`:
+    - Emits `executionPhaseUpdated` whenever a phase transitions to **running**, **complete** (both explicit `done` and implicit end-of-stream), or **failed**.
+    - Each event includes the project name, phase number/title, current status, and the total number of phases so listeners can produce concise telemetry.
+  - `devussy-web/src/components/addons/irc/IrcClient.tsx`:
+    - Subscribes to `executionPhaseUpdated` and mirrors per-phase execution telemetry into the **Status** tab as system messages of the form:
+      - `[Devussy] Execution started for phase N (Title) of M in <project>.`
+      - `[Devussy] Execution completed for phase N (Title) of M in <project>.`
+      - `[Devussy] Execution failed for phase N (Title) of M in <project>.`
+    - Keeps the existing `executionStarted` and `executionCompleted` summary messages unchanged.
+  - `devussy-web/src/apps/scratchpad.tsx` and `src/apps/AppRegistry.ts`:
+    - Introduced a new `ScratchpadApp` (`id: "scratchpad"`, `singleInstance: true`) registered in `AppRegistry` under the **Devussy** start menu category.
+    - The `ScratchpadView` component:
+      - Loads its initial contents from `appContext.getState().scratchpad` (when available) and falls back to `localStorage['devussy_scratchpad']`.
+      - On change, updates both `localStorage` and `appContext` via `setState(prev => ({ ...prev, scratchpad: value }))` so other windows can observe or reuse the shared note text.
+      - Provides a small **Clear** button that clears both local storage and the `scratchpad` key from shared `AppContext` state.
+
+- **Behavioural status:**
+  - The desktop, pipeline, and IRC chat flows behave as before, but you now have:
+    - A **Scratchpad** window available from the Start menu / All Programs list that persists notes per browser and exposes them via `AppContext`.
+    - Finer-grained execution telemetry in the **Status** tab, showing when individual phases start, complete, or fail, in addition to the existing high-level execution started/completed messages.
+  - `AppContext` is still a lightweight abstraction over the global `EventBus` but now carries a real shared state object that registry-driven apps can use for simple cross-window coordination.
+
+- **Remaining work / follow-ups:**
+  - Decide whether to introduce per-app or namespaced slices of `AppContext` state (rather than a single shared bag) if more complex apps are added.
+  - Extend `tests/integration/test_event_bus_notifications.py` or related tests if you want explicit assertions around the new `executionPhaseUpdated` event in addition to the existing generic checks.
+  - Consider adding a small integration test or harness that exercises the Scratchpad app’s interaction with `AppContext` once more apps start consuming `scratchpad` content.
