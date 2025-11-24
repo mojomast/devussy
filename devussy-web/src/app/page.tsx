@@ -155,14 +155,28 @@ function PageInner() {
   useEffect(() => {
     const unsubscribe = bus.subscribe('openShareLink', (payload: any) => {
       try {
-        const sharePayload = payload as ShareLinkPayload;
-        if (!sharePayload) return;
+        const sharePayload = payload as ShareLinkPayload | null | undefined;
+        if (!sharePayload || typeof sharePayload !== 'object') {
+          console.error('[page.tsx] Ignoring openShareLink with invalid payload');
+          return;
+        }
+
+        const rawData: unknown = (sharePayload as any).data;
+        const rawStage: unknown =
+          (sharePayload as any).stage ||
+          (rawData && (rawData as any).stage);
+
+        if (typeof rawStage !== 'string' || !rawStage.trim()) {
+          console.error('[page.tsx] Ignoring openShareLink with missing stage');
+          return;
+        }
+
+        const dataObj =
+          rawData && typeof rawData === 'object' ? (rawData as Record<string, any>) : {};
 
         const checkpointLike = {
-          ...(sharePayload.data || {}),
-          stage:
-            sharePayload.stage ||
-            (sharePayload.data && (sharePayload.data as any).stage),
+          ...dataObj,
+          stage: rawStage,
         };
 
         handleLoadCheckpoint(checkpointLike);
@@ -185,11 +199,27 @@ function PageInner() {
 
       window.sessionStorage.removeItem(key);
       const decoded = decodeSharePayload(encoded);
-      if (!decoded) return;
+      if (!decoded || typeof decoded !== 'object') {
+        console.error('[page.tsx] Ignoring stored share payload: invalid decode result');
+        return;
+      }
+
+      const rawData: unknown = (decoded as any).data;
+      const rawStage: unknown =
+        (decoded as any).stage ||
+        (rawData && (rawData as any).stage);
+
+      if (typeof rawStage !== 'string' || !rawStage.trim()) {
+        console.error('[page.tsx] Ignoring stored share payload: missing stage');
+        return;
+      }
+
+      const dataObj =
+        rawData && typeof rawData === 'object' ? (rawData as Record<string, any>) : {};
 
       const checkpointLike = {
-        ...(decoded.data || {}),
-        stage: decoded.stage || (decoded.data && (decoded.data as any).stage),
+        ...dataObj,
+        stage: rawStage,
       };
 
       handleLoadCheckpoint(checkpointLike);
@@ -595,7 +625,11 @@ function PageInner() {
           {/* mIRC */}
           <button
             className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
-            onDoubleClick={() => spawnAppWindow('irc', 'IRC Chat – #devussy-chat')}
+            onDoubleClick={() => {
+              const appDef = AppRegistry['irc'];
+              const title = appDef?.name || 'IRC Chat – #devussy-chat';
+              spawnAppWindow('irc', title);
+            }}
           >
             <div className="w-12 h-12 relative bg-white/10 rounded-lg border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
               {/* Custom mIRC-like icon since we don't have the asset */}

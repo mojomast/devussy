@@ -185,6 +185,7 @@ env: {
   NEXT_PUBLIC_IRC_CHANNEL: '#devussy-chat'
 }
 ```
+
 ### 7.2. Build script to merge services
 
 Create a script (scripts/generate-compose.ts) that reads all AppDefinition.services and writes a combined docker-compose.generated.yml. This script should:
@@ -258,3 +259,13 @@ User experience: Ensure the start menu and desktop icons remain uncluttered. Use
 ## 11. Conclusion
 
 By abstracting application metadata into a registry, introducing an event bus for cross‑app communication, and generating infrastructure configuration from declarative definitions, Devussy becomes a flexible platform for hosting a wide range of tools. The IRC add‑on is the first of many; with the proposed framework, adding a new app—whether a chat client, a code viewer or an AI companion—requires only a small, self‑contained module and a service definition. The share‑link feature enriches collaboration by allowing users to jump directly into any stage of a project from within chat. These enhancements will enable Devussy to grow into a true developer desktop in the browser.
+
+**Implementation status – Event Bus (extended):**
+
+- The global `EventBus` in `devussy-web/src/apps/eventBus.tsx` defines typed payloads for core cross-app events including `planGenerated`, `interviewCompleted`, `designCompleted`, `shareLinkGenerated`, `executionCompleted`, `openShareLink`, and now `executionStarted` (emitted when the Execution view begins running phases).
+- `ExecutionView` (`devussy-web/src/components/pipeline/ExecutionView.tsx`) emits `executionStarted` from `startExecution()` with `{ projectName, totalPhases }` before kicking off phase execution, and continues to emit `executionCompleted` when all phases finish.
+- `IrcClient` (`devussy-web/src/components/addons/irc/IrcClient.tsx`) subscribes to these events and mirrors them into `#devussy-chat` and the Status tab, including a system message when execution begins.
+
+**Implementation status – Window manager & AppRegistry (incremental):**
+
+- The desktop IRC shortcut in `devussy-web/src/app/page.tsx` now derives its window title from `AppRegistry['irc'].name`, falling back to the previous hard-coded title. This keeps the behaviour identical while ensuring that app naming is consistently driven by the central registry.

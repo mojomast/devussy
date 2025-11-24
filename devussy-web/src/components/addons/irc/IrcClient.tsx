@@ -289,7 +289,7 @@ export default function IrcClient({
         };
     }, [bus, defaultChannel, addMessage, addSystemMessage]);
 
-    // Listen for share links and execution completion events from the pipeline
+    // Listen for share links and execution lifecycle events from the pipeline
     useEffect(() => {
         const unsubscribeShare = bus.subscribe('shareLinkGenerated', (payload: any) => {
             try {
@@ -397,11 +397,28 @@ export default function IrcClient({
             }
         });
 
+        const unsubscribeExecStarted = bus.subscribe('executionStarted', (payload: any) => {
+            try {
+                const name =
+                    payload?.projectName ||
+                    payload?.project_name ||
+                    'a Devussy project';
+                const total = payload?.totalPhases;
+                const suffix = total ? ` (${total} phases)` : '';
+                const content = `[Devussy] Execution started for ${name}${suffix}.`;
+
+                addSystemMessage(content);
+            } catch (err) {
+                console.error('[IrcClient] Failed to handle executionStarted event', err);
+            }
+        });
+
         return () => {
             unsubscribeShare();
             unsubscribeExec();
             unsubscribeInterview();
             unsubscribeDesign();
+            unsubscribeExecStarted();
         };
     }, [bus, defaultChannel, ws, connected, addMessage, addSystemMessage]);
 

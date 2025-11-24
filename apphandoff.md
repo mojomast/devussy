@@ -285,6 +285,29 @@ These should be separate phases, each with its own mini-handoff:
 - Decide how much state should be included in share payloads vs. relying on backend checkpoints (e.g. minimal vs. full snapshots) and document that convention more explicitly if needed.
 - Add automated tests (or at least keep this manual script up to date) that cover the end‑to‑end share flow for design, plan, and execution stages.
 
+### Phase Log: Share Links Hardening (STATUS: COMPLETE – v2)
+
+- **Code changes (frontend safety/typing):**
+- `devussy-web/src/app/page.tsx`:
+  - Hardened the `openShareLink` event handler and the `devussy_share_payload` sessionStorage restore path. Both paths now:
+    - Validate that the decoded payload is an object.
+    - Derive `stage` from `payload.stage` (or `payload.data.stage` as a fallback) and require it to be a non-empty string.
+    - Treat the `data` field as optional and only spread it into the checkpoint object when it is a plain object.
+    - Log and no-op if the payload is malformed or missing a valid `stage`, instead of risking odd pipeline state.
+- `devussy-web/src/apps/eventBus.tsx`:
+  - Introduced a lightweight `EventPayloads` map and `EventKey` type so known events have explicit payload shapes: `planGenerated`, `interviewCompleted`, `designCompleted`, `shareLinkGenerated`, `executionCompleted`, and `openShareLink` (typed as `ShareLinkPayload`).
+  - Parameterised `EventBus.emit` and `EventBus.subscribe` over these keys to catch obvious type mismatches at compile time while retaining a string-indexed fallback (`[event: string]: any`) for future ad-hoc events.
+
+- **Manual test script (updated):**
+- With the frontend + IRC running, re-run the existing v1 script with an extra sanity check around bad payloads:
+  - From Design, Plan, and Execution views, use **Share** to generate links, paste them into `#devussy-chat`, and in another session click `[Open shared Devussy state]` to verify:
+    - `/share` shows the correct stage/project summary and persists `devussy_share_payload`.
+    - Returning to `/` restores the right pipeline window and project state via `handleLoadCheckpoint`.
+    - IRC receives a `[Devussy] Shared <stage> link: <url>` bot message in-channel and a mirrored system message in the Status tab.
+  - As a negative check, manually craft or paste an obviously broken link, e.g. `/share?payload=not-base64` or a base64 payload missing a `stage` field, and confirm that:
+    - `/share` reports the link as invalid when `decodeSharePayload` fails.
+    - If a malformed payload ever reaches the desktop (e.g. via a future integration), `page.tsx` logs an error (`Ignoring ... invalid decode result` or `missing stage`) and **does not** call `handleLoadCheckpoint`.
+
 4. **Compose / Nginx Generation**
    - Implement and extend `scripts/generate-compose.ts` as described, gradually moving app-specific services (like IRC) into `AppDefinition.services` / `proxy` metadata.
    - Keep existing `docker-compose.yml` and `nginx.conf` as ground truth until the generator is validated.
@@ -376,4 +399,34 @@ For the very next agent on this track, the recommended first move is to
 
 Pick one, define a small scope, and update this handoff.
 
+
+
+### Phase Log: Event Bus Expansion – executionStarted (STATUS: COMPLETE)
+
+- **Code changes (frontend):**
+  - `devussy-web/src/apps/eventBus.tsx`:
+    - Added a typed `executionStarted` event to the `EventPayloads` map with `{ projectName?: string; totalPhases?: number }` so execution lifecycle can be observed by other apps.
+  - `devussy-web/src/components/pipeline/ExecutionView.tsx`:
+    - Emits `executionStarted` from `startExecution()` with the current `projectName` and `phases.length` before kicking off phase execution, mirroring the existing `executionCompleted` event.
+  - `devussy-web/src/components/addons/irc/IrcClient.tsx`:
+    - Subscribes to `executionStarted` via `useEventBus` and mirrors it into the **Status** tab as a system message of the form `[Devussy] Execution started for <project> (<N> phases).`, consistent with other cross-app notifications.
+
+- **Behavioural status:**
+  - No changes to core pipeline flow or existing IRC behaviour. The only visible change is an additional system-level status line when execution begins.
+
+- **Remaining work / follow-ups:**
+  - Optionally extend execution telemetry (e.g. per-phase progress events) via the event bus in a future phase if finer-grained updates are desired.
+
+
+### Phase Log: Window Manager Refinement – AppRegistry-driven IRC title (STATUS: COMPLETE)
+
+- **Code changes (frontend):**
+  - `devussy-web/src/app/page.tsx`:
+    - Updated the Bliss desktop "mIRC" icon double-click handler to derive the window title from `AppRegistry['irc'].name`, falling back to `"IRC Chat  #devussy-chat"` if needed. This keeps behaviour identical while making the IRC window title consistent with the central app registry.
+
+- **Behavioural status:**
+  - Double-clicking the desktop IRC icon still opens the IRC chat window as before; the title now tracks the `IrcApp` definition in `AppRegistry` so future renames do not require changes in `page.tsx`.
+
+- **Remaining work / follow-ups:**
+  - Future window-manager phases can continue moving non-pipeline apps toward fully registry-driven rendering and props, but those are out of scope for this small refinement.
 

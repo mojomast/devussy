@@ -462,6 +462,15 @@ export const ExecutionView = ({
         setIsExecuting(true);
         setIsPaused(false);
 
+        try {
+            bus.emit('executionStarted', {
+                projectName,
+                totalPhases: phases.length,
+            });
+        } catch (err) {
+            console.error('[ExecutionView] Failed to emit executionStarted event', err);
+        }
+
         // Start ALL phases immediately
         const promises = phases.map((phase: PhaseStatus) => {
             console.log('[ExecutionView] Starting phase', phase.number);
