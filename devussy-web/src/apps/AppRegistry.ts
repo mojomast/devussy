@@ -2,7 +2,9 @@ import React from "react";
 import type { AppDefinition } from "./appTypes";
 import IrcApp from "./irc";
 import PipelineApp from "./pipeline";
-import { MessageSquare, Sparkles, Layers, Code2, GitBranch, Zap, HelpCircle, Settings } from "lucide-react";
+import HelpApp from "./help";
+import ModelSettingsApp from "./modelSettings";
+import { MessageSquare, Sparkles, Layers, Code2, GitBranch, Zap } from "lucide-react";
 
 const InitApp: AppDefinition = {
   id: "init",
@@ -57,25 +59,6 @@ const HandoffApp: AppDefinition = {
   startMenuCategory: "Devussy",
   component: () => null,
 };
-
-const HelpApp: AppDefinition = {
-  id: "help",
-  name: "Devussy Studio Help",
-  icon: React.createElement(HelpCircle, { className: "w-4 h-4" }),
-  defaultSize: { width: 700, height: 600 },
-  startMenuCategory: "Most Used",
-  component: () => null,
-};
-
-const ModelSettingsApp: AppDefinition = {
-  id: "model-settings",
-  name: "AI Model Settings",
-  icon: React.createElement(Settings, { className: "w-4 h-4" }),
-  defaultSize: { width: 500, height: 650 },
-  startMenuCategory: "Settings",
-  component: () => null,
-};
-
 export const AppRegistry: Record<string, AppDefinition> = {
   [InitApp.id]: InitApp,
   [InterviewApp.id]: InterviewApp,

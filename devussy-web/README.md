@@ -41,10 +41,22 @@ npm install
 python dev_server.py
 ```
 
-2. **Start the frontend** (port 3000):
+2. **Generate App Configuration** (optional, for IRC/Apps):
 ```bash
-# From devussy-web directory
+# Generates docker-compose.apps.generated.yml and nginx config
+npm run generate:compose
+```
+
+3. **Start the frontend** (port 3000):
+```bash
+# Standard dev mode
 npm run dev
+```
+
+4. **Run with Docker Apps (IRC, etc)**:
+```bash
+# To include generated app services:
+docker compose -f docker-compose.yml -f docker-compose.apps.generated.yml up
 ```
 
 3. **Open browser**:

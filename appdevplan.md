@@ -137,12 +137,12 @@ const EventBusContext = createContext(bus);
 export const useEventBus = () => useContext(EventBusContext);
 ```
 
-**Implementation status – Event bus (partial):**
+**Implementation status – Event bus (partial, v1 in use):**
 
 - `devussy-web/src/apps/eventBus.tsx` implements an `EventBus` class, `EventBusProvider`, and `useEventBus` hook that expose a single shared bus instance to the web UI.
-- `devussy-web/src/app/page.tsx` wraps the desktop/window manager in `EventBusProvider` (via an inner `PageInner` component) and emits a `planGenerated` event from `handlePlanApproved`, including `projectName`, `languages`, `requirements`, and the approved `plan`.
-- `devussy-web/src/components/addons/irc/IrcClient.tsx` subscribes to `planGenerated` and appends a local `[Devussy]` notification message from `devussy-bot` into the default `#devussy-chat` channel whenever a new plan is approved.
-- `AppContext.getState` / `setState` and other cross‑app events remain unimplemented; future phases should introduce additional events (e.g. share‑link handling, execution notifications) and decide which existing callbacks to migrate onto the bus.
+- `devussy-web/src/app/page.tsx` wraps the desktop/window manager in `EventBusProvider` (via an inner `PageInner` component), emits a `planGenerated` event from `handlePlanApproved`, and listens for `openShareLink` events and a persisted `devussy_share_payload` in `sessionStorage` to restore shared pipeline state via `handleLoadCheckpoint`.
+- `devussy-web/src/components/addons/irc/IrcClient.tsx` subscribes to `planGenerated`, `shareLinkGenerated`, and `executionCompleted` events to surface Devussy bot notifications into `#devussy-chat` whenever a plan is approved, a share link is created by a pipeline view, or execution completes; the same events are also mirrored into the IRC `Status` tab as system messages.
+- `AppContext.getState` / `setState` and any richer cross-app context model remain unimplemented; future phases can decide which additional callbacks to migrate onto the bus versus leaving them as direct props, and whether to introduce a structured `AppContext` wrapper for registry-driven apps.
 
 ## 6. Share Link Design and Handling
 
@@ -176,7 +176,6 @@ This function returns a link that can be copied to the clipboard or automaticall
 ### 6.3. Intercepting share links in the IRC client
 
 Enhance `IrcClient` so that messages are parsed for share links. When rendering a message containing a link that matches the pattern (for example `/share?payload=` or the custom `devussy://` protocol), render it as a clickable element with an `onClick` handler instead of a normal `<a>` tag. The handler should:
-
 - Decode the payload with `JSON.parse(base64url.decode(payload))`.
 - Publish an event on the bus, for example `emit('openShareLink', { stage, data })`.
 
@@ -184,15 +183,29 @@ The top‑level page listens for `openShareLink` and calls `spawnAppWindow(stage
 
 ### 6.4. Handling share links globally
 
-Also add a catch‑all route in Next.js (pages/share.tsx or app/share/page.tsx) that reads the payload query parameter and, if Devussy is open, forwards the data through the event bus. If the app is not running (e.g. the link is opened in a new tab), display a page with a “Open in Devussy” button that loads the main app and passes along the payload.
+Also add a catch‑all route in Next.js (pages/share.tsx or app/share/page.tsx) that reads the payload query parameter and, if Devussy is open, forwards the data through the event bus. If the app is not running (e.g. the link is opened in a new tab), display a page with a “Open Devussy” button that loads the main app and passes along the payload.
 
-## 7. Containerization and Nginx Integration
+**Implementation status – Share Links (implemented v1):**
 
-### 7.1. Service definitions in app metadata
+- `devussy-web/src/shareLinks.ts` implements a `ShareLinkPayload` interface together with `generateShareLink(stage, data)` and `decodeSharePayload(encoded)` helpers that use JSON + base64‑URL encoding to produce `/share?payload=...` URLs in a browser‑ and server‑safe way.
+- `devussy-web/src/app/share/page.tsx` defines the `/share` route. It reads the `payload` query parameter, validates and decodes it, displays a small summary of the shared stage/project, and persists the raw encoded payload to `sessionStorage` under `devussy_share_payload` before offering an “Open Devussy” button that navigates back to the main desktop.
+- `devussy-web/src/components/addons/irc/IrcClient.tsx` parses message text for `/share?payload=` links, renders them as a `[Open shared Devussy state]` button, decodes the payload via the shared helper, and emits an `openShareLink` event on the global event bus when clicked.
+- `devussy-web/src/app/page.tsx` subscribes to `openShareLink` on the event bus and also checks `sessionStorage` for a pending `devussy_share_payload` on load. In both cases it turns the embedded `{ projectName, languages, requirements, design, plan, stage }` object into a checkpoint‑like structure and passes it to `handleLoadCheckpoint`, which restores shared state and spawns the appropriate pipeline window (`design`, `plan`, `execute`, or `handoff`).
+- `devussy-web/src/components/pipeline/DesignView.tsx`, `PlanView.tsx`, and `ExecutionView.tsx` each expose a “Share” button in their headers. These buttons call `generateShareLink('design' | 'plan' | 'execute', data)` for the respective stage, attempt to copy the URL to the clipboard, and always fall back to showing it in a `window.prompt` so the user can paste it into IRC or elsewhere.
+- The same pipeline Share buttons also emit a `shareLinkGenerated` event on the global event bus with `{ stage, data, url }`, and `IrcClient.tsx` listens for this event to post a `[Devussy] Shared <stage> link: <url>` message into `#devussy-chat` whenever a new share link is created.
 
-Allow each app to define one or more backend services in its services field. For example, an IRC app might define:
+Remaining work / follow‑ups:
 
-```typescript
+- Decide on and document opinionated share presets (e.g. minimal vs. full project snapshot) and how they relate to backend checkpoints. The current implementation sends a stage‑specific snapshot of the relevant `{ projectName, languages, requirements, design, plan }` fields in the payload.
+- Add automated and/or integration tests that cover the end‑to‑end share flow: generating a link, opening it via `/share`, restoring the pipeline state in a new tab, and verifying that the correct window opens for design, plan, and execution stages.
+
+## 7. Compose and Nginx Generation
+
+### 7.1. Service definitions
+
+Each app can define its own services in its AppDefinition:
+
+```json
 services: [
   {
     name: 'ircd',
@@ -222,16 +235,6 @@ Append service definitions from each installed app. Give each service a unique n
 Add the app service names to the depends_on of frontend where appropriate.
 
 Write environment variables for the frontend into the build args section of the frontend service (e.g. NEXT_PUBLIC_IRC_WS_URL).
-
-Similarly, generate an Nginx config fragment (nginx/conf.d/apps.conf) by iterating over AppDefinition.proxy. Each entry becomes a location block proxying to the specified upstream with WebSocket headers if needed.
-
-When a developer adds a new app, they update its services and proxy fields. Running npm run generate:compose regenerates the unified Compose and Nginx configuration.
-
-## 8. Additional Feature Suggestions
-
-The modular framework opens the door for many new apps. Some ideas:
-
-File Explorer / Code Viewer: An app that allows users to browse, view and edit the code generated by Devussy. Could mount the workspace volume into a container running a simple file server or use the existing Node process to serve files.
 
 Live Logs / Notifications: A small WebSocket server that broadcasts events (e.g. new plan generated, execution phase started). The taskbar could display toast notifications or write to the IRC channel via the event bus.
 

@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { AppRegistry } from "@/apps/AppRegistry";
 import { EventBusProvider, useEventBus } from "@/apps/eventBus";
+import { decodeSharePayload, type ShareLinkPayload } from "@/shareLinks";
 
 type WindowType = keyof typeof AppRegistry;
 
@@ -168,6 +169,55 @@ function PageInner() {
       }
     }, 100);
   };
+
+  useEffect(() => {
+    const unsubscribe = bus.subscribe('openShareLink', (payload: any) => {
+      try {
+        const sharePayload = payload as ShareLinkPayload;
+        if (!sharePayload) return;
+
+        const checkpointLike = {
+          ...(sharePayload.data || {}),
+          stage:
+            sharePayload.stage ||
+            (sharePayload.data && (sharePayload.data as any).stage),
+        };
+
+        handleLoadCheckpoint(checkpointLike);
+      } catch (e) {
+        console.error('[page.tsx] Error handling openShareLink event', e);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [bus]);
+
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const key = 'devussy_share_payload';
+      const encoded = window.sessionStorage.getItem(key);
+      if (!encoded) return;
+
+      window.sessionStorage.removeItem(key);
+      const decoded = decodeSharePayload(encoded);
+      if (!decoded) return;
+
+      const checkpointLike = {
+        ...(decoded.data || {}),
+        stage: decoded.stage || (decoded.data && (decoded.data as any).stage),
+      };
+
+      handleLoadCheckpoint(checkpointLike);
+    } catch (e) {
+      console.error(
+        '[page.tsx] Failed to restore from share payload in sessionStorage',
+        e,
+      );
+    }
+  }, []);
 
   // Window Management Functions
   const getWindowSize = (type: WindowType): { width: number; height: number } => {

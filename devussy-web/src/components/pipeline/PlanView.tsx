@@ -3,9 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus } from "lucide-react";
+import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus, Share2 } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { PhaseCard, PhaseData } from './PhaseCard';
+import { generateShareLink } from "@/shareLinks";
+import { useEventBus } from "@/apps/eventBus";
 
 interface PlanViewProps {
     design: any;
@@ -20,6 +22,7 @@ export const PlanView = ({
     onPlanApproved,
     autoRun = false
 }: PlanViewProps) => {
+    const bus = useEventBus();
     const [plan, setPlan] = useState<any>(null);
     const [planContent, setPlanContent] = useState("");  // Track streaming content
     const [phases, setPhases] = useState<PhaseData[]>([]);  // Parsed phases
@@ -307,6 +310,54 @@ export const PlanView = ({
         }
     }, [autoRun, plan, isLoading, phases]);
 
+    const handleShare = async () => {
+        if (!design || (!plan && !planContent)) return;
+
+        try {
+            const shareData: any = {
+                design,
+                plan: plan || { raw_llm_response: planContent },
+            };
+
+            if ((design as any)?.project_name) {
+                shareData.projectName = (design as any).project_name;
+            }
+
+            const url = generateShareLink('plan', shareData);
+
+            try {
+                bus.emit('shareLinkGenerated', {
+                    stage: 'plan',
+                    data: shareData,
+                    url,
+                });
+            } catch (err) {
+                console.error('[PlanView] Failed to emit shareLinkGenerated event', err);
+            }
+
+            let copied = false;
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(url);
+                    copied = true;
+                } catch {
+                    copied = false;
+                }
+            }
+
+            if (typeof window !== 'undefined') {
+                window.prompt(
+                    copied
+                        ? 'Share link copied to clipboard. You can also copy it from here:'
+                        : 'Copy this Devussy share link:',
+                    url,
+                );
+            }
+        } catch (err) {
+            console.error('[PlanView] Failed to generate share link', err);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
@@ -351,6 +402,16 @@ export const PlanView = ({
                         disabled={isLoading}
                     >
                         Regenerate
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleShare}
+                        disabled={!plan && !planContent}
+                    >
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Share
                     </Button>
 
                     <Button

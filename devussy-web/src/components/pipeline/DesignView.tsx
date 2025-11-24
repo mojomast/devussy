@@ -3,9 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2 } from "lucide-react";
+import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Share2 } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { generateShareLink } from "@/shareLinks";
+import { useEventBus } from "@/apps/eventBus";
 
 interface DesignViewProps {
     projectName: string;
@@ -24,6 +26,7 @@ export const DesignView = ({
     onDesignComplete,
     autoRun = false
 }: DesignViewProps) => {
+    const bus = useEventBus();
     const [designContent, setDesignContent] = useState("");
     const [designData, setDesignData] = useState<any>(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -151,6 +154,52 @@ export const DesignView = ({
         onDesignComplete(designData || { raw_llm_response: designContent, project_name: projectName });
     };
 
+    const handleShare = async () => {
+        if (!designContent && !designData) return;
+
+        try {
+            const shareData: any = {
+                projectName,
+                requirements,
+                languages: languages.join(', '),
+                design: designData || { raw_llm_response: designContent, project_name: projectName },
+            };
+
+            const url = generateShareLink('design', shareData);
+
+            try {
+                bus.emit('shareLinkGenerated', {
+                    stage: 'design',
+                    data: shareData,
+                    url,
+                });
+            } catch (err) {
+                console.error('[DesignView] Failed to emit shareLinkGenerated event', err);
+            }
+
+            let copied = false;
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(url);
+                    copied = true;
+                } catch {
+                    copied = false;
+                }
+            }
+
+            if (typeof window !== 'undefined') {
+                window.prompt(
+                    copied
+                        ? 'Share link copied to clipboard. You can also copy it from here:'
+                        : 'Copy this Devussy share link:',
+                    url,
+                );
+            }
+        } catch (err) {
+            console.error('[DesignView] Failed to generate share link', err);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
@@ -185,6 +234,16 @@ export const DesignView = ({
                             )}
                         </>
                     )}
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleShare}
+                        disabled={isGenerating || (!designContent && !designData)}
+                    >
+                        <Share2 className="h-4 w-4 mr-2" />
+                        Share
+                    </Button>
 
                     <Button
                         variant="outline"
