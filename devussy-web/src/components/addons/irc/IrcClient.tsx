@@ -14,6 +14,7 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
+import { useEventBus } from '@/apps/eventBus';
 
 interface IrcMessage {
     id: string;
@@ -73,6 +74,8 @@ export default function IrcClient({
     const [ws, setWs] = useState<WebSocket | null>(null);
     const [connected, setConnected] = useState(false);
     const [demoMode, setDemoMode] = useState(false);
+
+    const bus = useEventBus();
 
     // Multi-conversation state
     const STATUS_TAB = 'Status';
@@ -198,6 +201,39 @@ export default function IrcClient({
             };
         });
     }, [STATUS_TAB]);
+
+    // Listen for cross-app events like planGenerated and surface them in chat
+    useEffect(() => {
+        const unsubscribe = bus.subscribe('planGenerated', (payload: any) => {
+            const channelName = defaultChannel;
+            const summaryParts: string[] = [];
+            if (payload?.projectName) {
+                summaryParts.push(`project "${payload.projectName}"`);
+            }
+            if (payload?.phaseCount) {
+                summaryParts.push(`${payload.phaseCount} phases`);
+            }
+            const summary = summaryParts.length > 0 ? ` (${summaryParts.join(', ')})` : '';
+            const content = `[Devussy] A new development plan was generated${summary}.`;
+
+            addMessage(channelName, {
+                id: Math.random().toString(36).substr(2, 9),
+                timestamp: new Date().toLocaleTimeString(),
+                prefix: 'devussy-bot',
+                command: 'PRIVMSG',
+                params: [channelName, content],
+                raw: '',
+                type: 'message',
+                sender: 'devussy-bot',
+                content,
+                target: channelName,
+            });
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [bus, defaultChannel, addMessage]);
 
     // Parse IRC Message
     const parseIrcMessage = (raw: string): IrcMessage => {

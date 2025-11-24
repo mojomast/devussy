@@ -107,7 +107,9 @@ Then visit `http://localhost:3000` to access the web interface.
 - ✅ **Window Management**: Auto-open New Project, improved default sizes, Help system integration
 - ✅ **Handoff Fixes**: Resolved 500 errors, fixed async/await issues, ensured full design content in zip
 - ✅ **Checkpoint Loading**: Fixed issue where loading 'handoff' stage reset to start screen
-- 📋 See `devussy-web/handoff.md` for detailed status and next steps
+- ✅ **App Framework**: `AppRegistry` now drives default window sizes, Start menu entries, and registry-driven apps (IRC, Help, Model Settings) in the web UI.
+- ✅ **Event Bus (MVP)**: A frontend `EventBus` + React context is wired into the window manager; the pipeline emits a `planGenerated` event that the IRC app listens to and posts into `#devussy-chat`.
+- See `devussy-web/handoff.md` for detailed status and next steps
 
 ## Install (from GitHub)
 

@@ -94,6 +94,8 @@ import PipelineApp from '@/apps/pipeline';
 export const AppRegistry: Record<string, AppDefinition> = {
   [IrcApp.id]: IrcApp,
   [PipelineApp.id]: PipelineApp,
+  [HelpApp.id]: HelpApp,
+  [ModelSettingsApp.id]: ModelSettingsApp,
   // ...
 };
 ```
@@ -102,10 +104,11 @@ export const AppRegistry: Record<string, AppDefinition> = {
 
 - `devussy-web/src/apps/appTypes.ts` defines `AppDefinition`, `DockerServiceDef`, `NginxProxyDef` and `AppContext` matching this design.
 - `devussy-web/src/apps/pipeline.tsx` and `devussy-web/src/apps/irc.tsx` export `AppDefinition` objects for the pipeline (placeholder) and IRC client.
-- `devussy-web/src/apps/AppRegistry.ts` aggregates these definitions into a registry map and also includes placeholder `AppDefinition` entries for the core pipeline windows (`init`, `interview`, `design`, `plan`, `execute`, `handoff`), `help`, and `model-settings`.
+- `devussy-web/src/apps/help.tsx` and `devussy-web/src/apps/modelSettings.tsx` export concrete `AppDefinition` objects for the Help window and the Model Settings window as registry-driven apps.
+- `devussy-web/src/apps/AppRegistry.ts` aggregates these definitions into a registry map and also includes placeholder `AppDefinition` entries for the core pipeline windows (`init`, `interview`, `design`, `plan`, `execute`, `handoff`), which are still rendered directly by `page.tsx`.
 - `WindowType` in `devussy-web/src/app/page.tsx` is derived from `keyof typeof AppRegistry`, window sizing uses `AppRegistry[appId].defaultSize`, and the Bliss Start menu "All Programs" list is generated from `AppRegistry` using each app's `startMenuCategory`.
 
-The registry and app types are now consumed by the window manager and menus, but the pipeline views are still wired directly in `page.tsx` rather than being wrapped in a dedicated `PipelineApp` component.
+The registry and app types are now consumed by the window manager and menus, with IRC, Help, and Model Settings rendered via registry-driven app components. The main pipeline views remain wired directly in `page.tsx` by design, since the pipeline UI is managed as a separate project and is not being fully migrated behind the app framework in this track.
 
 ## 5. Cross‑App Communication: Event Bus
 
@@ -133,6 +136,13 @@ const EventBusContext = createContext(bus);
 
 export const useEventBus = () => useContext(EventBusContext);
 ```
+
+**Implementation status – Event bus (partial):**
+
+- `devussy-web/src/apps/eventBus.tsx` implements an `EventBus` class, `EventBusProvider`, and `useEventBus` hook that expose a single shared bus instance to the web UI.
+- `devussy-web/src/app/page.tsx` wraps the desktop/window manager in `EventBusProvider` (via an inner `PageInner` component) and emits a `planGenerated` event from `handlePlanApproved`, including `projectName`, `languages`, `requirements`, and the approved `plan`.
+- `devussy-web/src/components/addons/irc/IrcClient.tsx` subscribes to `planGenerated` and appends a local `[Devussy]` notification message from `devussy-bot` into the default `#devussy-chat` channel whenever a new plan is approved.
+- `AppContext.getState` / `setState` and other cross‑app events remain unimplemented; future phases should introduce additional events (e.g. share‑link handling, execution notifications) and decide which existing callbacks to migrate onto the bus.
 
 ## 6. Share Link Design and Handling
 
@@ -262,10 +272,10 @@ Verify existing behaviour (pipeline flows, auto‑open IRC) still works.
 - `WindowType` in `devussy-web/src/app/page.tsx` is now derived from `keyof typeof AppRegistry`.
 - Window creation uses `AppRegistry[appId].defaultSize` via `getWindowSize`, matching the previous hard-coded defaults.
 - A `spawnAppWindow(appId, ...)` helper wraps the existing `spawnWindow` function and is used by the pipeline and helper actions.
-- The `irc` window type now renders its content via `AppRegistry['irc'].component` instead of importing `IrcClient` directly, making the IRC app fully registry-driven.
+- The `irc`, `help`, and `model-settings` window types now render their content via `AppRegistry[appId].component`, making these apps fully registry-driven while preserving previous behaviour.
 - `devussy-web/src/components/window/Taskbar.tsx` now accepts an `onOpenApp(appId)` callback, and both the Bliss Start menu and the non-Bliss floating taskbar use it to launch apps by id. `devussy-web/src/app/page.tsx` maps known app ids to existing handlers and falls back to `AppRegistry[appId]` for unknown ones.
 - The Bliss Start menu's **All Programs** list is generated from `AppRegistry` using each app's `startMenuCategory`, while the **Most Used** entries remain curated but still launch apps via their registry ids.
-- `renderAppContent` in `devussy-web/src/app/page.tsx` now includes a generic `default` branch that renders any app whose `AppRegistry[appId]` entry provides a `component`, allowing simple apps to be added via the registry without changing the switch, while the main pipeline windows still use bespoke branches in `page.tsx`.
+- `renderAppContent` in `devussy-web/src/app/page.tsx` now includes a generic `default` branch that renders any app whose `AppRegistry[appId]` entry provides a `component`. The main pipeline windows (`init`, `interview`, `design`, `plan`, `execute`, `handoff`) deliberately continue to use bespoke branches in `page.tsx`, since the pipeline UI is treated as a separate project and is not being refactored behind the app framework in this DevPlan.
 
 Event bus implementation (0.5 day)
 

@@ -20,9 +20,9 @@
   - Intro updated to match the **current** IRC integration (no stale branch references).
 - The **implementation** of the framework is **partially complete**:
   - App types, an `AppRegistry`, and initial app modules under `devussy-web/src/apps/` are in place and used by the window manager for `WindowType`, default sizes, Start menu categories, and IRC rendering.
-  - `src/app/page.tsx` still uses a manual `renderAppContent` switch for the pipeline and most other windows, and there is not yet a shared `AppContext` / event bus.
-  - No event bus is wired into the app tree.
-  - No `/share` route and no share‑link handling in `IrcClient.tsx`.
+  - `devussy-web/src/app/page.tsx` still uses a manual `renderAppContent` switch for the main pipeline windows, but now wraps the desktop/window manager in an `EventBusProvider` so apps can access a shared event bus.
+  - A minimal event bus is wired into the app tree and currently powers a `planGenerated` → IRC notification path (pipeline emits, IRC posts into `#devussy-chat`).
+  - There is still no `/share` route and no share-link handling in `IrcClient.tsx`.
   - Docker + nginx are still maintained manually (no `generate-compose` script).
 
 Think of `appdevplan.md` as the **design baseline**. Your job is to advance implementation while keeping the plan and handoff updated so any other agent can resume easily.
@@ -98,10 +98,10 @@ The next agent should read these before coding:
 
 ### Open Work (high level)
 
-1. **Introduce the app framework types in the frontend codebase.**
-2. **Refactor window management to use the registry instead of hard‑coded `WindowType`.**
-3. **Implement a basic event bus and wire it into pipeline + IRC.**
-4. **Add share‑link generation and consumption paths.**
+1. **Introduce the app framework types in the frontend codebase.** – **DONE**; see *Phase Log: App Types & Registry Skeleton* below.
+2. **Refactor window management to use the registry instead of hard‑coded `WindowType`.** – **PARTIAL**; see *Phase Log: Window Manager Refactor*.
+3. **Implement a basic event bus and wire it into pipeline + IRC.** – **PARTIAL**; a minimal `planGenerated` → IRC notification path is implemented, but other events and `AppContext` wiring are still open.
+4. **Add share-link generation and consumption paths.**
 5. **(Optional) Start the compose/nginx generation script.**
 
 You should not attempt to finish everything in one go. Pick a clear sub‑phase, implement it cleanly, and update this handoff for the next agent.
@@ -181,10 +181,11 @@ These should be separate phases, each with its own mini-handoff:
     - `WindowType` is now defined as `keyof typeof AppRegistry`.
     - Window sizing now uses `AppRegistry[appId].defaultSize` via `getWindowSize`, preserving the old default sizes.
     - Introduced `spawnAppWindow(appId, ...)` as a thin wrapper around the existing `spawnWindow`, and updated all call sites to use it.
-    - The existing `renderWindowContent` function was renamed to `renderAppContent`; most window types still use a manual `switch`, but the `'irc'` case now renders via `AppRegistry['irc'].component` instead of importing `IrcClient` directly.
+    - The existing `renderWindowContent` function was renamed to `renderAppContent`; most window types still use a manual `switch`, but the `'irc'`, `'help'`, and `'model-settings'` cases now render via `AppRegistry[appId].component` instead of importing their components directly.
     - `renderAppContent` now includes a generic `default` branch that renders any app whose `AppRegistry[appId]` entry provides a `component`, so new simple apps can be added via the registry without changing the switch, while the pipeline views still use dedicated branches in `page.tsx`.
   - `devussy-web/src/apps/AppRegistry.ts`:
-    - Added placeholder `AppDefinition` entries for `init`, `interview`, `design`, `plan`, `execute`, `handoff`, `help`, and `model-settings` with default sizes that match the current window manager behaviour.
+    - Added placeholder `AppDefinition` entries for `init`, `interview`, `design`, `plan`, `execute`, and `handoff` with default sizes that match the current window manager behaviour.
+    - Added concrete, registry-driven `AppDefinition` entries for `irc`, `help`, and `model-settings` implemented in `src/apps/irc.tsx`, `src/apps/help.tsx`, and `src/apps/modelSettings.tsx`.
   - `devussy-web/src/components/window/Taskbar.tsx`:
     - Now accepts an `onOpenApp(appId)` callback.
     - In the Bliss theme, the **Most Used** entries (New Project, Help & Support, IRC Chat) and the **All Programs** list launch apps via `onOpenApp`; the All Programs list is generated from `AppRegistry` using each app's `startMenuCategory`.
@@ -192,11 +193,11 @@ These should be separate phases, each with its own mini-handoff:
 
 - **Behavioural status:**
   - Pipeline flow (Interview → Design → Plan → Execute → Handoff) and auto-open IRC behaviour remain identical to the previous implementation.
-  - The registry is now the single source of truth for default window sizes and valid app IDs, powers the IRC window rendering, and feeds the Bliss Start menu's All Programs list. A generic `renderAppContent` fallback renders registry-provided components for simple apps, but the main pipeline windows still use bespoke branches in the `renderAppContent` switch.
+  - The registry is now the single source of truth for default window sizes and valid app IDs, powers the IRC/Help/Model Settings window rendering, and feeds the Bliss Start menu's All Programs list. A generic `renderAppContent` fallback renders registry-provided components for simple apps, but the main pipeline windows still use bespoke branches in the `renderAppContent` switch.
 
 - **Remaining work for this phase:**
-  - Gradually update `renderAppContent` (or an equivalent helper) to derive components from `AppRegistry` for additional apps (e.g., Help, Model Settings, eventually a PipelineApp wrapper), while keeping behaviour stable.
-  - Once an `AppContext` / event bus exists, consider moving more window logic into app modules so the window manager becomes a thin shell rather than a bespoke switch.
+  - Optionally use the registry-driven pattern for future non-pipeline apps, while **leaving the main pipeline windows (`init`, `interview`, `design`, `plan`, `execute`, `handoff`) bespoke**. The pipeline UI flows are managed as a separate project and are intentionally not being wrapped behind `AppRegistry` in this track.
+  - Once an `AppContext` / event bus exists, consider moving more window logic for add-on apps into their modules so the window manager becomes a thinner shell for non-pipeline functionality.
 
 2. **Event Bus Integration**
    - Implement the `EventBus` class and `EventBusContext` from `appdevplan.md`.
@@ -205,6 +206,19 @@ These should be separate phases, each with its own mini-handoff:
    - First cross‑app scenario:
      - Pipeline emit: `planGenerated`.
      - IRC listens and posts a message into `#devussy-chat`.
+
+### Phase Log: Event Bus Integration (STATUS: PARTIAL)
+
+- **Code changes (frontend):**
+  - `devussy-web/src/apps/eventBus.tsx` defines an `EventBus` class, `EventBusProvider`, and `useEventBus` hook that provide a shared event bus instance to the web UI.
+  - `devussy-web/src/app/page.tsx` wraps the desktop/window manager in `EventBusProvider` (via an inner `PageInner` component) and emits a `planGenerated` event from `handlePlanApproved` with `projectName`, `languages`, `requirements`, and the approved `plan`.
+  - `devussy-web/src/components/addons/irc/IrcClient.tsx` subscribes to `planGenerated` and appends a local `[Devussy]` notification message from `devussy-bot` into the default `#devussy-chat` channel whenever a new plan is approved.
+
+- **Behavioural status:**
+  - Core pipeline flow (Interview → Design → Plan → Execute → Handoff) and IRC connection behaviour remain unchanged; the event bus currently drives only the notification bridge from pipeline → IRC.
+
+- **Remaining work for this phase:**
+  - Introduce additional events (e.g. share-link handling, execution phase notifications) and decide which existing ad‑hoc callbacks should be migrated onto the bus versus left as direct props.
 
 3. **Share Links**
    - Add `generateShareLink(stage, data)` helper.
@@ -248,7 +262,7 @@ When you start a new phase:
      - Run the frontend and manually test:
        - Opening pipeline windows.
        - Auto-open IRC.
-     - For event bus/share‑link phases, test the full flow you introduce.
+     - For event bus/share-link phases, test the full flow you introduce.
 
 5. **Update docs**
    - Update `appdevplan.md` with any architectural shifts.
@@ -260,8 +274,8 @@ When you start a new phase:
 
 ## 8. Immediate Next Action
 
-For the very next agent, the recommended first move is:
+For the very next agent on this track, the recommended first move is to **start the Share Links phase**, reusing the existing event bus plumbing and keeping the core pipeline windows as-is:
 
-> Continue the **Window Manager Refactor** phase by extending `renderAppContent` to use `AppRegistry[appId].component` for additional apps beyond `irc`, and prepare for introducing an event bus / `AppContext` so apps can be rendered via the registry without tightly coupling them to `page.tsx`.
+> Implement the share-link helpers and `/share` route described in `appdevplan.md`, parse share links inside `IrcClient` (emitting an `openShareLink` event on the bus), and handle `openShareLink` at the top level using `handleLoadCheckpoint` and `spawnAppWindow`. Do not attempt to move the main pipeline windows behind `AppRegistry`; treat them as an independent UI owned by a separate project.
 
-Once that’s complete and documented, the following agent can safely pick up the **event bus** or **share links** phases, using just the codebase, `appdevplan.md`, and this evolving handoff.
+Once that’s complete and documented, the following agent can expand event bus usage to additional notifications or registry-driven apps, using just the codebase, `appdevplan.md`, and this evolving handoff.
