@@ -320,11 +320,29 @@ function PageInner() {
     setRequirements(data.requirements || "");
     setLanguages(data.primary_language || "");
 
+    try {
+      bus.emit('interviewCompleted', {
+        projectName: data.project_name,
+        requirements: data.requirements,
+        languages: data.primary_language,
+      });
+    } catch (e) {
+      console.error('[page.tsx] Error emitting interviewCompleted event', e);
+    }
+
     spawnAppWindow('design', 'System Design');
   };
 
   const handleDesignComplete = (designData: any) => {
     setDesign(designData);
+    try {
+      bus.emit('designCompleted', {
+        projectName,
+        design: designData,
+      });
+    } catch (e) {
+      console.error('[page.tsx] Error emitting designCompleted event', e);
+    }
     spawnAppWindow('plan', 'Development Plan');
   };
 
@@ -620,7 +638,7 @@ function PageInner() {
   };
 
   return (
-      <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
+    <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
       {/* Desktop Icons */}
       {theme === 'bliss' && (
         <div className="absolute top-4 left-4 z-0 flex flex-col gap-6 p-4">
@@ -766,7 +784,7 @@ function PageInner() {
         activeStage={getActiveStage()}
         ircNick={ircNick}
       />
-      </main>
+    </main>
   );
 }
 

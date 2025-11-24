@@ -43,9 +43,23 @@ python dev_server.py
 
 2. **Generate App Configuration** (optional, for IRC/Apps):
 ```bash
-# Generates docker-compose.apps.generated.yml and nginx config
+# From devussy-web/, generates docker-compose.apps.generated.yml and nginx config
 npm run generate:compose
+# or, if you prefer using npx directly:
+# npx ts-node scripts/generate-compose.ts
 ```
+
+This script reads app-level `services` / `proxy` / `env` metadata from
+`src/apps/AppRegistry` and writes:
+
+- `docker-compose.apps.generated.yml` – additional app-provided services and a
+  `frontend` environment overlay
+- `nginx/conf.d/apps.generated.conf` – nginx `location` blocks for any
+  app-defined proxies
+
+It is **non-destructive**: it never modifies `docker-compose.yml` or
+`nginx/nginx.conf`; you always layer the generated compose file on top of the
+handwritten base.
 
 3. **Start the frontend** (port 3000):
 ```bash
@@ -58,6 +72,12 @@ npm run dev
 # To include generated app services:
 docker compose -f docker-compose.yml -f docker-compose.apps.generated.yml up
 ```
+
+This command overlays any app-defined services (for example the IRC `ircd`
+container) on top of the base stack. The base `docker-compose.yml` and
+`nginx/nginx.conf` remain the source of truth; the generated nginx fragment
+adds optional aliases such as `/apps/irc/ws/` that point to the same IRC
+backend as the canonical `/ws/irc/` path.
 
 3. **Open browser**:
 ```

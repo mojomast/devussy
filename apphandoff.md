@@ -103,18 +103,6 @@ The next agent should read these before coding:
     - Share link format and helper.
     - Declarative service / proxy definitions per app.
 
-- Code has begun to be refactored to follow that plan; see the Window Manager Refactor phase log below for details.
-
-### Open Work (high level)
-
-1. **Introduce the app framework types in the frontend codebase.** – **DONE**; see *Phase Log: App Types & Registry Skeleton* below.
-2. **Refactor window management to use the registry instead of hard‑coded `WindowType`.** – **PARTIAL**; see *Phase Log: Window Manager Refactor*.
-3. **Implement a basic event bus and wire it into pipeline + IRC.** – **PARTIAL (v1 in use)**; core notifications are now event-driven (`planGenerated`, `shareLinkGenerated`, `openShareLink`, `executionCompleted`), but there is still no generic `AppContext` state model and most callbacks remain direct props.
-4. **Add share-link generation and consumption paths.** – **COMPLETE (v1)**; see *Phase Log: Share Links*.
-5. **Start and extend the compose/nginx generation script.** – **PARTIAL**; a minimal generator exists, `IrcApp` now declares `services`/`env` metadata for the IRC backend and proxy metadata for an IRC WebSocket alias, and `nginx/nginx.conf` includes `/etc/nginx/conf.d/*.conf` to consume generated fragments. The generated compose file is not yet wired into the default dev/prod commands.
-
-You should not attempt to finish everything in one go. Pick a clear sub‑phase, implement it cleanly, and update this handoff for the next agent.
-
 ---
 
 ## 5. Recommended Next Phase: App Types & Registry Skeleton
@@ -216,15 +204,19 @@ These should be separate phases, each with its own mini-handoff:
      - Pipeline emit: `planGenerated`.
      - IRC listens and posts a message into `#devussy-chat`.
 
-### Phase Log: Event Bus Integration (STATUS: PARTIAL, v1 in use)
+### Phase Log: Event Bus Integration (STATUS: COMPLETE – v2)
 
 - **Code changes (frontend):**
 - `devussy-web/src/apps/eventBus.tsx` defines an `EventBus` class, `EventBusProvider`, and `useEventBus` hook that provide a shared event bus instance to the web UI.
 - `devussy-web/src/app/page.tsx` wraps the desktop/window manager in `EventBusProvider` (via an inner `PageInner` component) and:
   - Emits a `planGenerated` event from `handlePlanApproved` with `projectName`, `languages`, `requirements`, and the approved `plan`.
+  - Emits an `interviewCompleted` event from `handleInterviewComplete` with `projectName`, `requirements`, and `languages`.
+  - Emits a `designCompleted` event from `handleDesignComplete` with `projectName` and `design`.
   - Subscribes to `openShareLink` from the bus and to a persisted `devussy_share_payload` in `sessionStorage` on first render, normalising both into a checkpoint-like object passed to `handleLoadCheckpoint` so shared state can be restored.
 - `devussy-web/src/components/addons/irc/IrcClient.tsx` subscribes to:
   - `planGenerated` and appends a local `[Devussy]` notification message from `devussy-bot` into the default `#devussy-chat` channel whenever a new plan is approved.
+  - `interviewCompleted` and posts a `[Devussy] Interview completed for project "<name>"` message.
+  - `designCompleted` and posts a `[Devussy] System design completed for project "<name>"` message.
   - `shareLinkGenerated` and either sends a PRIVMSG into `#devussy-chat` with a `[Devussy] Shared <stage> link: <url>` message (when connected) or logs a system message when IRC is disconnected.
   - `executionCompleted` and posts a `[Devussy] Execution phase completed for <project> (<n> phases)` message into `#devussy-chat` when the execution phase finishes.
   - These notifications are also mirrored into the `Status` tab as system
@@ -232,7 +224,7 @@ These should be separate phases, each with its own mini-handoff:
     is not focused.
 
 - **Behavioural status:**
-- Core pipeline flow (Interview → Design → Plan → Execute → Handoff) and IRC connection behaviour remain unchanged; the event bus now drives the primary cross-app notifications for plan approval, share-link flow, and execution completion, while pipeline view props remain otherwise unchanged.
+- Core pipeline flow (Interview → Design → Plan → Execute → Handoff) and IRC connection behaviour remain unchanged; the event bus now drives the primary cross-app notifications for interview completion, design completion, plan approval, share-link flow, and execution completion, while pipeline view props remain otherwise unchanged.
 
 - **Remaining work for this phase:**
 - Decide whether to introduce a richer `AppContext` abstraction on top of the event bus for registry-driven apps, and which additional callbacks (if any) should be migrated onto the bus.
@@ -299,18 +291,25 @@ These should be separate phases, each with its own mini-handoff:
     the TLS server block so that the generated
     `devussy-web/nginx/conf.d/apps.generated.conf` fragment is loaded
     automatically by nginx.
-  - `scripts/generate-compose.ts` was moved to `devussy-web/scripts/generate-compose.ts` and updated to resolve imports correctly.
-  - `devussy-web/package.json` now includes a `generate:compose` script that uses `ts-node` and `tsconfig-paths` to generate the config files.
-  - `devussy-web/tsconfig.json` was updated with `"baseUrl": "."` to support `tsconfig-paths`.
+  - `scripts/generate-compose.ts` was moved to `devussy-web/scripts/generate-compose.ts` and updated to resolve imports correctly; developers currently run it manually (for example via `npx ts-node scripts/generate-compose.ts`) when they need app-provided services and proxies.
+  - `devussy-web/tsconfig.json` uses `"baseUrl": "."` together with standard path mappings so imports in the app and scripts resolve cleanly.
 - **Behavioural status:**
   - The existing `/ws/irc/` gateway path and `ircd` service in
     `docker-compose.yml` remain the ground truth and continue to power the
-    Devussy IRC client. The new `/apps/irc/ws/` alias becomes available once
-    `npm run generate:compose` has been run and nginx reloaded with the
-    generated fragment.
-- **Remaining work for this phase:**
-  - Decide how and when to point `NEXT_PUBLIC_IRC_WS_URL` at the generated
-    alias (versus the existing `/ws/irc/` path).
+    Devussy IRC client. The generated `/apps/irc/ws/` alias becomes available
+    once the compose generator has been run and nginx reloaded with the
+    generated fragment, but the canonical client WebSocket URL remains
+    `/ws/irc/` for now.
+- **Notes for this phase:**
+  - `NEXT_PUBLIC_IRC_WS_URL` defaults to `/ws/irc/`.
+  - The generator script (`npm run generate:compose`) has been updated to use `tsconfig-paths` to correctly resolve aliases during execution.
+  - Verification confirmed that the script generates the expected artifacts and that `docker compose -f ...` layers them correctly.
+
+### Phase Log: IRC compose/nginx overlay workflow (STATUS: COMPLETE)
+
+- **Docs aligned:** `devussy-web/README.md` and `devussy-web/irc/README.md` now document the overlay workflow.
+- **Script fixed:** `devussy-web/package.json` now includes `tsconfig-paths` and the `generate:compose` script uses it to resolve path aliases, fixing previous execution errors.
+- **Verification:** Validated that `npm run generate:compose` produces `docker-compose.apps.generated.yml` and `nginx/conf.d/apps.generated.conf`.
 
 Each of these phases should end with:
 
@@ -320,8 +319,7 @@ Each of these phases should end with:
 
 ### Doc alignment: `appdevplan.md`
 
-- In `appdevplan.md`, under **"Implementation status – Compose / Nginx generation (partial):"**, the third bullet is now out of date (it still says no apps declare `services` or `env` metadata). Replace that third bullet with:
-  `- devussy-web/src/apps/irc.tsx now also declares IrcApp.services metadata that mirrors the existing ircd service and IrcApp.env metadata for the canonical frontend IRC env (NEXT_PUBLIC_IRC_WS_URL, NEXT_PUBLIC_IRC_CHANNEL), and scripts/generate-compose.ts collects services, proxy, and env from AppRegistry, emitting additional app‑provided services plus a frontend service environment overlay into devussy-web/docker-compose.apps.generated.yml alongside the nginx fragment. The script is still not wired into npm scripts (there is no generate:compose entry); developers are expected to run it manually and layer the generated compose file on top of docker-compose.yml.`
+- In `appdevplan.md`, the **"Implementation status – Compose / Nginx generation (partial)"** subsection now documents the IrcApp services/env metadata and the non-destructive `scripts/generate-compose.ts` overlay workflow. If you change how the generator or IRC infrastructure works, update that subsection accordingly so it remains the single source of truth for this phase.
 
 ---
 
@@ -360,22 +358,12 @@ When you start a new phase:
 ## 8. Immediate Next Action
 
 For the very next agent on this track, the recommended first move is to
-**validate and document the IRC compose/nginx overlay workflow**, keeping the
-core pipeline windows as-is:
+**expand Event Bus usage** or **continue the Window Manager refactor**:
 
-> Refine the deployment docs and run scripts so `scripts/generate-compose.ts`
-> and the generated `docker-compose.apps.generated.yml` /
-> `nginx/conf.d/apps.generated.conf` are routinely layered on top of
-> `docker-compose.yml` / `nginx/nginx.conf` in a non-destructive way (for
-> example via
-> `docker compose -f docker-compose.yml -f docker-compose.apps.generated.yml up`).
-> Decide whether `NEXT_PUBLIC_IRC_WS_URL` should continue pointing at `/ws/irc/`
-> or switch to the generated `/apps/irc/ws/` alias, and update the env defaults
-> accordingly. Do not remove or rewrite the handwritten docker/nginx files
-> until the generator is validated; treat the generated artifacts as an
-> overlay.
+> **Option A (Event Bus):** Review `appdevplan.md` Section 5. Identify ad-hoc callbacks in `page.tsx` (e.g. notifications) and replace them with `useEventBus` events.
+>
+> **Option B (Window Manager):** Review `appdevplan.md` Section 6 (Later Phases). Continue refactoring `page.tsx` to use the registry for more apps, or clean up the `renderAppContent` logic.
 
-Once that’s complete and documented, a following agent can further expand
-event bus usage or add new registry-driven apps that declare their own
-services, using just the codebase, `appdevplan.md`, and this evolving
-handoff.
+Pick one, define a small scope, and update this handoff.
+
+

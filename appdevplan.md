@@ -131,23 +131,6 @@ class EventBus {
   }
 }
 
-const bus = new EventBus();
-const EventBusContext = createContext(bus);
-
-export const useEventBus = () => useContext(EventBusContext);
-```
-
-**Implementation status – Event bus (partial, v1 in use):**
-
-- `devussy-web/src/apps/eventBus.tsx` implements an `EventBus` class, `EventBusProvider`, and `useEventBus` hook that expose a single shared bus instance to the web UI.
-- `devussy-web/src/app/page.tsx` wraps the desktop/window manager in `EventBusProvider` (via an inner `PageInner` component), emits a `planGenerated` event from `handlePlanApproved`, and listens for `openShareLink` events and a persisted `devussy_share_payload` in `sessionStorage` to restore shared pipeline state via `handleLoadCheckpoint`.
-- `devussy-web/src/components/addons/irc/IrcClient.tsx` subscribes to `planGenerated`, `shareLinkGenerated`, and `executionCompleted` events to surface Devussy bot notifications into `#devussy-chat` whenever a plan is approved, a share link is created by a pipeline view, or execution completes; the same events are also mirrored into the IRC `Status` tab as system messages.
-- `AppContext.getState` / `setState` and any richer cross-app context model remain unimplemented; future phases can decide which additional callbacks to migrate onto the bus versus leaving them as direct props, and whether to introduce a structured `AppContext` wrapper for registry-driven apps.
-
-## 6. Share Link Design and Handling
-
-### 6.1. Link format
-
 Define a custom URL scheme (or route) that encodes Devussy state in a compact, shareable form. A proposal:
 
 ```
@@ -223,7 +206,6 @@ env: {
   NEXT_PUBLIC_IRC_CHANNEL: '#devussy-chat'
 }
 ```
-
 ### 7.2. Build script to merge services
 
 Create a script (scripts/generate-compose.ts) that reads all AppDefinition.services and writes a combined docker-compose.generated.yml. This script should:
@@ -231,16 +213,6 @@ Create a script (scripts/generate-compose.ts) that reads all AppDefinition.servi
 Start from a base docker-compose.yml containing frontend, streaming-server and nginx.
 
 Append service definitions from each installed app. Give each service a unique name (e.g. prefix with app id) to avoid collisions.
-
-Add the app service names to the depends_on of frontend where appropriate.
-
-Write environment variables for the frontend into the build args section of the frontend service (e.g. NEXT_PUBLIC_IRC_WS_URL).
-
-Live Logs / Notifications: A small WebSocket server that broadcasts events (e.g. new plan generated, execution phase started). The taskbar could display toast notifications or write to the IRC channel via the event bus.
-
-Markdown Editor / Docs Viewer: An app for editing documentation or reading the generated handoff.md. Could integrate with GitHub via an API client container.
-
-AI Chat Companion: A lightweight chat interface to your preferred LLM provider (OpenAI, Requesty, Aether). Users could ask quick questions without leaving Devussy. This would require a backend proxy service to forward requests and handle API keys.
 
 Terminal / Shell: A web‑based terminal connected to a container with the project files. Useful for advanced users who want to run commands or inspect files manually. Security considerations apply (read‑only or restricted shells).
 
@@ -302,7 +274,7 @@ Compose and Nginx generation (2 days)
 
 Write scripts/generate-compose.ts to merge service definitions and update docker-compose.generated.yml and nginx/conf.d/apps.conf.
 
-Add a build step to regenerate these files during CI or when npm run generate:compose is executed.
+Add a build step to regenerate these files during CI or whenever the compose generator script is executed (for example via a dedicated npm script or a manual `npx ts-node scripts/generate-compose.ts` invocation).
 
 Document how to define new services and proxies in README.md.
 

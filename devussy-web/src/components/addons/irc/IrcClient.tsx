@@ -347,9 +347,61 @@ export default function IrcClient({
             }
         });
 
+        const unsubscribeInterview = bus.subscribe('interviewCompleted', (payload: any) => {
+            try {
+                const channelName = defaultChannel;
+                const name = payload?.projectName || 'a project';
+                const content = `[Devussy] Interview completed for project "${name}".`;
+
+                addMessage(channelName, {
+                    id: Math.random().toString(36).substr(2, 9),
+                    timestamp: new Date().toLocaleTimeString(),
+                    prefix: 'devussy-bot',
+                    command: 'PRIVMSG',
+                    params: [channelName, content],
+                    raw: '',
+                    type: 'message',
+                    sender: 'devussy-bot',
+                    content,
+                    target: channelName,
+                });
+
+                addSystemMessage(content);
+            } catch (err) {
+                console.error('[IrcClient] Failed to handle interviewCompleted event', err);
+            }
+        });
+
+        const unsubscribeDesign = bus.subscribe('designCompleted', (payload: any) => {
+            try {
+                const channelName = defaultChannel;
+                const name = payload?.projectName || 'a project';
+                const content = `[Devussy] System design completed for project "${name}".`;
+
+                addMessage(channelName, {
+                    id: Math.random().toString(36).substr(2, 9),
+                    timestamp: new Date().toLocaleTimeString(),
+                    prefix: 'devussy-bot',
+                    command: 'PRIVMSG',
+                    params: [channelName, content],
+                    raw: '',
+                    type: 'message',
+                    sender: 'devussy-bot',
+                    content,
+                    target: channelName,
+                });
+
+                addSystemMessage(content);
+            } catch (err) {
+                console.error('[IrcClient] Failed to handle designCompleted event', err);
+            }
+        });
+
         return () => {
             unsubscribeShare();
             unsubscribeExec();
+            unsubscribeInterview();
+            unsubscribeDesign();
         };
     }, [bus, defaultChannel, ws, connected, addMessage, addSystemMessage]);
 
@@ -874,10 +926,10 @@ export default function IrcClient({
                             <span className="text-xs text-muted-foreground ml-2">({nick})</span>
                             <span
                                 className={`text-[10px] ml-2 px-1 rounded-full border ${connected
-                                        ? 'border-green-500 text-green-400'
-                                        : demoMode
-                                            ? 'border-yellow-500 text-yellow-400'
-                                            : 'border-red-500 text-red-400'
+                                    ? 'border-green-500 text-green-400'
+                                    : demoMode
+                                        ? 'border-yellow-500 text-yellow-400'
+                                        : 'border-red-500 text-red-400'
                                     }`}
                             >
                                 {connected ? 'Connected' : demoMode ? 'Demo mode' : 'Disconnected'}

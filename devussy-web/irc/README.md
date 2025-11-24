@@ -34,6 +34,20 @@ NEXT_PUBLIC_IRC_CHANNEL=#devussy-chat
 - Proxies WebSocket connections from `/ws/irc/` to `ircd:8080`.
 - Handles SSL termination.
 
+### Compose / nginx overlay workflow
+
+- The IRC `ircd` service is defined in the base `devussy-web/docker-compose.yml`
+  and remains the ground truth for the IRC container.
+- The app framework can also generate an overlay file
+  `docker-compose.apps.generated.yml` (via `scripts/generate-compose.ts`) that
+  adds app-defined services and an nginx fragment at
+  `nginx/conf.d/apps.generated.conf`.
+- When running with Docker apps, you typically combine the two files with:
+  `docker compose -f docker-compose.yml -f docker-compose.apps.generated.yml up`.
+- The frontend IRC client continues to use `NEXT_PUBLIC_IRC_WS_URL` pointing at
+  the canonical `/ws/irc/` WebSocket path; the generated nginx fragment may add
+  an additional `/apps/irc/ws/` alias that routes to the same backend.
+
 ## Usage
 
 1.  Open Devussy Studio.
