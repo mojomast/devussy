@@ -57,25 +57,7 @@ function PageInner() {
   const [plan, setPlan] = useState<any>(null);
   const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0);
 
-  // Help preferences
-  const [dontShowHelpAgain, setDontShowHelpAgain] = useState<boolean>(() => {
-    try { return localStorage.getItem('devussy_help_dismissed') === '1'; } catch (e) { return false; }
-  });
 
-  const [analyticsOptOut, setAnalyticsOptOut] = useState<boolean>(false);
-
-  useEffect(() => {
-    try {
-      const cookies = document.cookie.split(';').map(c => c.trim());
-      const cookie = cookies.find(c => c.startsWith('devussy_analytics_optout='));
-      if (cookie) {
-        const value = (cookie.split('=')[1] || '').toLowerCase();
-        if (value === '1' || value === 'true' || value === 'yes') {
-          setAnalyticsOptOut(true);
-        }
-      }
-    } catch (e) { }
-  }, []);
 
   // IRC nickname (from localStorage)
   const [ircNick, setIrcNick] = useState<string>(() => {
@@ -252,6 +234,19 @@ function PageInner() {
   };
 
   const spawnAppWindow = (appId: WindowType, title: string, props?: Record<string, any>, options?: { isMinimized?: boolean }) => {
+    const appDef = AppRegistry[appId];
+    if (appDef?.singleInstance) {
+      const existing = windows.find(w => w.type === appId);
+      if (existing) {
+        if (!options?.isMinimized) {
+          focusWindow(existing.id);
+          if (existing.isMinimized) {
+            toggleMinimize(existing.id);
+          }
+        }
+        return;
+      }
+    }
     spawnWindow(appId, title, props, options);
   };
 
@@ -385,46 +380,6 @@ function PageInner() {
     spawnAppWindow('init', 'New Project');
   };
 
-  const handleHelp = () => {
-    // Prevent duplicate help windows
-    const existingHelp = windows.find(w => w.type === 'help');
-    if (existingHelp) {
-      focusWindow(existingHelp.id);
-      if (existingHelp.isMinimized) {
-        toggleMinimize(existingHelp.id);
-      }
-      return;
-    }
-    spawnAppWindow('help', 'Devussy Studio Help');
-  };
-
-  const handleOpenModelSettings = () => {
-    // Prevent duplicate model settings windows
-    const existing = windows.find(w => w.type === 'model-settings');
-    if (existing) {
-      focusWindow(existing.id);
-      if (existing.isMinimized) {
-        toggleMinimize(existing.id);
-      }
-      return;
-    }
-    spawnAppWindow('model-settings', 'AI Model Settings');
-  };
-
-  const handleOpenIrc = (options?: { isMinimized?: boolean }) => {
-    const existing = windows.find(w => w.type === 'irc');
-    if (existing) {
-      if (!options?.isMinimized) {
-        focusWindow(existing.id);
-        if (existing.isMinimized) {
-          toggleMinimize(existing.id);
-        }
-      }
-      return;
-    }
-    spawnAppWindow('irc', 'IRC Chat – #devussy-chat', undefined, options);
-  };
-
   // Auto-launch IRC (always, minimized)
   useEffect(() => {
     try {
@@ -433,7 +388,7 @@ function PageInner() {
       if (autoLaunch !== 'false') {
         // Delay to let page load
         setTimeout(() => {
-          handleOpenIrc({ isMinimized: true });
+          spawnAppWindow('irc', 'IRC Chat – #devussy-chat', undefined, { isMinimized: true });
         }, 500);
       }
     } catch (e) { }
@@ -601,36 +556,18 @@ function PageInner() {
         }
         return null;
       }
-      case 'help': {
+      case 'help':
+      case 'irc':
+      default: {
         const appDef = AppRegistry[window.type];
         if (appDef && appDef.component) {
           const Component = appDef.component as React.FC<any>;
           return (
             <Component
-              dontShowHelpAgain={dontShowHelpAgain}
-              setDontShowHelpAgain={setDontShowHelpAgain}
-              analyticsOptOut={analyticsOptOut}
-              setAnalyticsOptOut={setAnalyticsOptOut}
               onClose={() => closeWindow(window.id)}
               {...(window.props || {})}
             />
           );
-        }
-        return null;
-      }
-      case 'irc': {
-        const appDef = AppRegistry[window.type];
-        if (appDef && appDef.component) {
-          const Component = appDef.component as React.FC<any>;
-          return <Component {...(window.props || {})} />;
-        }
-        return null;
-      }
-      default: {
-        const appDef = AppRegistry[window.type];
-        if (appDef && appDef.component) {
-          const Component = appDef.component as React.FC<any>;
-          return <Component {...(window.props || {})} />;
         }
         return null;
       }
@@ -658,7 +595,7 @@ function PageInner() {
           {/* mIRC */}
           <button
             className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
-            onDoubleClick={() => handleOpenIrc()}
+            onDoubleClick={() => spawnAppWindow('irc', 'IRC Chat – #devussy-chat')}
           >
             <div className="w-12 h-12 relative bg-white/10 rounded-lg border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
               {/* Custom mIRC-like icon since we don't have the asset */}
@@ -731,43 +668,21 @@ function PageInner() {
           }
         }}
         onNewProject={handleNewProject}
-        onHelp={handleHelp}
-        onOpenModelSettings={handleOpenModelSettings}
-        onOpenIrc={() => handleOpenIrc()}
         onOpenApp={(appId) => {
-          switch (appId) {
-            case 'init':
-              handleNewProject();
-              break;
-            case 'interview':
-              handleStartInterview();
-              break;
-            case 'design':
-              spawnAppWindow('design', 'System Design');
-              break;
-            case 'plan':
-              spawnAppWindow('plan', 'Development Plan');
-              break;
-            case 'execute':
-              spawnAppWindow('execute', 'Execution Phase');
-              break;
-            case 'handoff':
-              spawnAppWindow('handoff', 'Project Handoff');
-              break;
-            case 'help':
-              handleHelp();
-              break;
-            case 'model-settings':
-              handleOpenModelSettings();
-              break;
-            case 'irc':
-              handleOpenIrc();
-              break;
-            default: {
-              const appDef = AppRegistry[appId as WindowType];
-              const title = appDef?.name || 'Devussy App';
-              spawnAppWindow(appId as WindowType, title);
-            }
+          // Special cases that require specific handlers
+          if (appId === 'init') {
+            handleNewProject();
+            return;
+          }
+          if (appId === 'interview') {
+            handleStartInterview();
+            return;
+          }
+
+          // Generic handler for all other apps
+          const appDef = AppRegistry[appId as WindowType];
+          if (appDef) {
+            spawnAppWindow(appId as WindowType, appDef.name);
           }
         }}
         currentState={{

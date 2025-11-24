@@ -34,6 +34,7 @@ const ModelSettingsApp: AppDefinition = {
   icon: <Settings className="w-4 h-4" />,
   defaultSize: { width: 500, height: 650 },
   startMenuCategory: "Settings",
+  singleInstance: true,
   component: ModelSettingsWindow,
 };
 

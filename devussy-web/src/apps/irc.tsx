@@ -9,6 +9,7 @@ const IrcApp: AppDefinition = {
   icon: <MessageSquare className="w-4 h-4" />,
   defaultSize: { width: 800, height: 600 },
   startMenuCategory: "Communication",
+  singleInstance: true,
   component: IrcClient,
   services: [
     {

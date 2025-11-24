@@ -4,20 +4,30 @@ import { HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface HelpViewProps {
-  dontShowHelpAgain: boolean;
-  setDontShowHelpAgain: (value: boolean) => void;
-  analyticsOptOut: boolean;
-  setAnalyticsOptOut: (value: boolean) => void;
   onClose?: () => void;
 }
 
-const HelpView: React.FC<HelpViewProps> = ({
-  dontShowHelpAgain,
-  setDontShowHelpAgain,
-  analyticsOptOut,
-  setAnalyticsOptOut,
-  onClose,
-}) => {
+const HelpView: React.FC<HelpViewProps> = ({ onClose }) => {
+  // Help preferences
+  const [dontShowHelpAgain, setDontShowHelpAgain] = React.useState<boolean>(() => {
+    try { return localStorage.getItem('devussy_help_dismissed') === '1'; } catch (e) { return false; }
+  });
+
+  const [analyticsOptOut, setAnalyticsOptOut] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';').map(c => c.trim());
+      const cookie = cookies.find(c => c.startsWith('devussy_analytics_optout='));
+      if (cookie) {
+        const value = (cookie.split('=')[1] || '').toLowerCase();
+        if (value === '1' || value === 'true' || value === 'yes') {
+          setAnalyticsOptOut(true);
+        }
+      }
+    } catch (e) { }
+  }, []);
+
   return (
     <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
       <h1 className="text-2xl font-bold mb-4">Devussy Studio Help</h1>
@@ -124,6 +134,7 @@ const HelpApp: AppDefinition = {
   icon: <HelpCircle className="w-4 h-4" />,
   defaultSize: { width: 700, height: 600 },
   startMenuCategory: "Most Used",
+  singleInstance: true,
   component: HelpView,
 };
 

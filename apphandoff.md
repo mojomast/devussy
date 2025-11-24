@@ -171,30 +171,40 @@ These should be separate phases, each with its own mini-handoff:
      - Existing pipeline flow and auto-open IRC still behave identically.
      - Taskbar and Start Menu derive from `AppRegistry`.
 
-### Phase Log: Window Manager Refactor (STATUS: PARTIAL)
+### Phase Log: Window Manager Refactor (STATUS: COMPLETE – v2)
 
 - **Code changes (frontend):**
+  - `devussy-web/src/apps/appTypes.ts`:
+    - Added `singleInstance?: boolean` to `AppDefinition` interface to support apps that should only have one window open at a time.
   - `devussy-web/src/app/page.tsx`:
     - `WindowType` is now defined as `keyof typeof AppRegistry`.
     - Window sizing now uses `AppRegistry[appId].defaultSize` via `getWindowSize`, preserving the old default sizes.
     - Introduced `spawnAppWindow(appId, ...)` as a thin wrapper around the existing `spawnWindow`, and updated all call sites to use it.
+    - **v2**: `spawnAppWindow` now implements `singleInstance` logic: if an app has `singleInstance: true` and a window is already open, it focuses and restores the existing window instead of creating a duplicate.
     - The existing `renderWindowContent` function was renamed to `renderAppContent`; most window types still use a manual `switch`, but the `'irc'`, `'help'`, and `'model-settings'` cases now render via `AppRegistry[appId].component` instead of importing their components directly.
     - `renderAppContent` now includes a generic `default` branch that renders any app whose `AppRegistry[appId]` entry provides a `component`, so new simple apps can be added via the registry without changing the switch, while the pipeline views still use dedicated branches in `page.tsx`.
+    - **v2**: Simplified `onOpenApp` handler to use `AppRegistry` generically for all apps except `init` and `interview` (which require special state setup). Removed redundant handlers `handleHelp`, `handleOpenIrc`, and `handleOpenModelSettings`.
   - `devussy-web/src/apps/AppRegistry.ts`:
     - Added placeholder `AppDefinition` entries for `init`, `interview`, `design`, `plan`, `execute`, and `handoff` with default sizes that match the current window manager behaviour.
     - Added concrete, registry-driven `AppDefinition` entries for `irc`, `help`, and `model-settings` implemented in `src/apps/irc.tsx`, `src/apps/help.tsx`, and `src/apps/modelSettings.tsx`.
+  - `devussy-web/src/apps/help.tsx`, `src/apps/irc.tsx`, `src/apps/modelSettings.tsx`:
+    - **v2**: Set `singleInstance: true` to prevent duplicate windows.
   - `devussy-web/src/components/window/Taskbar.tsx`:
     - Now accepts an `onOpenApp(appId)` callback.
     - In the Bliss theme, the **Most Used** entries (New Project, Help & Support, IRC Chat) and the **All Programs** list launch apps via `onOpenApp`; the All Programs list is generated from `AppRegistry` using each app's `startMenuCategory`.
     - In the non-Bliss theme, the floating taskbar's New/Help/Chat buttons also call `onOpenApp(appId)` so that launches go through the same registry-driven path.
+    - **v2**: Removed `onHelp`, `onOpenIrc`, and `onOpenModelSettings` props as they are now handled by the generic `onOpenApp`.
 
 - **Behavioural status:**
   - Pipeline flow (Interview → Design → Plan → Execute → Handoff) and auto-open IRC behaviour remain identical to the previous implementation.
-  - The registry is now the single source of truth for default window sizes and valid app IDs, powers the IRC/Help/Model Settings window rendering, and feeds the Bliss Start menu's All Programs list. A generic `renderAppContent` fallback renders registry-provided components for simple apps, but the main pipeline windows still use bespoke branches in the `renderAppContent` switch.
+  - The registry is now the single source of truth for default window sizes and valid app IDs, powers the IRC/Help/Model Settings window rendering, and feeds the Bliss Start menu's All Programs list.
+  - `renderAppContent` now uses a generic fallback for `help`, `irc`, and any other registry app, passing `onClose` and `window.props`. `HelpApp` was refactored to be self-contained (managing its own state for "don't show again" and analytics opt-out).
+  - The main pipeline windows (`init`, `interview`, `design`, `plan`, `execute`, `handoff`) still use bespoke branches in `page.tsx` as intended.
+  - **v2**: Help, IRC, and Model Settings windows now enforce single-instance behavior. Clicking to open them again focuses the existing window instead of spawning duplicates.
 
 - **Remaining work for this phase:**
-  - Optionally use the registry-driven pattern for future non-pipeline apps, while **leaving the main pipeline windows (`init`, `interview`, `design`, `plan`, `execute`, `handoff`) bespoke**. The pipeline UI flows are managed as a separate project and are intentionally not being wrapped behind `AppRegistry` in this track.
-  - Once an `AppContext` / event bus exists, consider moving more window logic for add-on apps into their modules so the window manager becomes a thinner shell for non-pipeline functionality.
+  - None for the core refactor. Future work can focus on moving pipeline apps to the registry pattern if desired, but they are currently out of scope.
+
 
 2. **Event Bus Integration**
    - Implement the `EventBus` class and `EventBusContext` from `appdevplan.md`.

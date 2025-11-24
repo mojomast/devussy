@@ -8,6 +8,7 @@ export interface AppDefinition {
   startMenuCategory?: string;
   component: React.FC<any>;
   onOpen?: (context: AppContext) => void;
+  singleInstance?: boolean;
   services?: DockerServiceDef[];
   proxy?: NginxProxyDef[];
   env?: Record<string, string>;
