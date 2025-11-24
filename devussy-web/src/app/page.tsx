@@ -18,7 +18,7 @@ import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { AppRegistry } from "@/apps/AppRegistry";
-import { EventBusProvider, useEventBus } from "@/apps/eventBus";
+import { EventBusProvider, useEventBus, createAppContext } from "@/apps/eventBus";
 import { decodeSharePayload, type ShareLinkPayload } from "@/shareLinks";
 
 type WindowType = keyof typeof AppRegistry;
@@ -37,6 +37,7 @@ interface WindowState {
 function PageInner() {
   const { theme } = useTheme();
   const bus = useEventBus();
+  const appContext = React.useMemo(() => createAppContext(bus), [bus]);
   // Window State Management
   const [windows, setWindows] = useState<WindowState[]>([
     { id: 'help-1', type: 'help', title: 'Devussy Studio Help', position: { x: 50, y: 50 }, zIndex: 10, size: { width: 700, height: 600 } }
@@ -580,6 +581,7 @@ function PageInner() {
               configs={modelConfigs}
               onConfigsChange={setModelConfigs}
               activeStage={getActiveStage()}
+              appContext={appContext}
               {...(window.props || {})}
             />
           );
@@ -595,6 +597,7 @@ function PageInner() {
           return (
             <Component
               onClose={() => closeWindow(window.id)}
+              appContext={appContext}
               {...(window.props || {})}
             />
           );

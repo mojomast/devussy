@@ -306,6 +306,17 @@ pytest -q
 black src && isort src && flake8 src
 ```
 
+Additional integration tests for the **web app framework & IRC integration** live under `tests/integration/` and can be run individually, for example:
+
+```bash
+pytest tests/integration/test_compose_generator.py -v
+pytest tests/integration/test_share_links_flow.py -v
+pytest tests/integration/test_event_bus_notifications.py -v
+pytest tests/integration/test_window_manager_registry.py -v
+```
+
+These tests exercise the `devussy-web` app framework features end-to-end, including the compose/nginx generator, share link helpers and `/share` route wiring, typed EventBus/AppContext notifications, and AppRegistry/window manager invariants.
+
 ### Dev archive
 
 Legacy Devussy docs, handoff summaries, and helper scripts have been moved into `devarchive/` to keep the repo root clean. This includes files like:
