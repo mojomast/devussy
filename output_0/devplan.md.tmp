@@ -1,0 +1,110 @@
+# Development Plan
+
+## Summary
+
+
+Detailed plan 0
+
+
+---
+
+
+[LIST] Project Dashboard
+
+
+This document serves as the main index and dashboard for project development. 
+Each phase below has its own dedicated markdown file with detailed actionable steps.
+
+
+### [ROCKET] Phase Overview
+
+
+| Phase | Title | Status | Steps | File |
+
+|-------|-------|--------|-------|------|
+
+
+---
+
+
+## 📝 How to Use This Plan
+
+
+1. **Main Dashboard**: This file provides overview and progress tracking
+
+2. **Phase Files**: Click on phase links above to view detailed actionable steps
+
+3. **Coding Agents**: Each phase file contains specific steps for implementation agents
+
+4. **Progress Tracking**: Mark steps complete in individual phase files
+
+
+### 🔗 Quick Access
+
+
+
+---
+
+
+## 🔧 Automation Hooks (Do Not Remove)
+
+
+<!-- PROGRESS_LOG_START -->
+<!-- PROGRESS_LOG_END -->
+
+
+<!-- NEXT_TASK_GROUP_START -->
+<!-- NEXT_TASK_GROUP_END -->
+
+
+<!-- COMPLETION_SUMMARY_START -->
+<!-- COMPLETION_SUMMARY_END -->
+
+
+## 📊 Overall Progress
+
+
+**Total Phases**: 0
+
+**Total Steps**: 0
+
+**Completed Steps**: 0
+
+
+*Last updated: 2025-11-24 18:28:10*
+
+
+---
+
+
+[TARGET] Anchor Reference Guide (Read-Minimal)
+
+
+
+**devplan.md**
+
+- `PROGRESS_LOG`: recent completions (~100 tokens)
+
+- `NEXT_TASK_GROUP`: next 3–5 tasks (~150 tokens)
+
+
+**phaseN.md**
+
+- `PHASE_TASKS`: all tasks for the phase (~100 tokens)
+
+- `PHASE_OUTCOMES`: outcomes / blockers (~50 tokens)
+
+
+**handoff_prompt.md**
+
+- `QUICK_STATUS`: current state snapshot (~50 tokens)
+
+
+**Token Budget:** aim for <500 tokens per agent turn by reading only these anchored sections.
+
+
+---
+
+
+## 🔒 Phase Status Anchors (Do Not Remove)
+

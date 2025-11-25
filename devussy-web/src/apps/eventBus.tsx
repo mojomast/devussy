@@ -2,44 +2,58 @@ import React, { createContext, useContext, useRef } from "react";
 import type { ShareLinkPayload } from "@/shareLinks";
 import type { AppContext } from "./appTypes";
 
+type PlanGeneratedPayload = {
+  projectName?: string;
+  languages?: string;
+  requirements?: string;
+  plan: any;
+  phaseCount?: number;
+};
+
+type ExecutionStartedPayload = {
+  projectName?: string;
+  totalPhases?: number;
+};
+
+type InterviewCompletedPayload = {
+  projectName?: string;
+  requirements?: string;
+  languages?: string;
+};
+
+type DesignCompletedPayload = {
+  projectName?: string;
+  design: any;
+};
+
+type ShareLinkGeneratedPayload = {
+  stage: string;
+  data: any;
+  url: string;
+};
+
+type ExecutionCompletedPayload = {
+  projectName?: string;
+  plan?: any;
+  totalPhases?: number;
+};
+
+type ExecutionPhaseUpdatedPayload = {
+  projectName?: string;
+  phaseNumber: number;
+  phaseTitle?: string;
+  status: "queued" | "running" | "complete" | "failed";
+  totalPhases?: number;
+};
+
 type EventPayloads = {
-  planGenerated: {
-    projectName?: string;
-    languages?: string;
-    requirements?: string;
-    plan: any;
-    phaseCount?: number;
-  };
-  executionStarted: {
-    projectName?: string;
-    totalPhases?: number;
-  };
-  interviewCompleted: {
-    projectName?: string;
-    requirements?: string;
-    languages?: string;
-  };
-  designCompleted: {
-    projectName?: string;
-    design: any;
-  };
-  shareLinkGenerated: {
-    stage: string;
-    data: any;
-    url: string;
-  };
-  executionCompleted: {
-    projectName?: string;
-    plan?: any;
-    totalPhases?: number;
-  };
-  executionPhaseUpdated: {
-    projectName?: string;
-    phaseNumber: number;
-    phaseTitle?: string;
-    status: "queued" | "running" | "complete" | "failed";
-    totalPhases?: number;
-  };
+  planGenerated: PlanGeneratedPayload;
+  executionStarted: ExecutionStartedPayload;
+  interviewCompleted: InterviewCompletedPayload;
+  designCompleted: DesignCompletedPayload;
+  shareLinkGenerated: ShareLinkGeneratedPayload;
+  executionCompleted: ExecutionCompletedPayload;
+  executionPhaseUpdated: ExecutionPhaseUpdatedPayload;
   openShareLink: ShareLinkPayload;
   // Fallback for any future or ad-hoc events
   [event: string]: any;

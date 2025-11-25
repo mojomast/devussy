@@ -26,6 +26,7 @@ from .ui_tokens import render
 from .markdown_output_manager import MarkdownOutputManager
 from .models import DevPlan, ProjectDesign
 from .interview import RepoAnalysis, RepositoryAnalyzer
+from .llm_interview import LLMInterviewManager
 from .pipeline.compose import PipelineOrchestrator
 from .progress_reporter import PipelineProgressReporter
 from .state_manager import StateManager
@@ -341,7 +342,18 @@ def _load_app_config(
         )
         config = AppConfig()
 
-    # Apply CLI overrides
+    # First, optionally apply UI preferences so they become the baseline
+    # for this process. CLI overrides specified by the user should then
+    # take precedence over those preferences.
+    if load_ui_preferences:
+        try:
+            _apply_last_prefs_to_config(config)
+        except Exception as e:
+            # Never break startup due to preference loading issues
+            logger.debug(f"Failed to load UI preferences: {e}")
+            pass
+
+    # Apply CLI overrides on top of config + preferences
     if provider:
         config.llm.provider = provider
     if model:
@@ -354,15 +366,6 @@ def _load_app_config(
         config.llm.max_tokens = max_tokens
     if verbose:
         config.log_level = "DEBUG"
-
-    # Apply UI preferences to config during startup (if not CLI-only commands)
-    if load_ui_preferences:
-        try:
-            _apply_last_prefs_to_config(config)
-        except Exception as e:
-            # Never break startup due to preference loading issues
-            logger.debug(f"Failed to load UI preferences: {e}")
-            pass
 
     # Setup logging
     setup_logging(config.log_level, str(config.log_file), config.log_format)
@@ -3308,23 +3311,23 @@ def generate_terminal(
 
 
 @app.command()
-def interactive(
+async def interactive(
     config_path: Annotated[
-        Optional[str], 
-        typer.Option("--config", help="Path to config file")
+        Optional[str],
+        typer.Option("--config", help="Path to config file"),
     ] = None,
     provider: Annotated[
-        Optional[str], 
-        typer.Option("--provider", help="LLM provider override")
+        Optional[str],
+        typer.Option("--provider", help="LLM provider override"),
     ] = None,
     model: Annotated[
-        Optional[str], 
-        typer.Option("--model", help="Model override")
+        Optional[str],
+        typer.Option("--model", help="Model override"),
     ] = None,
-    select_model: Annotated[
-        bool,
-        typer.Option("--select-model", help="Interactively choose a Requesty model for this run")
-    ] = False,
+    output_dir: Annotated[
+        Optional[str],
+        typer.Option("--output-dir", help="Output directory"),
+    ] = None,
     temperature: Annotated[
         Optional[float],
         typer.Option(
@@ -3342,18 +3345,23 @@ def interactive(
             min=1,
         ),
     ] = None,
-    output_dir: Annotated[
-        Optional[str], 
-        typer.Option("--output-dir", help="Output directory")
-    ] = None,
-    verbose: Annotated[
-        bool, 
-        typer.Option("--verbose", help="Enable verbose logging")
+    select_model: Annotated[
+        bool,
+        typer.Option(
+            "--select-model",
+            help="Interactively choose a Requesty model for this run",
+        ),
     ] = False,
-    debug: Annotated[
-        bool, 
-        typer.Option("--debug", help="Enable debug mode with full tracebacks")
-    ] = False,
+    # The following parameters are accepted for backwards compatibility
+    # with tests and older callers but are currently no-ops in this
+    # single-window interactive implementation.
+    save_session: Optional[str] = None,
+    resume_session: Optional[str] = None,
+    llm_interview: bool = True,
+    scripted: bool = False,
+    streaming: bool = False,
+    verbose: bool = False,
+    debug: bool = False,
 ) -> None:
     """Launch interactive mode with real-time streaming in a single window.
     
@@ -3364,7 +3372,8 @@ def interactive(
     4. Real-time phase generation (plan, design, implement, test, review) with streaming in terminal UI
     Everything runs in terminal UI with full real-time token streaming.
     """
-    async def run_interactive():
+
+    async def run_interactive() -> None:
         try:
             # Load config
             config = _load_app_config(
@@ -3387,8 +3396,10 @@ def interactive(
             except Exception:
                 pass
 
-            # Enable streaming for real-time feedback
-            config.streaming_enabled = True
+            # Enable streaming for real-time feedback unless explicitly
+            # disabled via the "streaming" flag.
+            if streaming:
+                config.streaming_enabled = True
             
             print("[LOGO] DevUssY Interactive Mode - Single Window")
             print("=" * 50)
@@ -3428,8 +3439,6 @@ def interactive(
             print("You'll stay in this terminal while we gather project requirements.\n")
 
             # Run interview using the existing console-based LLMInterviewManager
-            from .llm_interview import LLMInterviewManager
-
             interview_manager = LLMInterviewManager(
                 config=config,
                 verbose=verbose,
@@ -3913,8 +3922,9 @@ def interactive(
             typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
             raise typer.Exit(code=1)
     
-    # Run the async function
-    asyncio.run(run_interactive())
+    # Run the async function within the current event loop so that tests
+    # can `await interactive(...)` without event loop nesting issues.
+    await run_interactive()
 
 
 @app.command()

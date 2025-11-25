@@ -57,7 +57,9 @@ class SessionSettings(BaseModel):
     experimental_single_window: Optional[bool] = False
     color_theme_tester: Optional[bool] = False
     responsive_layout: Optional[bool] = False
-    repository_tools_enabled: Optional[bool] = False
+    # Start as None so merge logic can distinguish "unset" from
+    # "explicitly disabled"; prefer False when loading persisted prefs.
+    repository_tools_enabled: Optional[bool] = None
     
     # Development & Testing Tools
     mock_api_mode: Optional[bool] = False
@@ -174,7 +176,15 @@ def _load_prefs() -> SessionSettings:
         data = sm.load_state("ui_prefs") or {}
         logger.debug(f"_load_prefs: Loaded data from state: {data}")
         result = SessionSettings(**data)
-        logger.debug(f"_load_prefs: Created SessionSettings with repository_tools_enabled: {getattr(result, 'repository_tools_enabled', 'NOT_SET')}")
+        # Backwards compatibility: if repository_tools_enabled was not
+        # present in stored prefs, ensure it defaults to False rather than
+        # None so callers can rely on a concrete boolean value.
+        if getattr(result, "repository_tools_enabled", None) is None:
+            result.repository_tools_enabled = False
+        logger.debug(
+            "_load_prefs: Created SessionSettings with repository_tools_enabled: "
+            f"{getattr(result, 'repository_tools_enabled', 'NOT_SET')}"
+        )
         return result
     except Exception as e:
         logger.debug(f"_load_prefs: Exception occurred: {e}")

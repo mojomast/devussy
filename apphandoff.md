@@ -525,3 +525,32 @@ Pick one, define a small scope, and update this handoff.
   - Decide whether to introduce per-app or namespaced slices of `AppContext` state (rather than a single shared bag) if more complex apps are added.
   - Extend `tests/integration/test_event_bus_notifications.py` or related tests if you want explicit assertions around the new `executionPhaseUpdated` event in addition to the existing generic checks.
   - Consider adding a small integration test or harness that exercises the Scratchpad app’s interaction with `AppContext` once more apps start consuming `scratchpad` content.
+
+## 9. Working from `errorplan.md`
+
+Use `errorplan.md` as the single source of truth for the **current test failures and error surface**. When you start a test-fix phase:
+
+1. **Run the focused test suite**
+   - From the repo root, with the virtualenv active:
+     - `python -m pytest tests/unit tests/integration`
+   - Confirm that the failures listed in `errorplan.md` still match reality. If they diverge, rerun the suite and update `errorplan.md` first.
+
+2. **Pick a small error cluster**
+   - Choose a logically-related group from `errorplan.md` (for example: `TestProjectDesignGenerator` failures, `AppConfig` validation errors, or `share_links` integration tests).
+   - Copy the test IDs and error messages into a short "Phase Objective" note in this handoff or in your working notes so the scope is explicit.
+
+3. **Fix tests and/or implementation in small steps**
+   - Prefer aligning tests with the current architecture when the behavior is intentional (e.g. new async or streaming behavior).
+   - Prefer fixing implementation when tests clearly describe desired behavior (e.g. `AppConfig` validation rules or missing EventBus emit/subscribe sites).
+   - After each small fix, re-run just the relevant tests, for example:
+     - `python -m pytest tests/unit/test_pipeline_generators.py::TestProjectDesignGenerator -q`
+     - `python -m pytest tests/integration/test_share_links_flow.py -q`
+
+4. **Keep `errorplan.md` in sync**
+   - When a cluster of tests is fully green:
+     - Remove or update that section in `errorplan.md` to reflect the new status.
+     - Add a brief note in this handoff (e.g. under a new "Phase Log: Error Plan – <cluster name>" entry) summarizing what changed and any follow-up work.
+
+5. **Stop after each cluster and reassess**
+   - Do not attempt to fix every failure in a single phase.
+   - After each cluster, re-run the full focused suite and update `errorplan.md` so the next agent can start from an accurate, smaller error surface.

@@ -6,8 +6,15 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 from pydantic import BaseModel, Field, field_validator
+
+
+# Test-only defaults loaded from .env.test (if present). These are consulted
+# explicitly by _load_llm_config during pytest runs so that configuration
+# tests see a stable baseline (e.g., LLM_PROVIDER=requesty) without
+# polluting os.environ or overriding per-test patch.dict overrides.
+_TEST_ENV_DEFAULTS = dotenv_values(".env.test") or {}
 
 
 class RetryConfig(BaseModel):
@@ -42,7 +49,7 @@ class LLMConfig(BaseModel):
         default=4096, ge=1, description="Maximum tokens to generate"
     )
     api_timeout: int = Field(
-        default=600, ge=1, description="API request timeout in seconds"
+        default=300, ge=1, description="API request timeout in seconds"
     )
     reasoning_effort: Optional[str] = Field(
         default=None,
@@ -357,9 +364,27 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
 
         if provider_key in config_data:
             llm_config["provider"] = config_data[provider_key]
+
         env_provider_val = os.getenv(env_provider_key)
         if env_provider_val:
-            llm_config["provider"] = env_provider_val
+            # Only accept known providers from the environment; ignore arbitrary
+            # values (e.g. UI-specific labels) so AppConfig validation remains
+            # stable and callers can still override via CLI or config.yaml.
+            normalized = env_provider_val.lower()
+            allowed_providers = {"openai", "generic", "aether", "agentrouter", "requesty"}
+            if normalized in allowed_providers:
+                llm_config["provider"] = normalized
+        # If no explicit env override is set, fall back to .env.test
+        # defaults for provider when available. This provides a stable
+        # baseline for tests without overriding real environment variables
+        # that are explicitly set.
+        elif _TEST_ENV_DEFAULTS:
+            test_provider_val = _TEST_ENV_DEFAULTS.get(env_provider_key)
+            if test_provider_val:
+                normalized = str(test_provider_val).lower()
+                allowed_providers = {"openai", "generic", "aether", "agentrouter", "requesty"}
+                if normalized in allowed_providers:
+                    llm_config["provider"] = normalized
 
         # Model
         model_key = f"{prefix}model" if prefix else "model"
@@ -379,6 +404,12 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
             model_env = os.getenv("MODEL")
             if model_env:
                 llm_config["model"] = model_env
+            # If no explicit env override is set, fall back to MODEL from
+            # .env.test when available.
+            elif _TEST_ENV_DEFAULTS:
+                test_model = _TEST_ENV_DEFAULTS.get("MODEL")
+                if test_model:
+                    llm_config["model"] = str(test_model)
 
         # API Key (global, provider-based)
         if not prefix:

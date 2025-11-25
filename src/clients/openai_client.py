@@ -50,12 +50,16 @@ class OpenAIClient(LLMClient):
 
     async def _chat_completion(self, prompt: str, **kwargs: Any) -> str:
         model = kwargs.get("model", self._model)
-        temperature = kwargs.get(
-            "temperature", getattr(self._config, "temperature", 0.7)
-        )
-        max_tokens = kwargs.get(
-            "max_tokens", getattr(self._config, "max_tokens", 4096)
-        )
+
+        # Prefer per-LLM config defaults (config.llm.temperature/max_tokens)
+        # so that callers and tests which configure only the nested llm
+        # section see their values reflected in the OpenAI call.
+        llm_cfg = getattr(self._config, "llm", None)
+        default_temp = getattr(llm_cfg, "temperature", 0.7)
+        default_max_tokens = getattr(llm_cfg, "max_tokens", 4096)
+
+        temperature = kwargs.get("temperature", default_temp)
+        max_tokens = kwargs.get("max_tokens", default_max_tokens)
         top_p = kwargs.get("top_p", None)
 
         resp = await self._client.chat.completions.create(

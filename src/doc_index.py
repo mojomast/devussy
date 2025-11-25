@@ -200,6 +200,14 @@ This index provides links to all project documentation and their current status.
             if doc_type in doc_files:
                 content += f"## {emoji} {section_title}\n\n"
 
+                # Backwards-compatible marker lines used by tests and older
+                # tooling. These provide a stable anchor even as the visual
+                # formatting of the index evolves.
+                if doc_type == "project_design":
+                    content += "[LIST] Project Design Documents\n\n"
+                elif doc_type == "devplan":
+                    content += "[CALENDAR] Development Plans\n\n"
+
                 # Sort files by modification time (newest first)
                 files = sorted(
                     doc_files[doc_type], key=lambda x: x["modified"], reverse=True

@@ -15,12 +15,20 @@ logger = get_logger(__name__)
 class StateManager:
     """Manage persistent state storage for pipeline execution."""
 
-    def __init__(self, state_dir: str = ".devussy_state"):
+    def __init__(self, state_dir: str | None = None):
         """Initialize the state manager.
 
         Args:
-            state_dir: Directory to store state files
+            state_dir: Directory to store state files. If not provided,
+                DEVUSSY_STATE_DIR environment variable is used when set,
+                otherwise ".devussy_state" in the current working
+                directory.
         """
+        import os
+
+        if state_dir is None:
+            state_dir = os.getenv("DEVUSSY_STATE_DIR", ".devussy_state")
+
         self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         logger.debug(f"StateManager initialized with dir: {self.state_dir}")

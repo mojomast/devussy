@@ -66,6 +66,11 @@ def _run_share_links_harness(args: list[str]) -> str:
             capture_output=True,
             text=True,
         )
+    except FileNotFoundError:
+        # On some Windows environments, npx/ts-node may not be discoverable
+        # even if Node is installed. In that case we treat the harness as
+        # unavailable rather than failing the suite.
+        pytest.skip("Node.js shareLinks harness (npx/ts-node) is not available on PATH")
     except subprocess.CalledProcessError as exc:
         pytest.fail(
             "shareLinks harness failed with exit code "

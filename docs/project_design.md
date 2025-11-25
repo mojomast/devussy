@@ -2,94 +2,79 @@
 
 ## Architecture Overview
 
-Pattern: Hexagonal (Ports and Adapters) layered over a modular monolith. Easy to split into services later if needed.
-Data/control flow (typical run)
-1) Client creates a TestRun via POST /runs with references to TestSuite/Environment.
-2) API validates, persists run, enqueues job to a queue.
-3) Worker pulls job, prepares container image, runs test command, captures logs/results.
-4) Worker writes incremental logs/artifacts and final results to DB/storage.
-5) API exposes GET /runs/{id} for status, results; optional websocket for live logs.
-6) Notifications emitted when run completes/fails.
-Mermaid component diagram:
+Pattern: Clean/Hexagonal + Layered
+High-level component responsibilities
+Mermaid diagram (logical)
 ```mermaid
 flowchart LR
-Client -->|REST| API[FastAPI]
-API -->|Repos| DB[(Postgres/SQLite)]
-API -->|Enqueue| Queue[Redis/Celery]
-Worker -->|Dequeue| Queue
-Worker -->|CRUD| DB
-Worker -->|Run| Docker[Docker Engine]
-Worker -->|Store| Storage[(FS/S3)]
-API -->|Metrics| Prometheus
-API -->|Traces| OTLP[OpenTelemetry]
+subgraph Presentation
+A[FastAPI REST API]
+B[Typer CLI]
+end
+subgraph Application/Domain
+C[Services / Use-cases]
+D[Domain Models]
+end
+subgraph Infrastructure
+E[Repositories (SQLAlchemy)]
+F[Cache (Redis)]
+G[Message Broker (Redis -> Dramatiq)]
+H[External Clients (HTTPX) - optional]
+I[(PostgreSQL)]
+J[Workers (Dramatiq Consumers)]
+end
+A --> C
+B --> C
+C <--> D
+C --> E
+E --> I
+C --> F
+C --> G
+J --> C
+C --> H
 ```
-Sequence for a run:
-```mermaid
-sequenceDiagram
-participant C as Client
-participant A as API
-participant Q as Queue
-participant W as Worker
-participant D as DB
-participant K as Docker
-C->>A: POST /runs
-A->>D: Insert run (status=queued)
-A->>Q: Enqueue run_id
-W->>Q: Dequeue run_id
-W->>D: Fetch run config
-W->>K: Start container (cmd/tests)
-W->>D: Stream logs/results
-W->>D: Update run (status=passed/failed)
-C->>A: GET /runs/{id}
-A->>D: Query run/results
-A-->>C: 200 OK (JSON)
-```
+Data/control flow examples
+Scalability
 
 ## Tech Stack
 
-- Language: Python (as specified)
-- Justification: Rich testing ecosystem (pytest, hypothesis), excellent async/web support (FastAPI), strong community.
-- Web/API framework: FastAPI
-- Pros: Async-first, Pydantic models, automatic OpenAPI docs, good performance, active community.
-- Alternatives: Flask (simpler, less opinionated), Django (batteries-included, heavier).
-- Data modeling and ORM: SQLAlchemy 2.x + Pydantic
-- Rationale: Mature ORM, solid migrations through Alembic, Pydantic for request/response models.
-- Alternative: SQLModel (highly ergonomic; built on SQLAlchemy + Pydantic; fine for MVP).
-- Database
-- MVP: SQLite (zero-ops, easy local dev).
-- Production: PostgreSQL (transactions, concurrency, JSONB support, extensions).
-- Rationale: Start fast, migrate smoothly.
-- Background jobs / task queue
-- MVP: FastAPI BackgroundTasks (simple, limited).
-- Production: Celery or RQ with Redis
-- Celery: Feature-rich, robust scheduling/retries/chords.
-- RQ: Simpler, easier onboarding.
-- Rationale: Offload long-running/IO-bound test execution from API.
-- Containerization/sandboxing
-- Docker for executing tests in isolated environments (non-root, resource limits).
-- Rationale: Reproducibility, security boundaries, dependency isolation.
-- Caching/message broker
-- Redis: job queue + caching run metadata.
-- Alternative: RabbitMQ (for Celery broker), but Redis is simpler initially.
-- Observability
-- Logging: structlog or standard logging with JSON formatter.
-- Metrics: prometheus-client.
-- Tracing: OpenTelemetry SDK (OTLP exporter).
-- Rationale: Essential for diagnosing flaky/bursty workloads.
-- Packaging and tooling
-- Dependency management: Poetry (lockfile, scripts) or uv (fast, modern).
-- Lint/Format: Ruff, Black, isort.
-- Type checking: mypy or pyright.
-- Pre-commit hooks: pre-commit.
-- Testing
-- pytest, pytest-asyncio, hypothesis (property-based), pytest-cov.
-- Security
-- Auth: OAuth2/JWT with FastAPI’s utilities; scope-based permissions.
-- Static analysis: bandit.
-- Secrets management: dotenv locally, environment variables in CI/CD, optional Vault/SOPS later.
+- Language
+- Python 3.12 (modern features, performance improvements, long support window).
+- Web framework
+- FastAPI for async-friendly, typed, self-documented REST APIs.
+- Uvicorn as the ASGI server.
+- Data layer
+- SQLAlchemy 2.x ORM + Alembic for migrations.
+- PostgreSQL in production; SQLite for local/dev/tests.
+- Background jobs (optional out-of-the-box)
+- Dramatiq with Redis broker for simple, robust job processing (alternative: Celery).
+- Caching (optional)
+- Redis for caching, rate limiting, and task broker co-location.
+- Configuration
+- pydantic-settings (Pydantic v2) for typed, env-driven configuration.
+- CLI
+- Typer for a typed, ergonomic CLI.
+- HTTP client
+- HTTPX (sync/async support, testability).
+- Logging and observability
+- structlog + stdlib logging for structured logs.
+- OpenTelemetry SDK for traces/metrics; Prometheus exporter where relevant.
+- Packaging and dependency management
+- uv (fast, modern resolver/runner) with pyproject.toml (PEP 621).
+- Alternative: Poetry if team prefers.
+- Quality tooling
+- Ruff (lint + format), Black (optional if you prefer Black formatting), Mypy (type-checking).
+- Pytest, Hypothesis (property-based), Coverage.
+- pre-commit hooks.
+- Containerization and orchestration
+- Docker, Docker Compose (dev).
+- CI/CD
+- GitHub Actions (or GitLab CI), with caching, security checks, and multi-env deploy steps.
 - Documentation
-- OpenAPI generated by FastAPI; mkdocs-material or Sphinx for project docs.
-- Start simple (SQLite, BackgroundTasks), evolve to robust (Postgres, Celery/Redis) without architectural rework.
-- Strong typing and automated checks maintain code health as complexity grows.
-- Observability baked in to scale confidently.
+- MkDocs Material (developer docs), FastAPI auto-generated API docs (Swagger/Redoc).
+- FastAPI + Pydantic: excellent dev experience, type-safety, great community, automatic OpenAPI.
+- SQLAlchemy: mature, flexible ORM with strong community; Alembic for safe migrations.
+- Redis + Dramatiq: straightforward, reliable, scales well for most workloads.
+- Tooling (Ruff/Mypy/Pytest): high ROI on maintainability and correctness.
+- uv: fast installs and reproducible environments in CI/local.
 - --

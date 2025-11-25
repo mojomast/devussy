@@ -1,0 +1,2 @@
+devussy run-full-pipeline --name "concurrent-project-0" --languages "Python" --requirements "Requirements 0" --output-dir "output_0" --verbose
+devussy run-full-pipeline --resume-from "concurrent-project-0_pipeline" --output-dir "output_0" --verbose

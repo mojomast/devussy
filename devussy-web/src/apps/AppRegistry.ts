@@ -7,6 +7,8 @@ import ModelSettingsApp from "./modelSettings";
 import ScratchpadApp from "./scratchpad";
 import { MessageSquare, Sparkles, Layers, Code2, GitBranch, Zap } from "lucide-react";
 
+const MODEL_SETTINGS_APP_ID = "model-settings";
+
 const InitApp: AppDefinition = {
   id: "init",
   name: "New Project",
@@ -68,7 +70,7 @@ export const AppRegistry: Record<string, AppDefinition> = {
   [ExecuteApp.id]: ExecuteApp,
   [HandoffApp.id]: HandoffApp,
   [HelpApp.id]: HelpApp,
-  [ModelSettingsApp.id]: ModelSettingsApp,
+  [MODEL_SETTINGS_APP_ID]: ModelSettingsApp,
   [PipelineApp.id]: PipelineApp,
   [ScratchpadApp.id]: ScratchpadApp,
   [IrcApp.id]: IrcApp,

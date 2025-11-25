@@ -207,9 +207,11 @@ class DetailedDevPlanGenerator:
 
         # Check if streaming is enabled and handler is provided
         streaming_handler = llm_kwargs.pop("streaming_handler", None)
-        streaming_enabled = hasattr(self.llm_client, "streaming_enabled") and getattr(
-            self.llm_client, "streaming_enabled", False
-        )
+        # Only treat streaming as enabled when the flag is an actual bool.
+        # This avoids AsyncMock attributes (in tests) being interpreted as
+        # truthy and forcing the streaming path with a mocked client.
+        raw_stream_flag = getattr(self.llm_client, "streaming_enabled", False)
+        streaming_enabled = bool(raw_stream_flag) if isinstance(raw_stream_flag, bool) else False
 
         # Check HiveMind config
         config = load_config()
