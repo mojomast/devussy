@@ -161,11 +161,15 @@ export default function IrcClient({
     const reconnectAttempts = useRef(0);
     const maxReconnectAttempts = 3;
 
-    const wsUrl =
-        process.env.NEXT_PUBLIC_IRC_WS_URL ||
-        (typeof window !== 'undefined'
-            ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/irc/`
-            : 'ws://localhost:8080/webirc/websocket/');
+    const computeWsUrl = () => {
+        if (typeof window !== 'undefined') {
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            return `${protocol}://${window.location.host}/ws/irc/`;
+        }
+        return process.env.NEXT_PUBLIC_IRC_WS_URL || 'ws://localhost:8080/webirc/websocket/';
+    };
+
+    const wsUrl = computeWsUrl();
 
     // Ensure Status tab and default channel exist in state
     useEffect(() => {
