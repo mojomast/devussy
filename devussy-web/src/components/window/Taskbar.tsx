@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from "@/utils";
-import { Layout, HelpCircle, Plus, Power, Settings, MessageSquare } from "lucide-react";
+import { Layout, HelpCircle, Plus, Power, Settings, MessageSquare, ChevronRight, ChevronDown } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
@@ -47,6 +47,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
 }) => {
     const { theme } = useTheme();
     const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
+    const [isDevussyGroupOpen, setIsDevussyGroupOpen] = useState(true);
     const startMenuRef = useRef<HTMLDivElement>(null);
     const startButtonRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +73,59 @@ export const Taskbar: React.FC<TaskbarProps> = ({
 
     // Bliss Theme (Windows XP) Taskbar
     if (theme === 'bliss') {
+        const allApps = Object.values(AppRegistry)
+            .filter(app => app.startMenuCategory && app.startMenuCategory !== "Most Used");
+
+        const devussyApps = allApps
+            .filter(app => app.startMenuCategory === "Devussy" && app.id !== "scratchpad")
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        const otherApps = allApps
+            .filter(app => app.startMenuCategory !== "Devussy" || app.id === "scratchpad")
+            .sort((a, b) => {
+                const aCat = a.startMenuCategory || "";
+                const bCat = b.startMenuCategory || "";
+                if (aCat === bCat) {
+                    return a.name.localeCompare(b.name);
+                }
+                return aCat.localeCompare(bCat);
+            });
+
+        const renderStartMenuAppButton = (app: any, options?: { hideCategoryLabel?: boolean }) => {
+            const hideCategoryLabel = options?.hideCategoryLabel ?? false;
+
+            return (
+                <button
+                    key={app.id}
+                    onClick={() => {
+                        if (onOpenApp) {
+                            onOpenApp(app.id);
+                        } else {
+                            if (app.id === 'init') {
+                                onNewProject?.();
+                            } else if (app.id === 'help') {
+                                onHelp?.();
+                            } else if (app.id === 'irc') {
+                                onOpenIrc?.();
+                            }
+                        }
+                        setIsStartMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#316AC5] hover:text-white text-left text-xs text-gray-800 transition-colors"
+                >
+                    <div className="h-6 w-6 flex items-center justify-center text-gray-600">
+                        {app.icon}
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="font-medium">{app.name}</span>
+                        {!hideCategoryLabel && app.startMenuCategory && (
+                            <span className="text-[10px] text-gray-500">{app.startMenuCategory}</span>
+                        )}
+                    </div>
+                </button>
+            );
+        };
+
         return (
             <>
                 {/* Start Menu */}
@@ -133,46 +187,35 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                                 <div className="mt-auto border-t border-gray-200 pt-2">
                                     <div className="text-xs text-gray-500 font-bold px-2 mb-1 uppercase tracking-wider">All Programs</div>
                                     <div className="max-h-[220px] overflow-y-auto pr-1">
-                                        {Object.values(AppRegistry)
-                                            .filter(app => app.startMenuCategory && app.startMenuCategory !== "Most Used")
-                                            .sort((a, b) => {
-                                                const aCat = a.startMenuCategory || "";
-                                                const bCat = b.startMenuCategory || "";
-                                                if (aCat === bCat) {
-                                                    return a.name.localeCompare(b.name);
-                                                }
-                                                return aCat.localeCompare(bCat);
-                                            })
-                                            .map(app => (
+                                        {devussyApps.length > 0 && (
+                                            <div className="mb-1">
                                                 <button
-                                                    key={app.id}
-                                                    onClick={() => {
-                                                        if (onOpenApp) {
-                                                            onOpenApp(app.id);
-                                                        } else {
-                                                            if (app.id === 'init') {
-                                                                onNewProject?.();
-                                                            } else if (app.id === 'help') {
-                                                                onHelp?.();
-                                                            } else if (app.id === 'irc') {
-                                                                onOpenIrc?.();
-                                                            }
-                                                        }
-                                                        setIsStartMenuOpen(false);
-                                                    }}
-                                                    className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#316AC5] hover:text-white text-left text-xs text-gray-800 transition-colors"
+                                                    onClick={() => setIsDevussyGroupOpen((open) => !open)}
+                                                    className="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-[#316AC5] hover:text-white text-left text-xs font-semibold text-gray-800 transition-colors"
                                                 >
-                                                    <div className="h-6 w-6 flex items-center justify-center text-gray-600">
-                                                        {app.icon}
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="h-6 w-6 flex items-center justify-center text-gray-600">
+                                                            <Layout className="h-4 w-4" />
+                                                        </div>
+                                                        <span className="font-medium">Devussy</span>
                                                     </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium">{app.name}</span>
-                                                        {app.startMenuCategory && (
-                                                            <span className="text-[10px] text-gray-500">{app.startMenuCategory}</span>
+                                                    <div className="flex items-center">
+                                                        {isDevussyGroupOpen ? (
+                                                            <ChevronDown className="h-3 w-3" />
+                                                        ) : (
+                                                            <ChevronRight className="h-3 w-3" />
                                                         )}
                                                     </div>
                                                 </button>
-                                            ))}
+                                                {isDevussyGroupOpen && (
+                                                    <div className="mt-1 ml-6 space-y-1">
+                                                        {devussyApps.map(app => renderStartMenuAppButton(app, { hideCategoryLabel: true }))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {otherApps.map(app => renderStartMenuAppButton(app))}
                                     </div>
                                 </div>
                             </div>
