@@ -117,3 +117,4 @@ yarn-error.log*
 dist/
 .vite/
 devussy-web/streaming_server/analytics.db
+!devussy-web/package-lock.json
