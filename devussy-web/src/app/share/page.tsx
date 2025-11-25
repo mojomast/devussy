@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { decodeSharePayload, type ShareLinkPayload } from '@/shareLinks';
 
-export default function SharePage() {
+function SharePageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -83,5 +83,22 @@ export default function SharePage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function SharePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-background text-foreground">
+          <div className="max-w-lg w-full px-6 py-8 space-y-4 border border-border/40 rounded-xl bg-background/80 shadow-lg">
+            <h1 className="text-2xl font-bold tracking-tight">Devussy Share Link</h1>
+            <p className="text-sm text-muted-foreground">Validating share link...</p>
+          </div>
+        </main>
+      }
+    >
+      <SharePageInner />
+    </Suspense>
   );
 }
