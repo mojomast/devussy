@@ -827,9 +827,63 @@ pytest tests/integration/test_adaptive_pipeline_e2e.py tests/integration/test_ad
 ```
 
 **Next Steps (Priority Order):**
-1. **Start Frontend Phase 2** - Create `ComplexityAssessment.tsx` component
-2. **Wire frontend to adaptive endpoints** - Create SSE endpoints for complexity/validation stages
-3. **Add real LLM E2E tests** - Uncomment and run `@pytest.mark.requires_api` tests
+1. ✅ **Start Frontend Phase 2** - DONE: `ComplexityAssessment.tsx` component created
+2. ✅ **Wire frontend to adaptive endpoints** - DONE: FastAPI SSE endpoints in `streaming_server/app.py`
+3. ✅ **Add real LLM E2E tests** - DONE: 3 passing tests in `TestAdaptivePipelineRealLLM`
+
+---
+
+### Milestone 6: Frontend Components & API Integration (2025-11-26) ✅
+
+**What was done:**
+
+1. **Created `ComplexityAssessment.tsx` component** (`devussy-web/src/components/pipeline/`):
+   - Visual score gauge (SVG circle with animated progress)
+   - Depth level indicator with color coding (minimal=green, standard=blue, detailed=purple)
+   - Estimated phase count display
+   - Confidence meter with icon indicators
+   - Detailed breakdown grid showing all complexity factors
+   - `ComplexityBadge` compact variant for embedding in other views
+   - Full TypeScript types matching backend `ComplexityProfile`
+
+2. **Added FastAPI adaptive pipeline endpoints** (`devussy-web/streaming_server/app.py`):
+   - `POST /api/adaptive/complexity` - SSE stream for complexity analysis
+   - `POST /api/adaptive/validate` - SSE stream for design validation with LLM sanity review
+   - `POST /api/adaptive/correct` - SSE stream for correction loop execution
+   - `GET /api/adaptive/profile` - Quick synchronous profile lookup (non-streaming)
+   - All endpoints return proper SSE format with typed events
+
+3. **Implemented real LLM E2E tests** (`tests/integration/test_adaptive_pipeline_e2e.py`):
+   - `TestAdaptivePipelineRealLLM` class with 3 passing tests
+   - `test_real_minimal_pipeline` - CLI tools (verifies score ≤4, depth=minimal)
+   - `test_real_standard_pipeline` - APIs/web apps (verifies score 4-12, depth=standard/detailed)
+   - `test_real_detailed_pipeline` - SaaS/enterprise (verifies score ≥8, depth=detailed)
+   - Proper env var handling for provider configuration
+
+**Files created/modified:**
+- `devussy-web/src/components/pipeline/ComplexityAssessment.tsx` - New, ~280 lines
+- `devussy-web/streaming_server/app.py` - Added ~180 lines for adaptive endpoints
+- `tests/integration/test_adaptive_pipeline_e2e.py` - Modified, added real LLM test implementations
+
+**How to run:**
+```bash
+# Run real LLM E2E tests
+LLM_PROVIDER=requesty pytest tests/integration/test_adaptive_pipeline_e2e.py::TestAdaptivePipelineRealLLM -v
+
+# Test adaptive endpoints (requires streaming server running)
+curl -X POST http://localhost:8000/api/adaptive/complexity \
+  -H "Content-Type: application/json" \
+  -d '{"interview_data": {"project_type": "cli_tool", "requirements": "simple script", "team_size": "1"}}'
+
+# Get profile synchronously
+curl "http://localhost:8000/api/adaptive/profile?project_type=web_app&requirements=REST+API&team_size=3"
+```
+
+**Next Steps (Priority Order):**
+1. **Wire ComplexityAssessment into pipeline flow** - Add to DesignView or create dedicated step
+2. **Create ValidationReport component** - Display validation issues and auto-correction status
+3. **Create CorrectionTimeline component** - Show iteration history from correction loop
+4. **Update frontend state management** - Add complexity/validation stages to pipeline state
 
 ---
 
