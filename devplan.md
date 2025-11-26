@@ -1916,16 +1916,23 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 **2025-11-25 - Backend Mock Implementation Agent**
 - Implemented complexity analyzer, interview pipeline
 - Implemented validation and correction loop modules
+
+**2025-11-25 - Pipeline Integration Agent**
+- Refactored main pipeline (`compose.py`) with adaptive methods
+- Extended checkpoint system with complexity_profile, validation_report
+- Added streaming prefixes ([complexity], [validation], [correction])
+- Created JSON schemas in `schemas/` directory
+- Added 16 new tests (6 unit + 10 integration)
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
 ### Next Task Group (Current Sprint)
 
-1. **Refactor main pipeline** - Integrate complexity → validation → correction flow into `src/pipeline/main_pipeline.py`
-2. **Extend checkpoint system** - Add complexity_profile, validation_report, correction_history to checkpoints
-3. **Add streaming prefixes** - Implement [complexity], [validation], [correction] prefixes in `src/streaming.py`
-4. **Create JSON schemas** - `schemas/complexity_profile.json`, `validation_report.json`, etc.
-5. **Add unit tests** - Test follow-up mode, template selection, streaming updates
+1. **Add CLI command for adaptive pipeline** - Expose `run_adaptive_pipeline` method via CLI in `src/cli.py`
+2. **E2E tests with real LLM** - Create tests for 3 complexity levels (minimal/standard/detailed)
+3. **Increase test coverage** - Target 85%+ for new adaptive pipeline modules
+4. **Start Frontend Phase 2** - Begin `ComplexityAssessment.tsx` component
+5. **Wire frontend to adaptive endpoints** - Create SSE endpoints for complexity/validation stages
 <!-- NEXT_TASK_GROUP_END -->
 
 ---

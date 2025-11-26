@@ -11,7 +11,29 @@ import asyncio
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, Optional, TextIO
+from typing import Any, Callable, Literal, Optional, TextIO
+
+
+# Predefined streaming prefixes for adaptive pipeline stages
+StreamingStage = Literal[
+    "design",
+    "devplan",
+    "handoff",
+    "complexity",
+    "validation",
+    "correction",
+    "follow_up",
+]
+
+STREAMING_PREFIXES: dict[StreamingStage, str] = {
+    "design": "[design] ",
+    "devplan": "[devplan] ",
+    "handoff": "[handoff] ",
+    "complexity": "[complexity] ",
+    "validation": "[validation] ",
+    "correction": "[correction] ",
+    "follow_up": "[follow_up] ",
+}
 
 
 class StreamingHandler:
@@ -184,6 +206,24 @@ class StreamingHandler:
             StreamingHandler configured for file-only output
         """
         return cls(enable_console=False, log_file=log_file)
+
+    @classmethod
+    def create_stage_handler(
+        cls,
+        stage: StreamingStage,
+        log_file: Optional[Path] = None,
+    ) -> StreamingHandler:
+        """Create a handler with a predefined stage prefix.
+
+        Args:
+            stage: The pipeline stage (complexity, validation, correction, etc.)
+            log_file: Optional file path to log streaming output
+
+        Returns:
+            StreamingHandler configured for the specified stage
+        """
+        prefix = STREAMING_PREFIXES.get(stage, f"[{stage}] ")
+        return cls(enable_console=True, log_file=log_file, prefix=prefix)
 
 
 class StreamingSimulator:

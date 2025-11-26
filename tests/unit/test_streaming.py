@@ -6,7 +6,62 @@ from pathlib import Path
 from unittest.mock import Mock, patch, mock_open
 import tempfile
 
-from src.streaming import StreamingHandler, StreamingSimulator
+from src.streaming import (
+    StreamingHandler,
+    StreamingSimulator,
+    STREAMING_PREFIXES,
+    StreamingStage,
+)
+
+
+class TestStreamingPrefixes:
+    """Tests for adaptive pipeline streaming prefixes."""
+
+    def test_all_stages_have_prefixes(self):
+        """Verify all expected stages have prefix definitions."""
+        expected_stages: list[StreamingStage] = [
+            "design",
+            "devplan",
+            "handoff",
+            "complexity",
+            "validation",
+            "correction",
+            "follow_up",
+        ]
+        for stage in expected_stages:
+            assert stage in STREAMING_PREFIXES
+            prefix = STREAMING_PREFIXES[stage]
+            assert prefix.startswith("[")
+            assert prefix.endswith("] ")
+
+    def test_create_stage_handler_complexity(self):
+        """Test creating stage handler for complexity."""
+        handler = StreamingHandler.create_stage_handler("complexity")
+        assert handler.prefix == "[complexity] "
+        assert handler.enable_console is True
+
+    def test_create_stage_handler_validation(self):
+        """Test creating stage handler for validation."""
+        handler = StreamingHandler.create_stage_handler("validation")
+        assert handler.prefix == "[validation] "
+
+    def test_create_stage_handler_correction(self):
+        """Test creating stage handler for correction."""
+        handler = StreamingHandler.create_stage_handler("correction")
+        assert handler.prefix == "[correction] "
+
+    def test_create_stage_handler_follow_up(self):
+        """Test creating stage handler for follow_up."""
+        handler = StreamingHandler.create_stage_handler("follow_up")
+        assert handler.prefix == "[follow_up] "
+
+    def test_create_stage_handler_with_log_file(self, tmp_path: Path):
+        """Test stage handler with file logging."""
+        log_file = tmp_path / "stream.log"
+        handler = StreamingHandler.create_stage_handler("complexity", log_file=log_file)
+        assert handler.prefix == "[complexity] "
+        assert handler.log_file == log_file
+        assert handler.enable_console is True
 
 
 class TestStreamingHandlerInitialization:

@@ -1,84 +1,33 @@
 {
-  "repo_context": {
-    "project_type": "python",
-    "structure": {
-      "source_dirs": [
-        "src"
-      ],
-      "test_dirs": [
-        "tests"
-      ],
-      "config_dirs": [
-        "config"
-      ],
-      "has_ci": true
-    },
-    "dependencies": {
-      "python": [
-        "fastapi",
-        "uvicorn"
-      ]
-    },
-    "metrics": {
-      "total_files": 42,
-      "total_lines": 1337
-    },
-    "patterns": {
-      "test_frameworks": [
-        "pytest"
-      ],
-      "build_tools": [
-        "poetry"
-      ]
-    },
-    "project_name": "TestApp",
-    "description": "A test application",
-    "version": "1.0.0",
-    "author": "Test Author"
-  },
   "project_design": {
-    "project_name": "TestApp",
-    "languages": [
-      "Python",
-      "TypeScript"
-    ],
-    "frameworks": [
-      "FastAPI",
-      "React"
-    ],
-    "apis": [
-      "OpenAI",
-      "Stripe"
-    ],
-    "requirements": "Build a scalable web app.",
+    "project_name": "test-project",
     "objectives": [
-      "High performance",
-      "User friendly"
+      "Build web application",
+      "Create API"
     ],
     "tech_stack": [
-      "Python 3.11",
-      "React 18",
+      "Python",
+      "FastAPI",
       "PostgreSQL"
     ],
-    "architecture_overview": "Microservices architecture with API gateway.",
+    "architecture_overview": "Test architecture overview",
     "dependencies": [
-      "sqlalchemy",
-      "pydantic"
+      "requests",
+      "pydantic",
+      "uvicorn"
     ],
     "challenges": [
-      "Concurrency",
-      "Data consistency"
+      "Performance optimization",
+      "Scalability"
     ],
     "mitigations": [
-      "Use async/await",
-      "Use transactions"
+      "Use caching",
+      "Load balancing"
     ],
-    "complexity": "Medium",
-    "estimated_phases": 5
+    "raw_llm_response": null,
+    "complexity": null,
+    "estimated_phases": null
   },
-  "code_samples": "def hello_world():\n    print('Hello, World!')",
-  "interactive_session": {
-    "question_count": 5
-  },
-  "detail_level": "verbose"
+  "task_group_size": 3,
+  "detail_level": "normal"
 }

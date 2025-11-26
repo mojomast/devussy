@@ -541,10 +541,10 @@ devussy-web/
  - [x] Mock adaptive backend pipeline implemented (`mock_adaptive_pipeline.py`)
  - [x] Integration tests: end-to-end mock adaptive pipeline
  - [x] Pipeline test harness implemented for mock adaptive pipeline (`tests/harness/pipeline_test_harness.py`)
- - [ ] Main pipeline refactored to integrate new stages
- - [ ] Checkpoint system extended for complexity_profile, validation_report, correction_history
- - [ ] Streaming support added ([complexity], [validation], [correction] prefixes)
- - [ ] JSON schemas created (schemas/complexity_profile.json, etc.)
+ - [x] Main pipeline refactored to integrate new stages (`run_adaptive_pipeline` method in compose.py)
+ - [x] Checkpoint system extended for complexity_profile, validation_report, correction_history
+ - [x] Streaming support added ([complexity], [validation], [correction] prefixes)
+ - [x] JSON schemas created (schemas/complexity_profile.json, validation_report.json, review_result.json, correction_history.json)
  - [ ] E2E tests passing (3 complexity levels with real LLM)
  - [ ] Test coverage ≥ 85%
 
@@ -724,6 +724,58 @@ devussy-web/
 
 **Blockers/Decisions Needed:**
 - None - ready to proceed with main pipeline refactor
+
+---
+
+### 2025-11-25 - Pipeline Integration Agent
+**Completed:**
+- Refactored main pipeline to integrate adaptive complexity flow:
+  - Added `analyze_complexity()` method to PipelineOrchestrator
+  - Added `validate_design()` method for rule-based validation
+  - Added `review_design_with_llm()` method for semantic review
+  - Added `run_correction_loop()` method for iterative design correction
+  - Added `run_adaptive_pipeline()` async method for full adaptive flow
+- Extended checkpoint system with new stages:
+  - `complexity_analysis` stage with ComplexityProfile data
+  - `project_design` stage includes validation_report and correction_result
+- Added streaming prefixes for adaptive pipeline stages:
+  - `[complexity]`, `[validation]`, `[correction]`, `[follow_up]`
+  - New `create_stage_handler()` factory method in StreamingHandler
+- Created JSON schemas:
+  - `schemas/complexity_profile.json`
+  - `schemas/validation_report.json`
+  - `schemas/review_result.json`
+  - `schemas/correction_history.json`
+- Added comprehensive tests:
+  - 6 new streaming prefix unit tests
+  - 10 new adaptive pipeline orchestrator integration tests
+  - All 25 adaptive pipeline tests passing
+
+**Files Modified/Added:**
+- `src/pipeline/compose.py` (added adaptive pipeline methods)
+- `src/streaming.py` (added STREAMING_PREFIXES, StreamingStage, create_stage_handler)
+- `schemas/complexity_profile.json` (new)
+- `schemas/validation_report.json` (new)
+- `schemas/review_result.json` (new)
+- `schemas/correction_history.json` (new)
+- `tests/unit/test_streaming.py` (added TestStreamingPrefixes)
+- `tests/integration/test_adaptive_pipeline_orchestrator.py` (new)
+
+**How to run tests for this phase:**
+```bash
+pytest tests/unit/test_streaming.py::TestStreamingPrefixes -v
+pytest tests/integration/test_adaptive_pipeline_orchestrator.py -v
+pytest tests/unit/test_complexity_analyzer.py tests/unit/test_design_validator.py -v
+```
+
+**Next Steps (Priority Order):**
+1. **Add CLI command for adaptive pipeline** - Expose `run_adaptive_pipeline` via CLI
+2. **E2E tests with real LLM** - Test at 3 complexity levels (minimal/standard/detailed)
+3. **Increase test coverage** - Target 85%+ for new modules
+4. **Frontend work** - Start Phase 2 with ComplexityAssessment.tsx component
+
+**Blockers/Decisions Needed:**
+- None - Milestone 4 core items complete, ready for E2E testing and frontend
 
 ---
 
