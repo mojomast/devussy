@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Settings, ChevronDown, Check, Loader2, Globe, Layers, GitBranch, Code2, ArrowRight, MessageSquare, User } from 'lucide-react';
+import { Settings, ChevronDown, Check, Loader2, Globe, Layers, GitBranch, Code2, ArrowRight, MessageSquare, User, Gauge, Shield, History } from 'lucide-react';
 import { cn } from '@/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -10,7 +10,8 @@ export interface ModelConfig {
     concurrency?: number; // Number of concurrent phase executions (1-10)
 }
 
-export type PipelineStage = 'global' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff';
+// Extended to include adaptive pipeline stages
+export type PipelineStage = 'global' | 'interview' | 'complexity' | 'design' | 'validation' | 'correction' | 'plan' | 'execute' | 'handoff';
 
 export type ModelConfigs = Record<PipelineStage, ModelConfig | null> & { global: ModelConfig };
 
@@ -31,7 +32,10 @@ interface ModelSettingsProps {
 const STAGE_ICONS: Record<PipelineStage, React.ElementType> = {
     global: Globe,
     interview: MessageSquare,
+    complexity: Gauge,
     design: Layers,
+    validation: Shield,
+    correction: History,
     plan: GitBranch,
     execute: Code2,
     handoff: ArrowRight,
@@ -40,7 +44,10 @@ const STAGE_ICONS: Record<PipelineStage, React.ElementType> = {
 const STAGE_LABELS: Record<PipelineStage, string> = {
     global: 'Global Default',
     interview: 'Interview',
+    complexity: 'Complexity Analysis',
     design: 'Design',
+    validation: 'Validation',
+    correction: 'Correction',
     plan: 'Plan',
     execute: 'Execute',
     handoff: 'Handoff',
