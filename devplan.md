@@ -1958,6 +1958,18 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 - Wired ComplexityAssessment into DesignView with auto-analysis
 - Created ValidationReport.tsx component with issue cards and sanity review
 - Created CorrectionTimeline.tsx component with visual iteration history
+
+**2025-11-26 - Frontend Integration Agent**
+- Wired ValidationReport into DesignView design approval flow
+- Wired CorrectionTimeline with real-time iteration updates
+- Added validation state (report, sanity review, loading)
+- Added correction loop state (history, running, current iteration)
+- Auto-trigger validation after design generation completes
+- Block auto-advance when validation has issues
+- Added "Approve Anyway" option for manual override
+- Added show/hide toggles for complexity, validation, correction panels
+- Updated PipelineStage type with new stages (complexity, validation, correction)
+- Added icons and labels for new pipeline stages
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
@@ -1971,9 +1983,12 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 6. ✅ **Wire ComplexityAssessment into pipeline flow** - DONE: Integrated into DesignView
 7. ✅ **Create ValidationReport component** - DONE: Full validation display with LLM sanity review
 8. ✅ **Create CorrectionTimeline component** - DONE: Visual iteration history with progress
-9. **Wire ValidationReport into design approval flow** - Show validation before approve
-10. **Wire CorrectionTimeline into correction loop UI** - Real-time iteration updates
-11. **Update frontend state management** - Add complexity/validation stages to pipeline state
+9. ✅ **Wire ValidationReport into design approval flow** - DONE: Show validation before approve
+10. ✅ **Wire CorrectionTimeline into correction loop UI** - DONE: Real-time iteration updates
+11. ✅ **Update frontend state management** - DONE: Added complexity/validation stages to PipelineStage type
+12. **Add frontend component tests** - React Testing Library tests for new components
+13. **Add visual regression tests** - Percy/Chromatic for component snapshots
+14. **Documentation updates** - Update README with adaptive pipeline features
 <!-- NEXT_TASK_GROUP_END -->
 
 ---

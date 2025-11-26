@@ -941,10 +941,60 @@ curl "http://localhost:8000/api/adaptive/profile?project_type=web_app&requiremen
 ```
 
 **Next Steps (Priority Order):**
-1. **Wire ValidationReport into design approval flow** - Show validation before approve
-2. **Wire CorrectionTimeline into correction loop UI** - Real-time iteration updates
-3. **Update frontend state management** - Add complexity/validation stages to pipeline state
+1. ✅ **Wire ValidationReport into design approval flow** - DONE
+2. ✅ **Wire CorrectionTimeline into correction loop UI** - DONE
+3. ✅ **Update frontend state management** - DONE: Added complexity/validation/correction stages
 4. **Add frontend tests** - React Testing Library for new components
+5. **Add visual regression tests** - Percy/Chromatic for component snapshots
+6. **Documentation updates** - Update README with adaptive pipeline features
+
+---
+
+### 2025-11-26 - Frontend Integration Agent
+**Completed:**
+- Wired ValidationReport into DesignView design approval flow:
+  - Added validation state (report, sanity review, isValidating)
+  - Added correction state (history, isCorrecting, currentIteration)
+  - Auto-trigger validation via `validateDesign()` after design generation
+  - Show ValidationReport panel after ComplexityAssessment
+  - Show CorrectionTimeline during/after correction loop
+  - Added `runCorrectionLoop()` to trigger auto-correction via API
+- Updated approval flow logic:
+  - Block auto-advance when validation has issues
+  - Show "Approve Anyway" button for manual override
+  - Pass full metadata (complexity, validation, sanity, corrections) to onDesignComplete
+- Added UI controls:
+  - Show/hide toggles for complexity, validation, correction panels
+  - Badges in header when panels collapsed (ValidationBadge, CorrectionBadge)
+  - Disable regenerate during validation/correction
+- Updated PipelineStage type with new adaptive stages:
+  - Added `complexity`, `validation`, `correction` stages
+  - Added icons (Gauge, Shield, History) and labels for new stages
+
+**Files Modified:**
+- `devussy-web/src/components/pipeline/DesignView.tsx` - Added ~200 lines for validation/correction integration
+- `devussy-web/src/components/pipeline/ModelSettings.tsx` - Added 3 new stages to PipelineStage type
+
+**How to verify:**
+```bash
+# Run frontend dev server
+cd devussy-web && npm run dev
+
+# In browser:
+# 1. Open design view with enableAdaptive=true (default)
+# 2. Complexity analysis runs first
+# 3. Design generation streams
+# 4. Validation runs automatically after design completes
+# 5. ValidationReport shows issues (if any) with Auto-correct button
+# 6. Click Auto-correct to run correction loop
+# 7. CorrectionTimeline shows iteration progress
+# 8. Approve (or Approve Anyway) to proceed
+```
+
+**Next Steps:**
+1. Add React Testing Library tests for new DesignView behavior
+2. Add visual regression tests for ValidationReport/CorrectionTimeline
+3. Update frontend documentation
 
 ---
 
