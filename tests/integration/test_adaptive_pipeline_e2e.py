@@ -657,7 +657,6 @@ class TestAdaptivePipelineRealLLM:
     ) -> None:
         """Run actual pipeline with minimal complexity project."""
         from src.pipeline.compose import PipelineOrchestrator
-        from src.pipeline.design_generator import AdaptiveDesignGenerator
         
         interview_data = {
             "project_name": "quick-note",

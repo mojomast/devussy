@@ -1125,6 +1125,66 @@ python test_fastapi_endpoints.py
 
 ---
 
+### 2025-11-26 - Testing & Validation Agent
+**Status:** Full pipeline test suite created and validated ✅
+
+**What was done:**
+1. **Fixed test failures** in adaptive pipeline tests:
+   - Fixed `DesignValidator.validate()` signature mismatch in `compose.py` (removed unused `requirements_text` kwarg)
+   - Removed dead import of non-existent `AdaptiveDesignGenerator` from `test_adaptive_pipeline_e2e.py`
+   - All 23 adaptive pipeline tests now passing
+
+2. **Created comprehensive pipeline test scripts**:
+   - `run_adaptive_pipeline_test.py` - Clean run with medium complexity TaskFlow API project
+   - `run_adaptive_pipeline_with_corrections.py` - Complex SaaS project with intentionally flawed design
+
+3. **Generated test output artifacts** in two folders for comparison:
+   - `test_output/adaptive_pipeline_results/` - Clean run (12 files)
+   - `test_output/adaptive_pipeline_with_corrections/` - With corrections (14 files)
+
+4. **Test Results Comparison:**
+
+   | Metric | Clean Run | With Corrections |
+   |--------|-----------|------------------|
+   | Project | TaskFlow API | CloudSync Enterprise |
+   | Complexity Score | 14/20 (standard) | 18/20 (detailed) |
+   | Validation | ✅ Passed | ❌ Failed (multiple DBs) |
+   | Sanity Review | 95% "sound" | 75% "problematic" |
+   | Correction Loop | Not needed | Ran 1 iteration |
+
+**Files Created:**
+- `run_adaptive_pipeline_test.py` - Clean pipeline test script
+- `run_adaptive_pipeline_with_corrections.py` - Corrections test script
+- `test_output/adaptive_pipeline_results/*.md` - 12 output files
+- `test_output/adaptive_pipeline_with_corrections/*.md` - 14 output files
+
+**Files Modified:**
+- `src/pipeline/compose.py` - Fixed `validate_design()` call
+- `tests/integration/test_adaptive_pipeline_e2e.py` - Removed dead import
+
+**How to run:**
+```bash
+# Run clean pipeline test
+python run_adaptive_pipeline_test.py
+
+# Run pipeline with corrections
+python run_adaptive_pipeline_with_corrections.py
+
+# Run all adaptive pipeline pytest tests (23 tests)
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_adaptive_pipeline_e2e.py tests/integration/test_adaptive_pipeline_orchestrator.py -v
+
+# Run LLM integration tests (4 tests)
+python test_adaptive_llm_integration.py
+```
+
+**Next Steps:**
+1. Review generated artifacts in `test_output/` folders
+2. Fine-tune correction loop prompts for better fix rate
+3. Add more validation rules for edge cases
+4. Consider adding progress streaming for long LLM calls
+
+---
+
 ### For Frontend Work
 
 **Reuse existing:**

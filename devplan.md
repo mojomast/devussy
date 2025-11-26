@@ -1998,26 +1998,60 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 - Added show/hide toggles for complexity, validation, correction panels
 - Updated PipelineStage type with new stages (complexity, validation, correction)
 - Added icons and labels for new pipeline stages
+
+**2025-11-26 - Testing & Validation Agent**
+- Fixed test failures in adaptive pipeline tests:
+  - Fixed `DesignValidator.validate()` signature mismatch in `compose.py`
+  - Removed dead import from `test_adaptive_pipeline_e2e.py`
+- All 23 adaptive pipeline tests now passing
+- Created comprehensive pipeline test scripts:
+  - `run_adaptive_pipeline_test.py` - Clean run with medium complexity project
+  - `run_adaptive_pipeline_with_corrections.py` - Complex project with flawed design
+- Generated test output artifacts for comparison:
+  - `test_output/adaptive_pipeline_results/` - 12 files (clean run)
+  - `test_output/adaptive_pipeline_with_corrections/` - 14 files (with corrections)
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
-### Next Task Group (Current Sprint): Frontend Integration & Testing
+### Next Task Group (Current Sprint): LLM Integration Complete ✅
 
-**STATUS:** LLM integration COMPLETE - Backend now uses real LLM calls for all adaptive stages.
+**STATUS:** All adaptive pipeline stages complete and tested!
 
 **Completed in This Session:**
-- ✅ `LLMComplexityAnalyzer` - Real LLM calls with PHASE_1_HARDENED prompt
-- ✅ `LLMSanityReviewerWithLLM` - Real LLM calls with PHASE_2_HARDENED prompt  
-- ✅ `LLMDesignCorrectionLoop` - Real LLM calls with PHASE_3_HARDENED prompt
-- ✅ FastAPI endpoints updated to use LLM-powered classes
-- ✅ E2E test script passing (4/4 tests)
+- ✅ Fixed test failures (signature mismatch, dead imports)
+- ✅ All 23 pytest tests passing
+- ✅ Created pipeline test scripts with output artifacts
+- ✅ Generated comparison test outputs (clean vs corrections)
+- ✅ LLM integration verified with 4/4 E2E tests passing
 
-**Files Modified:**
-| File | Changes |
-|------|---------|
-| `src/interview/complexity_analyzer.py` | Added `LLMComplexityAnalyzer`, `LLMComplexityResult` |
-| `src/pipeline/llm_sanity_reviewer.py` | Added `LLMSanityReviewerWithLLM`, detailed result dataclasses |
-| `src/pipeline/design_correction_loop.py` | Added `LLMDesignCorrectionLoop`, `CorrectionChange` dataclass |
+**Test Output Artifacts:**
+
+| Folder | Project | Complexity | Validation | Files |
+|--------|---------|------------|------------|-------|
+| `test_output/adaptive_pipeline_results/` | TaskFlow API | 14/20 (standard) | ✅ Passed | 12 |
+| `test_output/adaptive_pipeline_with_corrections/` | CloudSync Enterprise | 18/20 (detailed) | ❌ → Fixed | 14 |
+
+**Quick Test Commands:**
+```bash
+# Run clean pipeline test
+python run_adaptive_pipeline_test.py
+
+# Run pipeline with corrections  
+python run_adaptive_pipeline_with_corrections.py
+
+# Run pytest suite (23 tests)
+.\.venv\Scripts\python.exe -m pytest tests/integration/test_adaptive_pipeline_e2e.py tests/integration/test_adaptive_pipeline_orchestrator.py -v
+
+# Run LLM integration tests (4 tests)
+python test_adaptive_llm_integration.py
+```
+
+**Next Steps for Fresh Agent:**
+1. Review generated artifacts in `test_output/` folders
+2. Fine-tune correction loop prompts for better fix rate
+3. Add more validation rules for edge cases
+4. Add frontend E2E tests with Playwright
+<!-- NEXT_TASK_GROUP_END -->
 | `devussy-web/streaming_server/app.py` | Updated endpoints, fixed imports, added LLM client helper |
 
 **Next Steps for Fresh Agent:**

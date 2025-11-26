@@ -1469,7 +1469,6 @@ class PipelineOrchestrator:
         validator = DesignValidator()
         report = validator.validate(
             design_text,
-            requirements_text=requirements_text,
             complexity_profile=complexity_profile,
         )
         
