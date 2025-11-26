@@ -386,6 +386,27 @@ Legacy Devussy docs, handoff summaries, and helper scripts have been moved into 
 - Integration tests for full workflows
 - Real-world validation with actual APIs
 
+## Documentation for Agents
+
+> **Important:** If you're an AI agent working on this codebase, read `AGENTS.md` first.
+
+### Anchor-Based Context Management
+
+Devussy uses **stable HTML comment anchors** to enable efficient circular development. All planning/handoff documents contain anchors like:
+
+```markdown
+<!-- PROGRESS_LOG_START -->
+... content ...
+<!-- PROGRESS_LOG_END -->
+```
+
+**Key rules for agents:**
+1. Read ONLY anchored sections, not entire files (saves 90%+ tokens)
+2. Use `safe_write_devplan()` from `src/file_manager.py` for writes (validates anchors, creates backups)
+3. Never remove or modify anchor comments themselves
+
+See `AGENTS.md`, `WARP.md`, and `handoff.md` for comprehensive anchor documentation.
+
 ## Troubleshooting
 - No output files? Ensure the appropriate provider key is set (OPENAI_API_KEY, AETHER_API_KEY, REQUESTY_API_KEY, AGENTROUTER_API_KEY, or GENERIC_API_KEY).
 - Status line missing? Make sure your terminal supports ANSI; non-TTY environments will still print stage lines and progress.

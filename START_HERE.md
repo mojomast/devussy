@@ -4,6 +4,19 @@
 
 ---
 
+## 🔗 CRITICAL: Anchor-Based Context Management
+
+> **⚠️ READ THIS FIRST** before diving into the codebase.
+
+Devussy uses **stable HTML comment anchors** for efficient context management. See `AGENTS.md` for the complete guide.
+
+**Quick rules:**
+1. Read ONLY anchored sections (e.g., `<!-- NEXT_TASK_GROUP_START -->` to `<!-- NEXT_TASK_GROUP_END -->`), not entire files
+2. Use `safe_write_devplan()` from `src/file_manager.py` for all devplan/phase file writes
+3. Never remove anchor comments - they're required for validation
+
+---
+
 ## 🎯 What You Need to Know
 
 ### Status: ✅ PRODUCTION READY
