@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devussy.dev/schemas/review_result.json",
+  "title": "ReviewResult",
+  "description": "LLM sanity review result for a design document.",
+  "type": "object",
+  "required": ["is_acceptable", "confidence", "summary"],
+  "properties": {
+    "is_acceptable": {
+      "type": "boolean",
+      "description": "Whether the design is acceptable without major changes"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence score for the review assessment (0.0-1.0)"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief summary of the review findings"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of issues or concerns identified"
+    },
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of improvement suggestions"
+    },
+    "strengths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of design strengths identified"
+    },
+    "risk_areas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Areas that may need additional attention or validation"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the review was performed"
+    }
+  },
+  "additionalProperties": false
+}

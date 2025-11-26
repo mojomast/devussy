@@ -1,0 +1,34 @@
+{# Follow-up Questions Template for Complexity Analysis Clarifications #}
+{# Used when complexity analyzer has low confidence and needs more context #}
+
+Based on our initial conversation, I need some clarification to better understand your project's complexity.
+
+{% if complexity_profile %}
+**Current Assessment:**
+- Complexity Score: {{ complexity_profile.complexity_score }}/20
+- Estimated Phases: {{ complexity_profile.estimated_phases }}
+- Confidence: {{ (complexity_profile.confidence * 100) | round(1) }}%
+{% endif %}
+
+{% if follow_up_questions %}
+**Clarification Questions:**
+{% for question in follow_up_questions %}
+{{ loop.index }}. {{ question }}
+{% endfor %}
+{% endif %}
+
+---
+
+Please answer these questions to help refine the project complexity assessment. You can:
+- Answer each question directly
+- Type "skip" to proceed with the current assessment
+- Type "/done" when finished
+
+{% if interview_data %}
+**Previously Collected Information:**
+{% for key, value in interview_data.items() %}
+{% if value %}
+- **{{ key | replace('_', ' ') | title }}**: {{ value }}
+{% endif %}
+{% endfor %}
+{% endif %}
