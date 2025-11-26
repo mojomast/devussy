@@ -351,6 +351,70 @@ Legacy Devussy docs, handoff summaries, and helper scripts have been moved into 
 - Code samples included for LLM context
 - Backward compatible (works without repo analysis)
 
+### Adaptive Complexity Pipeline ✅ (NEW)
+
+Devussy now includes an **adaptive complexity system** that intelligently scales output based on project requirements.
+
+**Complexity Analysis:**
+- Automatic project complexity scoring (0-20 scale)
+- Dynamic depth level detection (minimal/standard/detailed)
+- Phase count estimation (3-15 phases based on complexity)
+- Confidence scoring with follow-up question triggers
+- Supports both rule-based (testing) and LLM-driven (production) assessment
+
+**Design Validation System:**
+- 5 validation checks: consistency, completeness, scope alignment, hallucination detection, over-engineering detection
+- Rule-based validation for deterministic testing
+- LLM-powered semantic review for production
+- Auto-correctable issue identification
+- Detailed issue reports with suggestions
+
+**Correction Loop:**
+- Iterative design improvement (max 3 iterations)
+- Automatic correction of identified issues
+- Confidence threshold (0.8) for approval
+- Manual review escalation when needed
+- Full correction history tracking
+
+**Adaptive Output Generation:**
+- Template-based output scaling (minimal/standard/detailed)
+- Dynamic phase count based on complexity
+- Complexity-aware design generator
+- Per-depth-level devplan templates
+
+**Usage:**
+```bash
+# Run adaptive pipeline via CLI
+python -m src.cli run-adaptive-pipeline \
+  --name "My Project" \
+  --languages "Python,TypeScript" \
+  --requirements "Build a REST API" \
+  --validation \
+  --correction
+
+# Or use interview JSON
+python -m src.cli run-adaptive-pipeline \
+  --interview-file interview_data.json
+```
+
+**Web UI Components:**
+- `ComplexityAssessment` - Visual score gauge, depth indicator, phase estimate
+- `ValidationReport` - Issue display with severity, auto-fix badges, LLM review
+- `CorrectionTimeline` - Iteration history with progress tracking
+
+**Testing:**
+```bash
+# Backend adaptive pipeline tests
+pytest tests/integration/test_adaptive_pipeline_e2e.py -v
+pytest tests/integration/test_adaptive_pipeline_orchestrator.py -v
+
+# Frontend component tests
+cd devussy-web && npm test
+
+# Build Storybook for visual components
+cd devussy-web && npm run build-storybook
+```
+
 ### Terminal UI (Phases 4-5) ✅
 **Foundation (Phase 4):**
 - Responsive grid layout (5 cols / 3x2 / 1x5)
