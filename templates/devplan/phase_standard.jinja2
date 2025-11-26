@@ -1,0 +1,48 @@
+{# Phase Standard Template - Balanced detail for typical projects (complexity 4-7) #}
+{# Target: 5-7 phases, moderate detail, includes testing and deployment #}
+
+## Phase {{ phase_number }}: {{ phase_name }}
+
+{{ phase_description | default('') }}
+
+{% if phase_goal %}
+**Goal:** {{ phase_goal }}
+{% endif %}
+
+### Tasks
+{% for task in tasks %}
+{% if task is mapping %}
+- **{{ task.title | default('Task ' ~ loop.index) }}**: {{ task.description }}
+  {% if task.subtasks %}
+  {% for subtask in task.subtasks %}
+  - {{ subtask }}
+  {% endfor %}
+  {% endif %}
+{% else %}
+- {{ task }}
+{% endif %}
+{% endfor %}
+
+{% if dependencies %}
+### Dependencies
+{% for dep in dependencies %}
+- {{ dep }}
+{% endfor %}
+{% endif %}
+
+### Testing Strategy
+{{ test_strategy | default('Write unit tests for core functionality. Run integration tests for component interactions.') }}
+
+{% if acceptance_criteria %}
+### Acceptance Criteria
+{% for criterion in acceptance_criteria %}
+- [ ] {{ criterion }}
+{% endfor %}
+{% endif %}
+
+{% if estimated_time %}
+### Estimated Time
+{{ estimated_time }}
+{% endif %}
+
+---

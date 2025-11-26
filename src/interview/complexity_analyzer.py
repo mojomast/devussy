@@ -1,5 +1,33 @@
 from __future__ import annotations
 
+"""
+Complexity Analyzer - Testing Scaffold Implementation
+
+This module provides DETERMINISTIC, RULE-BASED complexity analysis for testing
+and development purposes. The static scoring rubric enables:
+- Predictable unit test outcomes
+- Fast iteration without API calls
+- Baseline comparison for LLM integration
+
+PRODUCTION BEHAVIOR (future):
+When integrated with LLM, the analyzer should dynamically assess complexity
+based on full project context rather than keyword matching. See:
+- adaptive_pipeline_llm_ideas.md (Section 1)
+- handoff.md (Complexity Assessment section)
+
+The LLM should:
+1. Analyze interview transcript holistically
+2. Consider how complexity factors interact
+3. Detect hidden complexity (compliance, security, scaling)
+4. Generate targeted follow-up questions
+5. Provide transparent reasoning for its assessment
+
+The rule-based implementation here serves as a FALLBACK when:
+- LLM is unavailable
+- Validating LLM output against heuristics
+- Running CI/CD tests deterministically
+"""
+
 from dataclasses import dataclass
 from typing import Literal, Mapping, Any
 

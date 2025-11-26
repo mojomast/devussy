@@ -743,10 +743,26 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
   - Design validation system (`DesignValidator`, `LLMSanityReviewer`, `DesignCorrectionLoop` with optional `ComplexityProfile`).
   - Adaptive design/devplan generators and `MockAdaptivePipeline` wiring.
   - `PipelineTestHarness` for exercising the mock adaptive pipeline.
+  - **NEW:** `follow_up` mode in `llm_interview.py` with:
+    - `FOLLOW_UP_SYSTEM_PROMPT` for clarification questions
+    - `switch_mode()` method for mode transitions
+    - `set_follow_up_context()` for setting complexity profile and questions
+    - `request_clarifications()` for generating follow-up prompts
+  - **NEW:** All template variants created:
+    - `templates/interview/follow_up_questions.jinja2`
+    - `templates/design/adaptive_design.jinja2`
+    - `templates/devplan/phase_minimal.jinja2`
+    - `templates/devplan/phase_standard.jinja2`
+    - `templates/devplan/phase_detailed.jinja2`
+  - **NEW:** Templates wired into generators:
+    - `design_generator.py` - `use_templates` flag, `_generate_from_template()` method
+    - `devplan_generator.py` - `use_templates` flag, `render_phase_markdown()` method
 - Not yet implemented:
-  - `llm_interview_manager` follow-up mode and follow-up question templates.
-  - Real LLM-backed adaptive design/devplan generation and `main_pipeline` refactor.
-  - JSON schemas, output formatter, streaming hooks, and extended checkpointing.
+  - Main pipeline refactor to integrate new stages (complexity → validation → correction)
+  - JSON schemas in `schemas/` directory
+  - Output formatter for deterministic markdown
+  - Streaming hooks for new stages ([complexity], [validation], [correction])
+  - Extended checkpointing for new artifacts
 
 **Testing Milestones:**
 1. Unit tests pass for all new modules

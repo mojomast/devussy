@@ -1,0 +1,21 @@
+{# Phase Minimal Template - Bare essentials for trivial projects (complexity 0-3) #}
+{# Target: 3-5 phases, concise output, no verbose sections #}
+
+## Phase {{ phase_number }}: {{ phase_name }}
+
+{{ phase_description | default('') }}
+
+### Tasks
+{% for task in tasks %}
+- {{ task.description | default(task) }}
+{% endfor %}
+
+### Testing
+- {{ test_strategy | default('Verify functionality works as expected') }}
+
+{% if acceptance_criteria %}
+### Done When
+{% for criterion in acceptance_criteria %}
+- {{ criterion }}
+{% endfor %}
+{% endif %}

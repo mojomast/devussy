@@ -1,25 +1,107 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+
+from jinja2 import Environment, FileSystemLoader
 
 from src.interview.complexity_analyzer import ComplexityProfile
 
 
-class AdaptiveDesignGenerator:
-    """Mock adaptive design generator.
+def _get_templates_dir() -> Path:
+    """Get the templates directory path."""
+    return Path(__file__).resolve().parents[2] / "templates"
 
-    This implementation is intentionally LLM-free. It produces a simple
-    markdown design document whose size and level of detail vary based on
-    the provided ``ComplexityProfile``. It is used by the mock adaptive
-    pipeline to exercise control flow before real LLM integration.
+
+class AdaptiveDesignGenerator:
+    """Adaptive design generator with complexity-aware output.
+
+    This implementation can operate in two modes:
+    1. Mock mode (default): Produces deterministic markdown without LLM calls
+    2. Template mode: Uses Jinja templates for structured output
+
+    The size and level of detail vary based on the provided ``ComplexityProfile``.
     """
 
-    def generate(self, profile: ComplexityProfile, project_label: str = "project") -> str:
-        """Generate a mock design document for the given complexity profile.
+    def __init__(self, use_templates: bool = False):
+        """Initialize the generator.
+
+        Args:
+            use_templates: If True, use Jinja templates for output generation.
+        """
+        self.use_templates = use_templates
+        if use_templates:
+            templates_dir = _get_templates_dir()
+            self._env = Environment(
+                loader=FileSystemLoader(str(templates_dir)),
+                autoescape=False,
+                trim_blocks=True,
+                lstrip_blocks=True,
+            )
+
+    def generate(
+        self,
+        profile: ComplexityProfile,
+        project_label: str = "project",
+        **context: Any,
+    ) -> str:
+        """Generate a design document for the given complexity profile.
 
         Args:
             profile: Complexity profile computed from interview data.
-            project_label: Human-readable label for the project (e.g. project type).
+            project_label: Human-readable label for the project.
+            **context: Additional context variables for template rendering.
+
+        Returns:
+            Markdown string describing the system design.
+        """
+        if self.use_templates:
+            return self._generate_from_template(profile, project_label, **context)
+        return self._generate_mock(profile, project_label)
+
+    def _generate_from_template(
+        self,
+        profile: ComplexityProfile,
+        project_label: str,
+        **context: Any,
+    ) -> str:
+        """Generate design using Jinja templates."""
+        template = self._env.get_template("design/adaptive_design.jinja2")
+
+        template_context = {
+            "complexity_profile": {
+                "complexity_score": profile.score,
+                "estimated_phases": profile.estimated_phase_count,
+                "depth_level": profile.depth_level,
+                "project_scale": self._get_project_scale(profile.score),
+                "risk_factors": getattr(profile, "risk_factors", []),
+                "confidence": profile.confidence,
+            },
+            "project_name": project_label,
+            **context,
+        }
+
+        return template.render(**template_context)
+
+    def _get_project_scale(self, score: float) -> str:
+        """Map complexity score to project scale label."""
+        if score <= 3:
+            return "trivial"
+        elif score <= 7:
+            return "simple"
+        elif score <= 12:
+            return "medium"
+        elif score <= 16:
+            return "complex"
+        else:
+            return "enterprise"
+
+    def _generate_mock(self, profile: ComplexityProfile, project_label: str) -> str:
+        """Generate a mock design document (original implementation).
+
+        Args:
+            profile: Complexity profile computed from interview data.
+            project_label: Human-readable label for the project.
 
         Returns:
             Markdown string describing a mock system design.

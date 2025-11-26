@@ -40,7 +40,9 @@ def test_design_validator_flags_over_engineering_for_trivial_project():
 
 def test_design_validator_scope_alignment_for_complex_project():
     validator = DesignValidator()
-    design = """Complex SaaS platform.\nArchitecture: microservices.\nData model: relational.\nTesting: comprehensive.\n(No explicit scalability here.)"""
+    # Design for complex project (score=10) that does NOT mention scalability
+    # Note: "scalab" substring is checked, so avoid that word entirely
+    design = """Complex SaaS platform.\nArchitecture: microservices.\nData model: relational.\nTesting: comprehensive.\n(No performance discussion here.)"""
 
     report = validator.validate(design, complexity_profile=_simple_profile(10))
 

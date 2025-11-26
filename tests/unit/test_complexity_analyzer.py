@@ -6,6 +6,8 @@ from src.interview.complexity_analyzer import (
 
 
 def test_estimate_phase_count_thresholds():
+    # Test boundary conditions for phase count estimation
+    # Formula: score <= 3 -> 3, <= 7 -> 5, <= 12 -> 7, else min(9 + (score-12)//2, 15)
     assert estimate_phase_count(0) == 3
     assert estimate_phase_count(3) == 3
     assert estimate_phase_count(4) == 5
@@ -13,7 +15,12 @@ def test_estimate_phase_count_thresholds():
     assert estimate_phase_count(8) == 7
     assert estimate_phase_count(12) == 7
     assert estimate_phase_count(13) == 9
-    assert estimate_phase_count(20) == 15
+    # At score=20: 9 + (20-12)//2 = 9 + 4 = 13
+    assert estimate_phase_count(20) == 13
+    # At score=24: 9 + (24-12)//2 = 9 + 6 = 15 (capped)
+    assert estimate_phase_count(24) == 15
+    # At score=30: 9 + (30-12)//2 = 9 + 9 = 18, but capped at 15
+    assert estimate_phase_count(30) == 15
 
 
 def test_analyze_trivial_cli_solo():

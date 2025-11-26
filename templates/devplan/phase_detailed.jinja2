@@ -1,0 +1,124 @@
+{# Phase Detailed Template - Comprehensive coverage for complex projects (complexity 8+) #}
+{# Target: 7-11 phases, granular tasks, full documentation #}
+
+## Phase {{ phase_number }}: {{ phase_name }}
+
+{{ phase_description | default('') }}
+
+{% if phase_goal %}
+### 🎯 Goal
+{{ phase_goal }}
+{% endif %}
+
+{% if rationale %}
+### 📋 Rationale
+{{ rationale }}
+{% endif %}
+
+### 📝 Tasks
+
+{% for task in tasks %}
+{% if task is mapping %}
+#### {{ phase_number }}.{{ loop.index }}: {{ task.title | default('Task ' ~ loop.index) }}
+
+{{ task.description | default('') }}
+
+{% if task.subtasks %}
+**Steps:**
+{% for subtask in task.subtasks %}
+- [ ] {{ subtask }}
+{% endfor %}
+{% endif %}
+
+{% if task.files %}
+**Files to create/modify:**
+{% for file in task.files %}
+- `{{ file }}`
+{% endfor %}
+{% endif %}
+
+{% if task.commands %}
+**Commands:**
+```bash
+{% for cmd in task.commands %}
+{{ cmd }}
+{% endfor %}
+```
+{% endif %}
+
+{% else %}
+- {{ task }}
+{% endif %}
+{% endfor %}
+
+{% if dependencies %}
+### 🔗 Dependencies
+
+**Phase Dependencies:**
+{% for dep in dependencies %}
+- Phase {{ dep }} must be complete
+{% endfor %}
+
+{% if external_dependencies %}
+**External Dependencies:**
+{% for ext_dep in external_dependencies %}
+- {{ ext_dep }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
+### 🧪 Testing Strategy
+
+{{ test_strategy | default('Implement comprehensive testing:') }}
+
+{% if test_cases %}
+**Test Cases:**
+{% for test in test_cases %}
+- [ ] {{ test }}
+{% endfor %}
+{% endif %}
+
+{% if coverage_target %}
+**Coverage Target:** {{ coverage_target }}%
+{% endif %}
+
+### ✅ Acceptance Criteria
+
+{% if acceptance_criteria %}
+{% for criterion in acceptance_criteria %}
+- [ ] {{ criterion }}
+{% endfor %}
+{% else %}
+- [ ] All tasks completed and committed
+- [ ] Tests pass with acceptable coverage
+- [ ] Code reviewed and approved
+{% endif %}
+
+{% if risks %}
+### ⚠️ Risk Mitigation
+
+{% for risk in risks %}
+- **{{ risk.name | default('Risk') }}**: {{ risk.description }}
+  - *Mitigation*: {{ risk.mitigation | default('Monitor and address as needed') }}
+{% endfor %}
+{% endif %}
+
+{% if estimated_time %}
+### ⏱️ Estimated Time
+{{ estimated_time }}
+{% endif %}
+
+{% if code_samples %}
+### 💻 Code Samples
+
+```{{ code_language | default('python') }}
+{{ code_samples }}
+```
+{% endif %}
+
+{% if notes %}
+### 📌 Notes
+{{ notes }}
+{% endif %}
+
+---

@@ -1,0 +1,121 @@
+{# Adaptive Design Template - Scales output based on complexity profile #}
+{# Uses complexity_profile.depth_level to control verbosity #}
+
+You are an expert software architect creating a project design document.
+
+{% if complexity_profile %}
+## Complexity Context
+
+- **Complexity Score:** {{ complexity_profile.complexity_score }}/20
+- **Estimated Phases:** {{ complexity_profile.estimated_phases }}
+- **Depth Level:** {{ complexity_profile.depth_level }}
+- **Project Scale:** {{ complexity_profile.project_scale | default('standard') }}
+{% if complexity_profile.risk_factors %}
+- **Risk Factors:** {{ complexity_profile.risk_factors | join(', ') }}
+{% endif %}
+
+{% if complexity_profile.depth_level == "minimal" %}
+## Output Guidelines
+
+Provide a **concise design** focusing only on core architecture and critical decisions.
+- Target: 500-800 words
+- Focus on: Architecture overview, tech stack, core features
+- Skip: Detailed deployment, monitoring, extensive testing strategy
+- Keep sections brief and actionable
+
+{% elif complexity_profile.depth_level == "standard" %}
+## Output Guidelines
+
+Provide a **balanced design** covering architecture, tech stack, and key considerations.
+- Target: 1000-1500 words
+- Include: Architecture, tech stack, deployment approach, testing strategy, dependencies
+- Moderate detail on each section
+- Balance completeness with conciseness
+
+{% elif complexity_profile.depth_level == "detailed" %}
+## Output Guidelines
+
+Provide a **comprehensive design** including all aspects of the project.
+- Target: 2000-3000 words
+- Include: Architecture, patterns, deployment, testing strategy, security, scalability, monitoring, CI/CD, data models
+- Detailed rationale for key decisions
+- Address risks and mitigations
+- Include diagrams descriptions where helpful
+
+{% endif %}
+{% endif %}
+
+## Project Information
+
+**Project Name:** {{ project_name }}
+
+{% if requirements %}
+**Requirements:**
+{{ requirements }}
+{% endif %}
+
+{% if languages %}
+**Languages:** {{ languages | join(', ') if languages is iterable and languages is not string else languages }}
+{% endif %}
+
+{% if frameworks %}
+**Frameworks:** {{ frameworks | join(', ') if frameworks is iterable and frameworks is not string else frameworks }}
+{% endif %}
+
+{% if apis %}
+**External APIs:** {{ apis | join(', ') if apis is iterable and apis is not string else apis }}
+{% endif %}
+
+{% if database %}
+**Database:** {{ database }}
+{% endif %}
+
+{% if deployment_platform %}
+**Deployment:** {{ deployment_platform }}
+{% endif %}
+
+## Your Task
+
+Create a project design document that includes:
+
+{% if complexity_profile and complexity_profile.depth_level == "minimal" %}
+### Required Sections (Minimal)
+1. **Architecture Overview** - High-level system structure (1-2 paragraphs)
+2. **Technology Stack** - Languages, frameworks, key libraries
+3. **Core Features** - Main functionality to implement
+4. **Dependencies** - Critical external dependencies
+
+{% elif complexity_profile and complexity_profile.depth_level == "detailed" %}
+### Required Sections (Detailed)
+1. **Executive Summary** - Project overview and goals
+2. **Architecture Overview** - System structure with component descriptions
+3. **Component Details** - Each major component with responsibilities
+4. **Technology Stack** - Full tech stack with rationale
+5. **Data Model** - Key entities and relationships
+6. **API Design** - Endpoints and contracts (if applicable)
+7. **Security Considerations** - Auth, data protection, compliance
+8. **Scalability & Performance** - Capacity planning, optimization strategies
+9. **Testing Strategy** - Unit, integration, E2E approaches
+10. **Deployment & Operations** - Environments, CI/CD, monitoring
+11. **Dependencies** - External services and libraries
+12. **Risks & Mitigations** - Technical and operational risks
+13. **Success Criteria** - Measurable outcomes
+
+{% else %}
+### Required Sections (Standard)
+1. **Architecture Overview** - System structure and key components
+2. **Technology Stack** - Languages, frameworks, databases
+3. **Core Features** - Main functionality broken into phases
+4. **Deployment Strategy** - Basic deployment approach
+5. **Testing Approach** - Testing strategy overview
+6. **Dependencies** - Key external dependencies
+7. **Challenges & Mitigations** - Known challenges and solutions
+
+{% endif %}
+
+## Output Format
+
+Provide the design document in clean Markdown format with appropriate headings.
+Ensure all sections are addressed based on the depth level specified.
+
+Recommended phase count: {{ complexity_profile.estimated_phases if complexity_profile else '5-7' }}
