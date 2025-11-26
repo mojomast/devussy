@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal, Mapping, Any
-
+import json
+from dataclasses import dataclass, field
+from typing import Literal, Mapping, Any, List, Optional
 
 ProjectTypeBucket = Literal["cli_tool", "library", "api", "web_app", "saas"]
 TechnicalComplexityBucket = Literal[
@@ -206,3 +206,157 @@ class ComplexityAnalyzer:
         ]
         inferred_count = sum(1 for b in buckets if b is not None)
         return max(0.5, min(1.0, 0.5 + 0.125 * inferred_count))
+
+
+# =============================================================================
+# LLM-Powered Complexity Analysis
+# =============================================================================
+
+COMPLEXITY_ANALYSIS_PROMPT = """IMPORTANT OUTPUT RULES (STRICT):
+1. Output ONLY valid JSON.
+2. Do NOT wrap the JSON in code fences.
+3. Do NOT include any prose before or after the JSON.
+4. Do NOT add/remove/rename any fields.
+5. Do NOT include comments inside the JSON.
+6. Use ONLY double-quoted strings.
+7. All booleans must be lowercase true/false.
+8. No trailing commas.
+9. Follow the schema EXACTLY.
+
+ABOUT THIS TASK:
+You are the Complexity Analysis Model. You will review the full interview data to produce a structured complexity profile describing the difficulty, scope, and risks of the project.
+
+YOU MUST NOT:
+- invent features not in the requirements
+- contradict the provided data
+- hallucinate unknown metrics
+- produce non-deterministic field names
+- output any text outside JSON
+
+ALLOWED VALUES:
+depth_level MUST be one of:
+  - "minimal"
+  - "standard"
+  - "detailed"
+
+complexity_score MUST be a number between 0 and 20.
+confidence MUST be a float between 0 and 1.
+
+follow_up_questions MUST be questions seeking missing or ambiguous project info.
+hidden_risks MUST identify domain-specific risks not explicitly stated.
+
+EXPECTED JSON SCHEMA (MUST MATCH EXACTLY):
+
+{{
+  "complexity_score": <number>,
+  "estimated_phase_count": <integer>,
+  "depth_level": "<minimal|standard|detailed>",
+  "confidence": <number>,
+  "rationale": "<string>",
+  "complexity_factors": {{
+    "integrations": "<string>",
+    "security_compliance": "<string>",
+    "data_privacy": "<string>",
+    "realtime_communication": "<string>",
+    "multi_tenancy": "<string>",
+    "scale": "<string>",
+    "architecture": "<string>",
+    "team_and_timeline": "<string>",
+    "domain_complexity": "<string>",
+    "operational_overhead": "<string>"
+  }},
+  "follow_up_questions": [
+    "<string>"
+  ],
+  "hidden_risks": [
+    "<string>"
+  ]
+}}
+
+YOUR TASK:
+Analyze the provided interview data and return JSON in the exact schema above, with no extra fields.
+
+INTERVIEW DATA:
+{interview_json}
+
+BEGIN NOW."""
+
+
+@dataclass
+class LLMComplexityResult:
+    """Result from LLM-powered complexity analysis."""
+    complexity_score: float
+    estimated_phase_count: int
+    depth_level: DepthLevel
+    confidence: float
+    rationale: str = ""
+    complexity_factors: Mapping[str, str] = field(default_factory=dict)
+    follow_up_questions: List[str] = field(default_factory=list)
+    hidden_risks: List[str] = field(default_factory=list)
+
+
+class LLMComplexityAnalyzer:
+    """LLM-powered complexity analyzer using hardened prompts."""
+
+    def __init__(self, llm_client: Any) -> None:
+        self._llm_client = llm_client
+        self._fallback_analyzer = ComplexityAnalyzer()
+
+    async def analyze_with_llm(
+        self, interview_data: Mapping[str, Any]
+    ) -> LLMComplexityResult:
+        """Analyze complexity using LLM with hardened prompt.
+        
+        Falls back to static analysis if LLM fails.
+        """
+        interview_json = json.dumps(interview_data, indent=2)
+        prompt = COMPLEXITY_ANALYSIS_PROMPT.format(interview_json=interview_json)
+
+        try:
+            response = await self._llm_client.generate_completion(prompt)
+            return self._parse_llm_response(response)
+        except Exception as e:
+            # Fallback to static analysis
+            print(f"LLM analysis failed, using fallback: {e}")
+            static_profile = self._fallback_analyzer.analyze(interview_data)
+            return LLMComplexityResult(
+                complexity_score=static_profile.score,
+                estimated_phase_count=static_profile.estimated_phase_count,
+                depth_level=static_profile.depth_level,
+                confidence=static_profile.confidence,
+                rationale="Fallback to static analysis due to LLM error",
+            )
+
+    def _parse_llm_response(self, response: str) -> LLMComplexityResult:
+        """Parse LLM JSON response into structured result."""
+        # Clean up response - remove potential code fences
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            # Remove markdown code fences
+            lines = cleaned.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            cleaned = "\n".join(lines)
+
+        try:
+            data = json.loads(cleaned)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse LLM response as JSON: {e}")
+
+        # Validate and extract fields
+        depth_level = data.get("depth_level", "standard")
+        if depth_level not in ("minimal", "standard", "detailed"):
+            depth_level = "standard"
+
+        return LLMComplexityResult(
+            complexity_score=float(data.get("complexity_score", 5.0)),
+            estimated_phase_count=int(data.get("estimated_phase_count", 5)),
+            depth_level=depth_level,
+            confidence=float(data.get("confidence", 0.8)),
+            rationale=str(data.get("rationale", "")),
+            complexity_factors=data.get("complexity_factors", {}),
+            follow_up_questions=data.get("follow_up_questions", []),
+            hidden_risks=data.get("hidden_risks", []),
+        )

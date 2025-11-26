@@ -1,0 +1,2 @@
+devussy run-full-pipeline --name "test" --languages "Python" --requirements "Test" --output-dir "docs" --verbose
+devussy run-full-pipeline --resume-from "test_pipeline" --output-dir "docs" --verbose

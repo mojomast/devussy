@@ -1059,39 +1059,69 @@ cd devussy-web && npm run build-storybook
 
 ---
 
-### 2025-11-26 - LLM Integration Planning Agent
-**Current Status:**
-- ⚠️ **3 adaptive phases are MOCKED** - hardened prompts exist but NOT wired to real LLM
+### 2025-11-26 - LLM Integration Complete ✅
+**Status:** All 3 adaptive pipeline stages now wired to REAL LLM calls!
 
-**Hardened Prompts (Ready to Use):**
-| Phase | File | Purpose | Token Savings |
-|-------|------|---------|---------------|
-| 1 | `PHASE_1_HARDENED.md` | Complexity analysis → JSON | ~74% reduction |
-| 2 | `PHASE_2_HARDENED.md` | Sanity review → JSON | Strict limits |
-| 3 | `PHASE_3_HARDENED.md` | Design correction → JSON | Minimal edits |
+**What was done:**
+1. **Added LLM to ComplexityAnalyzer** (`src/interview/complexity_analyzer.py`):
+   - New `LLMComplexityAnalyzer` class with `analyze_with_llm()` async method
+   - Uses PHASE_1_HARDENED prompt for strict JSON output
+   - Parses LLM response into `LLMComplexityResult` dataclass
+   - Fallback to static analysis on parse failure
 
-**Files Needing LLM Integration:**
-1. `src/interview/complexity_analyzer.py` - Currently uses static keyword matching
-2. `src/pipeline/llm_sanity_reviewer.py` - Currently returns hardcoded mock data
-3. `src/pipeline/design_correction_loop.py` - Currently appends fake footer text
+2. **Added LLM to LLMSanityReviewer** (`src/pipeline/llm_sanity_reviewer.py`):
+   - New `LLMSanityReviewerWithLLM` class with `review_with_llm()` async method
+   - Uses PHASE_2_HARDENED prompt for semantic validation
+   - Rich result types: `HallucinationIssue`, `ScopeAlignment`, `Risk`, `LLMSanityReviewResultDetailed`
+   - Returns structured issues with severity and auto-correct flags
 
-**To Test UI Locally:**
+3. **Added LLM to DesignCorrectionLoop** (`src/pipeline/design_correction_loop.py`):
+   - New `LLMDesignCorrectionLoop` class with `run_with_llm()` async method
+   - Uses PHASE_3_HARDENED prompt for minimal, targeted corrections
+   - Iterative loop (max 3 iterations) with confidence threshold (0.8)
+   - Returns `CorrectionChange` list documenting each fix
+
+4. **Updated FastAPI endpoints** (`devussy-web/streaming_server/app.py`):
+   - Fixed import issue (try/except for relative vs absolute imports)
+   - Added `_create_llm_client_for_adaptive()` helper using requesty/gpt-4.1-nano
+   - Updated `/api/adaptive/complexity`, `/api/adaptive/validate`, `/api/adaptive/correct`
+   - Added `use_llm` flag to enable real LLM calls (default: True)
+
+5. **Created test scripts** (root folder):
+   - `test_adaptive_llm_integration.py` - 4/4 tests passing with real LLM
+   - `test_fastapi_endpoints.py` - HTTP endpoint verification
+
+**Provider Configuration:**
+- Provider: `requesty`
+- Model: `openai/gpt-4.1-nano`
+- All stages use same config for consistency
+
+**How to test:**
 ```bash
-# Terminal 1: Start FastAPI backend
+# Run integration tests (4/4 passing)
+python test_adaptive_llm_integration.py
+
+# Start FastAPI server
 cd devussy-web/streaming_server
 python -m uvicorn app:app --reload --port 8000
 
-# Terminal 2: Start Next.js frontend
-cd devussy-web
-npm run dev
-
-# Open http://localhost:3000 and run adaptive pipeline
+# Test endpoints (in another terminal)
+python test_fastapi_endpoints.py
 ```
 
+**Files Modified:**
+- `src/interview/complexity_analyzer.py` - Added LLMComplexityAnalyzer class
+- `src/pipeline/llm_sanity_reviewer.py` - Added LLMSanityReviewerWithLLM class
+- `src/pipeline/design_correction_loop.py` - Added LLMDesignCorrectionLoop class
+- `devussy-web/streaming_server/app.py` - Fixed imports, wired LLM endpoints
+- `test_adaptive_llm_integration.py` - NEW: E2E LLM tests
+- `test_fastapi_endpoints.py` - NEW: HTTP endpoint tests
+
 **Next Steps:**
-1. Wire hardened prompts into backend classes (add `*_with_llm()` async methods)
-2. Update FastAPI endpoints to call LLM methods instead of mocks
-3. Test through UI with real API calls
+1. Frontend testing - verify UI works with real LLM responses
+2. Add error handling for API rate limits
+3. Add caching for repeated complexity analyses
+4. Consider adding progress streaming for long LLM calls
 
 ---
 
