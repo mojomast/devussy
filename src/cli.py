@@ -1283,6 +1283,257 @@ def run_full_pipeline(
 
 
 @app.command()
+def run_adaptive_pipeline(
+    project_name: Annotated[str, typer.Option("--name", help="Project name")],
+    languages: Annotated[
+        str,
+        typer.Option("--languages", help="Comma-separated programming languages"),
+    ],
+    requirements: Annotated[
+        str, typer.Option("--requirements", help="Project requirements")
+    ],
+    frameworks: Annotated[
+        Optional[str],
+        typer.Option("--frameworks", help="Comma-separated frameworks"),
+    ] = None,
+    apis: Annotated[
+        Optional[str], typer.Option("--apis", help="Comma-separated APIs")
+    ] = None,
+    config_path: Annotated[
+        Optional[str], typer.Option("--config", help="Path to config file")
+    ] = None,
+    provider: Annotated[
+        Optional[str], typer.Option("--provider", help="LLM provider override")
+    ] = None,
+    model: Annotated[
+        Optional[str], typer.Option("--model", help="Model override")
+    ] = None,
+    select_model: Annotated[
+        bool,
+        typer.Option(
+            "--select-model",
+            help="Interactively choose a Requesty model for this run",
+        ),
+    ] = False,
+    temperature: Annotated[
+        Optional[float],
+        typer.Option(
+            "--temperature",
+            help="Sampling temperature override for the active model",
+            min=0.0,
+            max=2.0,
+        ),
+    ] = None,
+    max_tokens: Annotated[
+        Optional[int],
+        typer.Option(
+            "--max-tokens",
+            help="Maximum tokens to request from the model",
+            min=1,
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Optional[str], typer.Option("--output-dir", help="Output directory")
+    ] = None,
+    interview_file: Annotated[
+        Optional[str],
+        typer.Option(
+            "--interview-file",
+            help="Path to JSON file with interview data for complexity analysis",
+        ),
+    ] = None,
+    enable_validation: Annotated[
+        bool,
+        typer.Option(
+            "--validation/--no-validation",
+            help="Enable design validation after generation",
+        ),
+    ] = True,
+    enable_correction: Annotated[
+        bool,
+        typer.Option(
+            "--correction/--no-correction",
+            help="Enable iterative correction loop if validation fails",
+        ),
+    ] = True,
+    max_concurrent: Annotated[
+        Optional[int],
+        typer.Option("--max-concurrent", help="Maximum concurrent API requests"),
+    ] = None,
+    streaming: Annotated[
+        bool, typer.Option("--streaming", help="Enable token streaming")
+    ] = False,
+    verbose: Annotated[
+        bool, typer.Option("--verbose", help="Enable verbose logging")
+    ] = False,
+    debug: Annotated[
+        bool, typer.Option("--debug", help="Enable debug mode with full tracebacks")
+    ] = False,
+) -> None:
+    """Run the adaptive pipeline with complexity analysis, validation, and correction.
+
+    This extends the standard pipeline with:
+    - Complexity analysis before design generation (scales output depth)
+    - Design validation after generation
+    - Iterative correction loop if issues found
+
+    Example:
+        devussy run-adaptive-pipeline --name "myapp" --languages "Python,TypeScript" \\
+            --requirements "Build a REST API with auth" --validation --correction
+    """
+    try:
+        # Validate required parameters
+        if not project_name or not project_name.strip():
+            typer.echo("Error: Project name is required", err=True, color=True)
+            raise typer.Exit(code=1)
+
+        if not languages or not languages.strip():
+            typer.echo(
+                "Error: At least one language must be specified", err=True, color=True
+            )
+            raise typer.Exit(code=1)
+
+        if not requirements or not requirements.strip():
+            typer.echo("Error: Project requirements are required", err=True, color=True)
+            raise typer.Exit(code=1)
+
+        # Load config
+        config = _load_app_config(
+            config_path,
+            provider,
+            model,
+            output_dir,
+            verbose,
+            temperature,
+            max_tokens,
+        )
+
+        if select_model:
+            _select_requesty_model_interactively(config)
+
+        if max_concurrent:
+            config.max_concurrent_requests = max_concurrent
+        if streaming:
+            config.streaming_enabled = True
+
+        # Parse lists
+        languages_list = [lang.strip() for lang in languages.split(",")]
+        frameworks_list = (
+            [fw.strip() for fw in frameworks.split(",")] if frameworks else None
+        )
+        apis_list = [api.strip() for api in apis.split(",")] if apis else None
+
+        # Load interview data if provided, otherwise create minimal interview data
+        if interview_file:
+            interview_file_path = Path(interview_file)
+            if not interview_file_path.exists():
+                typer.echo(
+                    f"Error: Interview file not found: {interview_file}",
+                    err=True,
+                    color=True,
+                )
+                raise typer.Exit(code=1)
+            with open(interview_file_path, "r", encoding="utf-8") as f:
+                interview_data = json.load(f)
+            typer.echo(f"[NOTE] Loaded interview data from: {interview_file}\n")
+        else:
+            # Create minimal interview data from CLI inputs for complexity analysis
+            interview_data = {
+                "project_name": project_name,
+                "languages": languages_list,
+                "requirements": requirements,
+                "frameworks": frameworks_list or [],
+                "apis": apis_list or [],
+                "team_size": "solo",  # Default assumption
+                "project_type": "api" if apis_list else "cli_tool",  # Heuristic
+            }
+            typer.echo("[NOTE] Using CLI inputs for complexity analysis\n")
+
+        # Create markdown output manager and initialize run directory
+        markdown_output_mgr = MarkdownOutputManager(base_output_dir="outputs")
+        run_dir = markdown_output_mgr.create_run_directory(project_name)
+        typer.echo(f"\n[NOTE] Saving all outputs to: {run_dir}\n")
+
+        # Save run metadata
+        markdown_output_mgr.save_run_metadata({
+            "project_name": project_name,
+            "languages": languages_list,
+            "requirements": requirements,
+            "frameworks": frameworks_list,
+            "apis": apis_list,
+            "config_path": config_path,
+            "provider": config.llm.provider,
+            "model": config.llm.model,
+            "pipeline_type": "adaptive",
+            "enable_validation": enable_validation,
+            "enable_correction": enable_correction,
+        })
+
+        # Create orchestrator with markdown output manager
+        orchestrator = _create_orchestrator(config, markdown_output_manager=markdown_output_mgr)
+
+        # Ensure output directory exists
+        config.output_dir.mkdir(parents=True, exist_ok=True)
+
+        typer.echo("\n" + "=" * 60)
+        typer.echo("[ROCKET] Starting Adaptive Pipeline")
+        typer.echo("=" * 60)
+        typer.echo(f"  Project: {project_name}")
+        typer.echo(f"  Validation: {'enabled' if enable_validation else 'disabled'}")
+        typer.echo(f"  Correction: {'enabled' if enable_correction else 'disabled'}")
+        typer.echo("=" * 60 + "\n")
+
+        # Run adaptive pipeline
+        logger.info(f"Starting adaptive pipeline for: {project_name}")
+
+        design, devplan, handoff, complexity_profile = asyncio.run(
+            orchestrator.run_adaptive_pipeline(
+                project_name=project_name,
+                languages=languages_list,
+                requirements=requirements,
+                interview_data=interview_data,
+                frameworks=frameworks_list,
+                apis=apis_list,
+                output_dir=str(config.output_dir),
+                save_artifacts=True,
+                enable_validation=enable_validation,
+                enable_correction=enable_correction,
+            )
+        )
+
+        # Display complexity profile summary
+        if complexity_profile:
+            typer.echo("\n" + "=" * 60)
+            typer.echo("[CHART] Complexity Analysis Results")
+            typer.echo("=" * 60)
+            typer.echo(f"  Project Type: {complexity_profile.project_type_bucket}")
+            typer.echo(f"  Technical Complexity: {complexity_profile.technical_complexity_bucket}")
+            typer.echo(f"  Integration Level: {complexity_profile.integration_bucket}")
+            typer.echo(f"  Team Size: {complexity_profile.team_size_bucket}")
+            typer.echo(f"  Complexity Score: {complexity_profile.score:.2f}")
+            typer.echo(f"  Depth Level: {complexity_profile.depth_level}")
+            typer.echo(f"  Estimated Phases: {complexity_profile.estimated_phase_count}")
+            typer.echo("=" * 60 + "\n")
+
+        logger.info("Adaptive pipeline completed successfully")
+        typer.echo("\n[OK] Adaptive pipeline completed successfully!\n")
+
+    except typer.Exit:
+        raise
+    except KeyboardInterrupt:
+        typer.echo("\n\n[WARN] Pipeline interrupted by user", err=True, color=True)
+        logger.warning("Pipeline interrupted by user")
+        raise typer.Exit(code=130)
+    except Exception as e:
+        typer.echo(f"\n[ERROR] Error: {str(e)}", err=True, color=True)
+        logger.error(f"Error running adaptive pipeline: {e}", exc_info=True)
+        if debug:
+            typer.echo("\nDebug traceback:", err=True)
+            typer.echo(traceback.format_exc(), err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def init_repo(
     path: Annotated[
         Optional[str],
