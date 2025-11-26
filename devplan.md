@@ -1,10 +1,83 @@
-# Create the complete devplan structure
-devplan_content = """# Devussy Adaptive Complexity Pipeline - Complete DevPlan
+# Devussy Adaptive Complexity Pipeline - Complete DevPlan
 
 **Project:** Devussy Adaptive Complexity Overhaul  
 **Version:** 2.0  
 **Generated:** 2025-11-25  
 **Scope:** Transform Devussy from static to adaptive complexity-driven pipeline
+
+---
+
+## 🔗 CRITICAL: Anchor-Based Context Management
+
+> **⚠️ ESSENTIAL RULE FOR ALL AGENTS:** This project uses **stable HTML comment anchors** to enable efficient context management. Agents MUST read ONLY the sections bounded by these anchors, NOT the entire file. This is critical for:
+> - Keeping context under 50k tokens
+> - Enabling circular development handoffs
+> - Preventing token overflow and hallucinations
+> - Allowing safe, deterministic file updates
+
+### Required Anchors (All files must preserve these)
+
+**devplan.md anchors:**
+```markdown
+<!-- PROGRESS_LOG_START -->
+... progress entries ...
+<!-- PROGRESS_LOG_END -->
+
+<!-- NEXT_TASK_GROUP_START -->
+... current 3-5 tasks to execute ...
+<!-- NEXT_TASK_GROUP_END -->
+```
+
+**phase*.md anchors:**
+```markdown
+<!-- PHASE_TASKS_START -->
+... phase-specific tasks ...
+<!-- PHASE_TASKS_END -->
+
+<!-- PHASE_PROGRESS_START -->
+... outcomes and blockers ...
+<!-- PHASE_PROGRESS_END -->
+```
+
+**handoff_prompt.md anchors:**
+```markdown
+<!-- QUICK_STATUS_START -->
+... current status snapshot ...
+<!-- QUICK_STATUS_END -->
+
+<!-- HANDOFF_NOTES_START -->
+... handoff-specific notes ...
+<!-- HANDOFF_NOTES_END -->
+```
+
+### How Agents Should Use Anchors
+
+1. **Reading Context:**
+   ```
+   ❌ WRONG: Read entire devplan.md (3000+ lines)
+   ✅ RIGHT: Read only between <!-- NEXT_TASK_GROUP_START --> and <!-- NEXT_TASK_GROUP_END --> (~100 tokens)
+   ```
+
+2. **Updating Files:**
+   - Use `safe_write_devplan()` in `src/file_manager.py` - it validates anchors exist before writing
+   - NEVER delete or modify anchor comments themselves
+   - Content BETWEEN anchors can be replaced freely
+
+3. **File Validation:**
+   - `file_manager.py:_validate_devplan_content()` enforces anchor presence
+   - Files without required anchors will be written to `.tmp` instead of overwriting
+   - Always check for validation failures in logs
+
+### Token Budget Reference
+
+| File | Section | Read Frequency | ~Tokens |
+|------|---------|----------------|---------|
+| devplan.md | NEXT_TASK_GROUP | Every turn | ~100 |
+| devplan.md | PROGRESS_LOG | If needed | ~100 |
+| phase*.md | PHASE_TASKS | When working on phase | ~80 |
+| handoff.md | Progress Log | Start of session | ~200 |
+
+**Target: Stay under 500 tokens per turn by reading ONLY anchored sections.**
 
 ---
 
@@ -1806,6 +1879,54 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 - Reduced iteration time from feedback
 - Improved first-time implementation success rate
 - Developer confidence in generated plans
+
+---
+
+## 📋 Project Dashboard
+
+### 🚀 Phase Overview
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | 🔄 In Progress | Backend Workflow Overhaul |
+| Phase 2 | ⏳ Pending | Frontend/UI Updates |
+
+<!-- PROGRESS_LOG_START -->
+### Progress Log
+
+**2025-11-25 - Anchor Documentation Agent**
+- Added comprehensive anchor-based context management documentation to:
+  - `devplan.md` - New critical section at top
+  - `handoff.md` - New critical section at top  
+  - `AGENTS.md` - New critical section at top (moved to priority position)
+  - `README.md` - New "Documentation for Agents" section
+  - `START_HERE.md` - Added anchor warning
+  - `HANDOFF_FOR_NEXT_AGENT.md` - Added anchor warning
+- All entry-point documents now reference anchor system
+
+**2025-11-25 - Template & Interview Integration Agent**
+- Implemented `follow_up` mode in `src/llm_interview.py`
+- Created all template variants in `templates/`
+- Wired templates into generators
+
+**2025-11-25 - Adaptive Generators & Harness Agent**
+- Implemented `design_generator.py` and `devplan_generator.py`
+- Created pipeline test harness
+
+**2025-11-25 - Backend Mock Implementation Agent**
+- Implemented complexity analyzer, interview pipeline
+- Implemented validation and correction loop modules
+<!-- PROGRESS_LOG_END -->
+
+<!-- NEXT_TASK_GROUP_START -->
+### Next Task Group (Current Sprint)
+
+1. **Refactor main pipeline** - Integrate complexity → validation → correction flow into `src/pipeline/main_pipeline.py`
+2. **Extend checkpoint system** - Add complexity_profile, validation_report, correction_history to checkpoints
+3. **Add streaming prefixes** - Implement [complexity], [validation], [correction] prefixes in `src/streaming.py`
+4. **Create JSON schemas** - `schemas/complexity_profile.json`, `validation_report.json`, etc.
+5. **Add unit tests** - Test follow-up mode, template selection, streaming updates
+<!-- NEXT_TASK_GROUP_END -->
 
 ---
 

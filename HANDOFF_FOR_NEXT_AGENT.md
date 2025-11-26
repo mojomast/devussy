@@ -1,6 +1,17 @@
 # Handoff for Next Agent
 
-## 🚀 Status Update
+## � CRITICAL: Anchor-Based Context Management
+
+> **⚠️ READ THIS FIRST** - This project uses **stable HTML comment anchors** for efficient context management.
+
+See `AGENTS.md` for the complete anchor reference. Key points:
+- Read ONLY anchored sections (e.g., `<!-- NEXT_TASK_GROUP_START -->` to `<!-- NEXT_TASK_GROUP_END -->`), not entire files
+- Use `safe_write_devplan()` from `src/file_manager.py` for writes - it validates anchors and creates backups
+- Target under 500 tokens per turn by reading only what's needed
+
+---
+
+## �🚀 Status Update
 **Current Version**: 0.3.0 (Commit Stage)
 **Branch**: `0.3`
 

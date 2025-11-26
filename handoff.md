@@ -7,6 +7,98 @@
 
 ---
 
+## 🔗 CRITICAL: Anchor-Based Context Management
+
+> **⚠️ THIS IS THE MOST IMPORTANT SECTION OF THIS DOCUMENT.**
+> 
+> Devussy uses **stable HTML comment anchors** to enable efficient circular development. 
+> **All agents MUST use anchors** to minimize context loading and enable safe file updates.
+
+### Why Anchors Matter
+
+1. **Token Economy:** Reading full files wastes context budget. Anchored sections are ~100 tokens vs 3000+ for full files.
+2. **Safe Updates:** `file_manager.py` validates anchor presence before writes - prevents accidental data loss.
+3. **Circular Handoffs:** Each agent reads only what's needed, updates only the anchored sections, passes baton cleanly.
+4. **Deterministic Updates:** Anchors provide stable targets for regex-based updates.
+
+### Required Anchor Patterns
+
+All devplan/phase/handoff files MUST preserve these HTML comment anchors:
+
+```markdown
+<!-- SECTION_NAME_START -->
+content that can be safely replaced
+<!-- SECTION_NAME_END -->
+```
+
+**Core Anchors by File:**
+
+| File | Anchor | Purpose |
+|------|--------|---------|
+| devplan.md | `PROGRESS_LOG_START/END` | Track completed work |
+| devplan.md | `NEXT_TASK_GROUP_START/END` | Current tasks to execute |
+| phase*.md | `PHASE_TASKS_START/END` | Phase-specific tasks |
+| phase*.md | `PHASE_PROGRESS_START/END` | Outcomes and blockers |
+| handoff_prompt.md | `QUICK_STATUS_START/END` | Status snapshot |
+| handoff_prompt.md | `HANDOFF_NOTES_START/END` | Agent handoff notes |
+
+### How to Use Anchors (Required Reading for All Agents)
+
+**Reading Context:**
+```
+# CORRECT - Read only anchored section (~100 tokens)
+Read devplan.md lines between <!-- NEXT_TASK_GROUP_START --> and <!-- NEXT_TASK_GROUP_END -->
+
+# WRONG - Loads entire file (~3000 tokens)
+Read devplan.md
+```
+
+**Updating Files:**
+```python
+# The safe_write_devplan() function in src/file_manager.py:
+# 1. Creates .bak backup before any write
+# 2. Validates required anchors exist in new content
+# 3. Refuses to overwrite if anchors missing (writes to .tmp instead)
+
+from src.file_manager import FileManager
+fm = FileManager()
+success, path = fm.safe_write_devplan("docs/devplan.md", new_content)
+if not success:
+    # Content was written to .tmp - anchors were missing!
+    logger.error(f"Devplan write failed - check {path}")
+```
+
+**Adding New Anchors:**
+When creating new document types, follow the pattern:
+```markdown
+<!-- MY_SECTION_START -->
+This content can be replaced by agents
+<!-- MY_SECTION_END -->
+```
+
+### Token Budget Per Turn
+
+| File | Section | ~Tokens | When to Read |
+|------|---------|---------|--------------|
+| handoff.md | Progress Log | ~200 | Start of session |
+| devplan.md | NEXT_TASK_GROUP | ~100 | Every turn |
+| devplan.md | PROGRESS_LOG | ~100 | If needed |
+| phase*.md | PHASE_TASKS | ~80 | When working on phase |
+
+**Target: Stay under 500 tokens per turn by reading ONLY anchored sections.**
+
+### Validation Enforcement
+
+The `file_manager.py:_validate_devplan_content()` function enforces these invariants:
+- Must contain `# Development Plan` or `## 📋 Project Dashboard` header
+- Must contain `### 🚀 Phase Overview` with a table
+- Must contain `<!-- PROGRESS_LOG_START -->` anchor
+- Must contain `<!-- NEXT_TASK_GROUP_START -->` anchor
+
+Files failing validation are written to `.tmp` and the original is preserved.
+
+---
+
 ## 🎯 Mission Statement
 
 Transform Devussy into an adaptive, complexity-aware development planning pipeline that dynamically scales output based on project complexity, validates designs through multi-stage checks, and prevents over-engineering through intelligent iteration.
