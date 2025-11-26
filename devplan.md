@@ -1955,6 +1955,9 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 - Added streaming prefixes ([complexity], [validation], [correction])
 - Created JSON schemas in `schemas/` directory
 - Added 16 new tests (6 unit + 10 integration)
+- Wired ComplexityAssessment into DesignView with auto-analysis
+- Created ValidationReport.tsx component with issue cards and sanity review
+- Created CorrectionTimeline.tsx component with visual iteration history
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
@@ -1965,9 +1968,12 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 3. ✅ **Increase test coverage** - DONE: 87% coverage achieved
 4. ✅ **Start Frontend Phase 2** - DONE: `ComplexityAssessment.tsx` component created
 5. ✅ **Wire frontend to adaptive endpoints** - DONE: FastAPI SSE endpoints added
-6. **Wire ComplexityAssessment into pipeline flow** - Add to DesignView or create dedicated step
-7. **Create ValidationReport component** - Display validation issues and auto-correction status
-8. **Create CorrectionTimeline component** - Show iteration history from correction loop
+6. ✅ **Wire ComplexityAssessment into pipeline flow** - DONE: Integrated into DesignView
+7. ✅ **Create ValidationReport component** - DONE: Full validation display with LLM sanity review
+8. ✅ **Create CorrectionTimeline component** - DONE: Visual iteration history with progress
+9. **Wire ValidationReport into design approval flow** - Show validation before approve
+10. **Wire CorrectionTimeline into correction loop UI** - Real-time iteration updates
+11. **Update frontend state management** - Add complexity/validation stages to pipeline state
 <!-- NEXT_TASK_GROUP_END -->
 
 ---

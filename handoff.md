@@ -551,7 +551,10 @@ devussy-web/
 ### Phase 2 Checklist
 
 **Milestone 5: Core UI Components**
-- [ ] `ComplexityAssessment.tsx` implemented
+- [x] `ComplexityAssessment.tsx` implemented
+- [x] `ValidationReport.tsx` implemented  
+- [x] `CorrectionTimeline.tsx` implemented
+- [x] Wired into DesignView with auto-analysis
 
 ---
 
@@ -879,11 +882,69 @@ curl -X POST http://localhost:8000/api/adaptive/complexity \
 curl "http://localhost:8000/api/adaptive/profile?project_type=web_app&requirements=REST+API&team_size=3"
 ```
 
+---
+
+### Milestone 7: Frontend Component Wiring (2025-11-26) ✅
+
+**What was done:**
+
+1. **Wired ComplexityAssessment into DesignView** (`devussy-web/src/components/pipeline/DesignView.tsx`):
+   - Added `enableAdaptive` prop (default: true) to enable/disable complexity analysis
+   - Auto-analyzes complexity on component mount before design generation
+   - Shows ComplexityAssessment panel at top of design view with collapsible UI
+   - ComplexityBadge shown in header when panel collapsed
+   - Complexity profile passed through to design data on approval
+   - Helper functions to infer project type and integrations from requirements text
+
+2. **Created ValidationReport component** (`devussy-web/src/components/pipeline/ValidationReport.tsx`):
+   - Full validation issue display with severity indicators (error/warning/info)
+   - Check-specific icons (consistency, completeness, scope alignment, hallucination, over-engineering)
+   - Auto-correctable issue badges with wrench icon
+   - LLM sanity review section with confidence meter and suggestions
+   - ValidationBadge compact variant for embedding
+   - onRequestCorrection callback for triggering auto-correction
+
+3. **Created CorrectionTimeline component** (`devussy-web/src/components/pipeline/CorrectionTimeline.tsx`):
+   - Visual timeline with iteration nodes and connector lines
+   - Real-time progress bar showing iterations vs max
+   - Per-iteration details: issues addressed, corrections applied, validation result
+   - Duration and confidence display per iteration
+   - Status indicators (success, max iterations reached, manual review required)
+   - Summary stats: total iterations, corrections count, final confidence
+   - CorrectionBadge compact variant for embedding
+
+**Files created/modified:**
+- `devussy-web/src/components/pipeline/DesignView.tsx` - Modified, added complexity integration (~100 lines)
+- `devussy-web/src/components/pipeline/ValidationReport.tsx` - New, ~340 lines
+- `devussy-web/src/components/pipeline/CorrectionTimeline.tsx` - New, ~320 lines
+
+**Component API:**
+```tsx
+// ComplexityAssessment (already existed)
+<ComplexityAssessment profile={complexityProfile} showDetails={true} onRefresh={() => {}} />
+
+// ValidationReport
+<ValidationReport 
+  report={validationReport} 
+  sanityReview={sanityReviewResult}
+  onRequestCorrection={() => triggerCorrection()}
+  showDetails={true}
+/>
+
+// CorrectionTimeline
+<CorrectionTimeline 
+  history={correctionHistory}
+  isRunning={isCorrectingDesign}
+  currentIteration={currentIteration}
+  showDetails={true}
+/>
+```
+
 **Next Steps (Priority Order):**
-1. **Wire ComplexityAssessment into pipeline flow** - Add to DesignView or create dedicated step
-2. **Create ValidationReport component** - Display validation issues and auto-correction status
-3. **Create CorrectionTimeline component** - Show iteration history from correction loop
-4. **Update frontend state management** - Add complexity/validation stages to pipeline state
+1. **Wire ValidationReport into design approval flow** - Show validation before approve
+2. **Wire CorrectionTimeline into correction loop UI** - Real-time iteration updates
+3. **Update frontend state management** - Add complexity/validation stages to pipeline state
+4. **Add frontend tests** - React Testing Library for new components
 
 ---
 
