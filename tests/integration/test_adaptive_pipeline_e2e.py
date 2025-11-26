@@ -607,30 +607,141 @@ class TestAdaptivePipelineRealLLM:
         if not os.getenv("OPENAI_API_KEY") and not os.getenv("REQUESTY_API_KEY"):
             pytest.skip("No API key available for real LLM tests")
 
+    @pytest.fixture
+    def real_llm_client(self):
+        """Create a real LLM client from config."""
+        from src.config import load_config
+        from src.clients.factory import create_llm_client
+        
+        # Temporarily override any invalid provider in environment
+        original_provider = os.environ.get("LLM_PROVIDER")
+        if original_provider and original_provider not in ["openai", "generic", "aether", "agentrouter", "requesty"]:
+            os.environ["LLM_PROVIDER"] = "requesty"
+        
+        try:
+            config = load_config()
+            return create_llm_client(config)
+        finally:
+            # Restore original value
+            if original_provider:
+                os.environ["LLM_PROVIDER"] = original_provider
+            elif "LLM_PROVIDER" in os.environ:
+                del os.environ["LLM_PROVIDER"]
+
+    @pytest.fixture
+    def real_concurrency_manager(self):
+        """Create a real concurrency manager."""
+        from src.config import load_config
+        
+        # Temporarily override any invalid provider in environment
+        original_provider = os.environ.get("LLM_PROVIDER")
+        if original_provider and original_provider not in ["openai", "generic", "aether", "agentrouter", "requesty"]:
+            os.environ["LLM_PROVIDER"] = "requesty"
+        
+        try:
+            config = load_config()
+            return ConcurrencyManager(config)
+        finally:
+            if original_provider:
+                os.environ["LLM_PROVIDER"] = original_provider
+            elif "LLM_PROVIDER" in os.environ:
+                del os.environ["LLM_PROVIDER"]
+
     @pytest.mark.asyncio
     async def test_real_minimal_pipeline(
         self,
         skip_if_no_api_key: None,
+        real_llm_client,
+        real_concurrency_manager,
         tmp_path: Path,
     ) -> None:
         """Run actual pipeline with minimal complexity project."""
-        # This test would use real LLM - implementation depends on config setup
-        pytest.skip("Real LLM test - uncomment to run manually")
+        from src.pipeline.compose import PipelineOrchestrator
+        from src.pipeline.design_generator import AdaptiveDesignGenerator
+        
+        interview_data = {
+            "project_name": "quick-note",
+            "project_type": "cli_tool",
+            "requirements": "CLI tool to quickly jot down notes to a local file",
+            "languages": ["Python"],
+            "frameworks": [],
+            "apis": "",
+            "team_size": "solo",
+        }
+        
+        orchestrator = PipelineOrchestrator(
+            llm_client=real_llm_client,
+            concurrency_manager=real_concurrency_manager,
+        )
+        
+        # Run complexity analysis
+        profile = orchestrator.analyze_complexity(interview_data)
+        
+        assert profile.depth_level == "minimal"
+        assert profile.score <= 4.0
+        assert profile.estimated_phase_count <= 4
 
     @pytest.mark.asyncio
     async def test_real_standard_pipeline(
         self,
         skip_if_no_api_key: None,
+        real_llm_client,
+        real_concurrency_manager,
         tmp_path: Path,
     ) -> None:
         """Run actual pipeline with standard complexity project."""
-        pytest.skip("Real LLM test - uncomment to run manually")
+        from src.pipeline.compose import PipelineOrchestrator
+        
+        interview_data = {
+            "project_name": "task-api",
+            "project_type": "api",
+            "requirements": "REST API for task management with authentication and database",
+            "languages": ["Python"],
+            "frameworks": ["FastAPI", "SQLAlchemy"],
+            "apis": ["auth0"],
+            "team_size": "3",
+        }
+        
+        orchestrator = PipelineOrchestrator(
+            llm_client=real_llm_client,
+            concurrency_manager=real_concurrency_manager,
+        )
+        
+        profile = orchestrator.analyze_complexity(interview_data)
+        
+        assert profile.depth_level in ["standard", "detailed"]
+        assert 4.0 < profile.score <= 12.0
+        assert 5 <= profile.estimated_phase_count <= 7
 
     @pytest.mark.asyncio
     async def test_real_detailed_pipeline(
         self,
         skip_if_no_api_key: None,
+        real_llm_client,
+        real_concurrency_manager,
         tmp_path: Path,
     ) -> None:
         """Run actual pipeline with detailed complexity project."""
-        pytest.skip("Real LLM test - uncomment to run manually")
+        from src.pipeline.compose import PipelineOrchestrator
+        
+        interview_data = {
+            "project_name": "enterprise-platform",
+            "project_type": "saas",
+            "requirements": "Multi-tenant SaaS platform with real-time collaboration, ML recommendations, and multi-region deployment",
+            "languages": ["TypeScript", "Python"],
+            "frameworks": ["Next.js", "FastAPI", "PyTorch"],
+            "apis": ["stripe", "sendgrid", "auth0", "datadog", "cloudflare", "openai"],
+            "team_size": "15",
+        }
+        
+        orchestrator = PipelineOrchestrator(
+            llm_client=real_llm_client,
+            concurrency_manager=real_concurrency_manager,
+        )
+        
+        profile = orchestrator.analyze_complexity(interview_data)
+        
+        assert profile.depth_level == "detailed"
+        assert profile.score >= 8.0
+        assert profile.estimated_phase_count >= 7
+

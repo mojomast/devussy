@@ -29,6 +29,10 @@ from src.pipeline.basic_devplan import BasicDevPlanGenerator
 from src.pipeline.detailed_devplan import DetailedDevPlanGenerator
 from src.pipeline.handoff_prompt import HandoffPromptGenerator
 from src.pipeline.hivemind import HiveMindManager
+from src.pipeline.design_validator import DesignValidator
+from src.pipeline.design_correction_loop import DesignCorrectionLoop
+from src.pipeline.llm_sanity_reviewer import LLMSanityReviewer
+from src.interview.complexity_analyzer import ComplexityAnalyzer, ComplexityProfile
 from src.models import ProjectDesign, DevPlan
 from src.concurrency import ConcurrencyManager
 import os
@@ -765,5 +769,247 @@ async def get_models():
         return JSONResponse(status_code=200, content={"models": sanitized})
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Adaptive Pipeline Endpoints
+# =============================================================================
+
+
+@app.post("/api/adaptive/complexity")
+async def complexity_analysis(request: Request):
+    """
+    Analyze project complexity from interview data.
+    Returns SSE stream with complexity profile.
+    
+    Input:
+    {
+        "interview_data": {
+            "project_type": "...",
+            "requirements": "...",
+            "team_size": "...",
+            "apis": [...],
+            "frameworks": "..."
+        }
+    }
+    """
+    data = await request.json()
+    interview_data = data.get('interview_data', {})
+
+    async def event_generator():
+        try:
+            # Send start event
+            yield f"data: {json.dumps({'type': 'analyzing', 'message': 'Starting complexity analysis...'})}\n\n"
+
+            # Run complexity analysis
+            analyzer = ComplexityAnalyzer()
+            profile = analyzer.analyze(interview_data)
+
+            # Send progress update
+            yield f"data: {json.dumps({'type': 'progress', 'message': f'Computed score: {profile.score:.1f}, depth: {profile.depth_level}'})}\n\n"
+
+            # Prepare result
+            result = {
+                "project_type_bucket": profile.project_type_bucket,
+                "technical_complexity_bucket": profile.technical_complexity_bucket,
+                "integration_bucket": profile.integration_bucket,
+                "team_size_bucket": profile.team_size_bucket,
+                "score": profile.score,
+                "estimated_phase_count": profile.estimated_phase_count,
+                "depth_level": profile.depth_level,
+                "confidence": profile.confidence
+            }
+
+            # Check if follow-up questions are needed (low confidence)
+            follow_up_questions = []
+            if profile.confidence < 0.7:
+                follow_up_questions = _generate_follow_up_questions(profile, interview_data)
+
+            # Send final result
+            yield f"data: {json.dumps({'type': 'result', 'profile': result, 'follow_up_questions': follow_up_questions, 'needs_clarification': len(follow_up_questions) > 0})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'success': True})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+def _generate_follow_up_questions(profile: ComplexityProfile, interview_data: dict) -> list:
+    """Generate follow-up questions based on low-confidence areas."""
+    questions = []
+
+    if not interview_data.get('team_size'):
+        questions.append("What is the expected team size for this project?")
+
+    if not interview_data.get('apis') and profile.score > 5:
+        questions.append("Will this project integrate with any external APIs or services?")
+
+    if profile.technical_complexity_bucket == "simple_crud" and profile.score > 7:
+        questions.append("Are there any advanced features like real-time updates, ML, or multi-region deployment?")
+
+    if not interview_data.get('frameworks'):
+        questions.append("What frameworks or libraries do you plan to use?")
+
+    return questions[:3]
+
+
+@app.post("/api/adaptive/validate")
+async def design_validation(request: Request):
+    """
+    Validate a design document against complexity profile.
+    Returns SSE stream with validation report.
+    
+    Input:
+    {
+        "design_content": "...",
+        "complexity_profile": {...}
+    }
+    """
+    data = await request.json()
+    design_content = data.get('design_content', '')
+    profile_data = data.get('complexity_profile', {})
+
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps({'type': 'validating', 'message': 'Starting design validation...'})}\n\n"
+
+            # Build complexity profile from data
+            profile = ComplexityProfile(
+                project_type_bucket=profile_data.get('project_type_bucket', 'web_app'),
+                technical_complexity_bucket=profile_data.get('technical_complexity_bucket', 'simple_crud'),
+                integration_bucket=profile_data.get('integration_bucket', 'standalone'),
+                team_size_bucket=profile_data.get('team_size_bucket', 'solo'),
+                score=profile_data.get('score', 5.0),
+                estimated_phase_count=profile_data.get('estimated_phase_count', 5),
+                depth_level=profile_data.get('depth_level', 'standard'),
+                confidence=profile_data.get('confidence', 0.8)
+            )
+
+            # Run validation
+            validator = DesignValidator()
+            report = validator.validate(design_content, complexity_profile=profile)
+
+            # Send individual check results
+            for check_name, passed in report.checks.items():
+                yield f"data: {json.dumps({'type': 'check', 'check': check_name, 'passed': passed})}\n\n"
+
+            # Build issues list
+            issues = [
+                {
+                    "code": issue.code,
+                    "message": issue.message,
+                    "auto_correctable": issue.auto_correctable
+                }
+                for issue in report.issues
+            ]
+
+            result = {
+                "is_valid": report.is_valid,
+                "auto_correctable": report.auto_correctable,
+                "checks": report.checks,
+                "issues": issues
+            }
+
+            # Run LLM sanity review if available
+            try:
+                reviewer = LLMSanityReviewer()
+                review_result = reviewer.review(design_content, report)
+                result["review"] = {
+                    "confidence": review_result.confidence,
+                    "risks": review_result.risks,
+                    "notes": review_result.notes
+                }
+            except Exception as review_error:
+                print(f"LLM review skipped: {review_error}")
+
+            yield f"data: {json.dumps({'type': 'result', **result})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'success': True})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.post("/api/adaptive/correct")
+async def design_correction(request: Request):
+    """
+    Run the design correction loop.
+    Returns SSE stream with corrected design.
+    
+    Input:
+    {
+        "design_content": "...",
+        "max_iterations": 3
+    }
+    """
+    data = await request.json()
+    design_content = data.get('design_content', '')
+    max_iterations = data.get('max_iterations', 3)
+
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps({'type': 'correcting', 'message': 'Starting design correction loop...', 'max_iterations': max_iterations})}\n\n"
+
+            # Create and run correction loop
+            correction_loop = DesignCorrectionLoop(max_iterations=max_iterations)
+            result = await correction_loop.run(design_content)
+
+            # Send result
+            history = [
+                {
+                    "iteration": h.iteration,
+                    "changes_made": h.changes_made,
+                    "issues_resolved": h.issues_resolved
+                }
+                for h in result.history
+            ]
+
+            yield f"data: {json.dumps({'type': 'result', 'final_design': result.final_design, 'iterations': result.iterations, 'converged': result.converged, 'history': history})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'success': True})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.get("/api/adaptive/profile")
+async def get_complexity_profile(request: Request):
+    """
+    Synchronous endpoint to get complexity profile (non-streaming).
+    Useful for quick lookups or when SSE is not needed.
+    
+    Query params: project_type, requirements, team_size, apis, frameworks
+    """
+    params = dict(request.query_params)
+    
+    interview_data = {
+        "project_type": params.get("project_type", ""),
+        "requirements": params.get("requirements", ""),
+        "team_size": params.get("team_size", ""),
+        "apis": params.get("apis", "").split(",") if params.get("apis") else [],
+        "frameworks": params.get("frameworks", ""),
+    }
+
+    try:
+        analyzer = ComplexityAnalyzer()
+        profile = analyzer.analyze(interview_data)
+
+        result = {
+            "project_type_bucket": profile.project_type_bucket,
+            "technical_complexity_bucket": profile.technical_complexity_bucket,
+            "integration_bucket": profile.integration_bucket,
+            "team_size_bucket": profile.team_size_bucket,
+            "score": profile.score,
+            "estimated_phase_count": profile.estimated_phase_count,
+            "depth_level": profile.depth_level,
+            "confidence": profile.confidence
+        }
+
+        return JSONResponse(status_code=200, content=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
