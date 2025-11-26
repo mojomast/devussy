@@ -1185,6 +1185,43 @@ python test_adaptive_llm_integration.py
 
 ---
 
+### 2025-11-26 - Phase Count & Content Richness Fixes ✅
+**Status:** Critical adaptive pipeline issues resolved!
+
+**Problems Fixed:**
+1. **Phase count always 4 regardless of complexity** - LLM was suggesting 1-4 phases; static rubric was not enforced
+2. **Phase files had minimal/stub content** - Test script used mock phases instead of real devplan generators
+
+**Root Cause Analysis:**
+- `complexity_analyzer.py:_parse_llm_response()` was trusting LLM's `estimated_phase_count` suggestion
+- `compose.py:run_adaptive_pipeline()` wasn't setting `project_design.estimated_phases` before devplan generation
+- `run_adaptive_pipeline_test.py` used hardcoded mock phases instead of `BasicDevPlanGenerator` + `DetailedDevPlanGenerator`
+
+**Changes Made:**
+
+| File | Change |
+|------|--------|
+| `src/interview/complexity_analyzer.py` | Modified `_parse_llm_response()` to enforce static rubric via `estimate_phase_count()` instead of trusting LLM suggestion; logs when LLM suggests different count |
+| `src/pipeline/compose.py` | Added `project_design.estimated_phases = complexity_profile.estimated_phase_count` and `project_design.complexity = complexity_profile.depth_level.capitalize()` before devplan generation |
+| `run_adaptive_pipeline_test.py` | Replaced mock devplan with real `BasicDevPlanGenerator` + `DetailedDevPlanGenerator` (~100 lines changed) |
+
+**Verification:**
+- Score 15.0 → 10 phases (LLM suggested 4, rubric enforced 10)
+- Phase files now have 8-10 detailed steps with sub-bullets
+- Each step includes CLI commands, file paths, git commits
+- All 18 pytest tests passing
+
+**Test Commands:**
+```bash
+# Run adaptive pipeline with rich output
+python run_adaptive_pipeline_test.py
+
+# Run pytest suite
+pytest tests/integration/test_adaptive_pipeline_e2e.py -v
+```
+
+---
+
 ### For Frontend Work
 
 **Reuse existing:**

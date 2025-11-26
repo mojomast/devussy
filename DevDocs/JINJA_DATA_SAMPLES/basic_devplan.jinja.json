@@ -1,32 +1,37 @@
 {
   "project_design": {
-    "project_name": "test-project",
+    "project_name": "TaskFlow API",
     "objectives": [
-      "Build web application",
-      "Create API"
+      "Build a scalable task management API",
+      "Implement secure user authentication",
+      "Support real-time notifications",
+      "Achieve high test coverage"
     ],
     "tech_stack": [
-      "Python",
       "FastAPI",
+      "SQLAlchemy",
+      "Alembic",
+      "Redis"
+    ],
+    "architecture_overview": "# TaskFlow API - Project Design\n\n## Overview\nTaskFlow API is a task management REST API built with FastAPI and PostgreSQL.\n\n## Architecture\n\n### System Components\n- **API Layer**: FastAPI with async endpoints\n- **Database**: PostgreSQL with SQLAlchemy ORM\n- **Cache**: Redis for session and frequently accessed data\n- **Auth**: JWT-based authentication with refresh tokens\n- **Notifications**: WebSocket server for real-time updates\n\n### Tech Stack\n- Python 3.11+\n- FastAPI 0.100+\n- SQLAlchemy 2.0\n- Alembic for migrations\n- Redis for caching\n- Pydantic for validation\n\n## Database Schema\n\n### Users Table\n- id (UUID, PK)\n- email (VARCHAR, unique)\n- password_hash (VARCHAR)\n- created_at (TIMESTAMP)\n- updated_at (TIMESTAMP)\n\n### Projects Table\n- id (UUID, PK)\n- name (VARCHAR)\n- owner_id (FK -> Users)\n- created_at (TIMESTAMP)\n\n### Tasks Table\n- id (UUID, PK)\n- title (VARCHAR)\n- description (TEXT)\n- status (ENUM: pending, in_progress, completed)\n- project_id (FK -> Projects)\n- assignee_id (FK -> Users)\n- due_date (TIMESTAMP)\n- created_at (TIMESTAMP)\n\n## API Endpoints\n\n### Authentication\n- POST /auth/register - Register new user\n- POST /auth/login - Login and get JWT\n- POST /auth/refresh - Refresh access token\n\n### Projects\n- GET /projects - List user's projects\n- POST /projects - Create project\n- GET /projects/{id} - Get project details\n- PUT /projects/{id} - Update project\n- DELETE /projects/{id} - Delete project\n\n### Tasks\n- GET /projects/{project_id}/tasks - List tasks\n- POST /projects/{project_id}/tasks - Create task\n- GET /tasks/{id} - Get task details\n- PUT /tasks/{id} - Update task\n- DELETE /tasks/{id} - Delete task\n\n## Testing Strategy\n\n### Unit Tests\n- Model validation tests\n- Service layer tests\n- Utility function tests\n\n### Integration Tests\n- API endpoint tests with TestClient\n- Database transaction tests\n- Authentication flow tests\n\n### E2E Tests\n- Full user journey tests\n- WebSocket notification tests\n\n## Security Considerations\n- JWT tokens with short expiry (15 min access, 7 day refresh)\n- Password hashing with bcrypt\n- Rate limiting per IP and per user\n- Input validation with Pydantic\n- SQL injection prevention via ORM\n",
+    "dependencies": [
+      "FastAPI",
+      "SQLAlchemy",
+      "Alembic",
+      "Redis",
       "PostgreSQL"
     ],
-    "architecture_overview": "Test architecture overview",
-    "dependencies": [
-      "requests",
-      "pydantic",
-      "uvicorn"
-    ],
     "challenges": [
-      "Performance optimization",
-      "Scalability"
+      "Real-time WebSocket scaling",
+      "Secure auth implementation"
     ],
     "mitigations": [
-      "Use caching",
-      "Load balancing"
+      "Use Redis pub/sub",
+      "Follow OWASP guidelines"
     ],
     "raw_llm_response": null,
-    "complexity": null,
-    "estimated_phases": null
+    "complexity": "Detailed",
+    "estimated_phases": 10
   },
   "task_group_size": 3,
   "detail_level": "normal"

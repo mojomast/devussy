@@ -1894,7 +1894,18 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 <!-- PROGRESS_LOG_START -->
 ### Progress Log
 
-**2025-11-26 - LLM Integration Complete (Current Session)**
+**2025-11-26 - Phase Count & Content Richness Fixes**
+- ✅ Fixed phase count always being 4 regardless of complexity:
+  - Modified `complexity_analyzer.py:_parse_llm_response()` to enforce static rubric
+  - LLM was suggesting 1-4 phases; now uses `estimate_phase_count()` rubric (score-based)
+  - Logs when LLM suggests different count for debugging
+- ✅ Fixed phase content being minimal/stub:
+  - Modified `compose.py:run_adaptive_pipeline()` to set `project_design.estimated_phases` and `project_design.complexity` from complexity profile before devplan generation
+  - Updated `run_adaptive_pipeline_test.py` to use real `BasicDevPlanGenerator` + `DetailedDevPlanGenerator` instead of mock phases
+- ✅ Verified: Score 15.0 → 10 phases (LLM suggested 4, rubric enforced 10)
+- ✅ Verified: Phase files now have 8-10 detailed steps with sub-bullets, CLI commands, file paths
+
+**2025-11-26 - LLM Integration Complete**
 - ✅ Wired real LLM calls to all 3 adaptive pipeline stages:
   1. `complexity_analyzer.py` - Added `LLMComplexityAnalyzer` class with `analyze_with_llm()` method
   2. `llm_sanity_reviewer.py` - Added `LLMSanityReviewerWithLLM` class with `review_with_llm()` method
@@ -2013,123 +2024,38 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
-### Next Task Group (Current Sprint): LLM Integration Complete ✅
+### Next Task Group (Current Sprint): Phase Count & Content Fixes Complete ✅
 
-**STATUS:** All adaptive pipeline stages complete and tested!
+**STATUS:** All adaptive pipeline issues resolved!
 
 **Completed in This Session:**
-- ✅ Fixed test failures (signature mismatch, dead imports)
-- ✅ All 23 pytest tests passing
-- ✅ Created pipeline test scripts with output artifacts
-- ✅ Generated comparison test outputs (clean vs corrections)
-- ✅ LLM integration verified with 4/4 E2E tests passing
+- ✅ Diagnosed root cause: LLM phase count not enforced by static rubric
+- ✅ Fixed `complexity_analyzer.py:_parse_llm_response()` to use `estimate_phase_count()` rubric
+- ✅ Fixed `compose.py` to wire `project_design.estimated_phases` from complexity profile
+- ✅ Updated `run_adaptive_pipeline_test.py` to use real devplan generators (not mocks)
+- ✅ Verified: Score 15 → 10 phases, each with 8-10 detailed steps
 
-**Test Output Artifacts:**
+**Key Changes:**
 
-| Folder | Project | Complexity | Validation | Files |
-|--------|---------|------------|------------|-------|
-| `test_output/adaptive_pipeline_results/` | TaskFlow API | 14/20 (standard) | ✅ Passed | 12 |
-| `test_output/adaptive_pipeline_with_corrections/` | CloudSync Enterprise | 18/20 (detailed) | ❌ → Fixed | 14 |
+| File | Change |
+|------|--------|
+| `src/interview/complexity_analyzer.py` | Enforce static rubric in `_parse_llm_response()` |
+| `src/pipeline/compose.py` | Set `project_design.estimated_phases` and `.complexity` from profile |
+| `run_adaptive_pipeline_test.py` | Use `BasicDevPlanGenerator` + `DetailedDevPlanGenerator` |
 
-**Quick Test Commands:**
+**Test Commands:**
 ```bash
-# Run clean pipeline test
+# Run adaptive pipeline with rich output
 python run_adaptive_pipeline_test.py
 
-# Run pipeline with corrections  
-python run_adaptive_pipeline_with_corrections.py
-
-# Run pytest suite (23 tests)
-.\.venv\Scripts\python.exe -m pytest tests/integration/test_adaptive_pipeline_e2e.py tests/integration/test_adaptive_pipeline_orchestrator.py -v
-
-# Run LLM integration tests (4 tests)
-python test_adaptive_llm_integration.py
+# Run pytest suite
+pytest tests/integration/test_adaptive_pipeline_e2e.py -v
 ```
 
 **Next Steps for Fresh Agent:**
-1. Review generated artifacts in `test_output/` folders
-2. Fine-tune correction loop prompts for better fix rate
-3. Add more validation rules for edge cases
-4. Add frontend E2E tests with Playwright
-<!-- NEXT_TASK_GROUP_END -->
-| `devussy-web/streaming_server/app.py` | Updated endpoints, fixed imports, added LLM client helper |
-
-**Next Steps for Fresh Agent:**
-
-1. **Test UI Integration**
-   - Start backend: `cd devussy-web/streaming_server && uvicorn app:app --port 8000`
-   - Start frontend: `cd devussy-web && npm run dev`
-   - Test adaptive pipeline flow through web UI
-
-2. **Verify SSE Streaming**
-   - Check that complexity analysis streams progress events
-   - Check that validation shows LLM review results
-   - Check that correction loop streams iteration updates
-
-3. **Handle Edge Cases**
-   - LLM timeout handling
-   - JSON parsing failures (fallback to static analysis)
-   - Rate limiting from requesty provider
-
-**Test Command:**
-```bash
-python test_adaptive_llm_integration.py  # Should show 4/4 passing
-```
-
-**Provider Config:** Uses requesty provider with openai/gpt-4.1-nano model
-<!-- NEXT_TASK_GROUP_END -->
-
-**Hardened Prompts Location:** `adaptive_llm_implementation/`
-- `PHASE_1_HARDENED.md` - Complexity analysis prompt (JSON schema)
-- `PHASE_2_HARDENED.md` - Sanity review prompt (JSON schema)
-- `PHASE_3_HARDENED.md` - Design correction prompt (JSON schema)
-
-**Files to Integrate:**
-
-| # | File | Current State | Hardened Prompt | Integration Task |
-|---|------|---------------|-----------------|------------------|
-| 1 | `src/interview/complexity_analyzer.py` | Static keyword matching | PHASE_1_HARDENED.md | Add LLM call with JSON parsing |
-| 2 | `src/pipeline/llm_sanity_reviewer.py` | Returns mock data | PHASE_2_HARDENED.md | Add LLM call with JSON parsing |
-| 3 | `src/pipeline/design_correction_loop.py` | Appends fake footer | PHASE_3_HARDENED.md | Add LLM call with JSON parsing |
-
-**Implementation Steps:**
-
-1. **Phase 1 - Complexity Analyzer LLM Integration**
-   - Add `async analyze_with_llm(interview_data)` method
-   - Use PHASE_1_HARDENED prompt with interview JSON as context
-   - Parse JSON response into `ComplexityProfile` dataclass
-   - Keep static `analyze()` as fallback for tests
-
-2. **Phase 2 - Sanity Reviewer LLM Integration**
-   - Add `async review_with_llm(design_text, validation_report)` method
-   - Use PHASE_2_HARDENED prompt with design + validation context
-   - Parse JSON response into `LLMSanityReviewResult` dataclass
-   - Keep mock `review()` as fallback for tests
-
-3. **Phase 3 - Design Correction LLM Integration**
-   - Add `async correct_with_llm(design_text, issues)` method
-   - Use PHASE_3_HARDENED prompt with design + issues context
-   - Parse JSON response (corrected_design + changes_made)
-   - Keep mock `_apply_corrections()` as fallback for tests
-
-4. **Wire to FastAPI endpoints**
-   - Update `/api/adaptive/complexity` to use LLM method
-   - Update `/api/adaptive/validate` to use LLM method
-   - Update `/api/adaptive/correct` to use LLM method
-
-**Test Locally:**
-```bash
-# Start backend
-cd devussy-web/streaming_server && python -m uvicorn app:app --reload --port 8000
-
-# Start frontend
-cd devussy-web && npm run dev
-
-# Open browser to http://localhost:3000
-# Test adaptive pipeline flow through UI
-```
-
-**Provider Config:** Uses requesty/gpt-5-nano (from conftest.py)
+1. Run full E2E tests to confirm no regressions
+2. Test via web UI with various project complexities
+3. Consider adding more validation rules for edge cases
 <!-- NEXT_TASK_GROUP_END -->
 
 ---

@@ -328,7 +328,12 @@ class LLMComplexityAnalyzer:
             )
 
     def _parse_llm_response(self, response: str) -> LLMComplexityResult:
-        """Parse LLM JSON response into structured result."""
+        """Parse LLM JSON response into structured result.
+        
+        The phase count is calculated using the static rubric based on
+        complexity_score to ensure consistency. The LLM's suggested phase
+        count is logged but not used directly.
+        """
         # Clean up response - remove potential code fences
         cleaned = response.strip()
         if cleaned.startswith("```"):
@@ -350,9 +355,29 @@ class LLMComplexityAnalyzer:
         if depth_level not in ("minimal", "standard", "detailed"):
             depth_level = "standard"
 
+        # Get complexity score from LLM
+        complexity_score = float(data.get("complexity_score", 5.0))
+        
+        # CRITICAL FIX: Use static rubric for phase count calculation
+        # This ensures consistent scaling regardless of LLM output variance.
+        # The rubric is:
+        #   score 0-3  -> 3 phases (minimal)
+        #   score 4-7  -> 5 phases (standard)
+        #   score 8-12 -> 7 phases (complex)
+        #   score 13+  -> 9-15 phases (enterprise)
+        calculated_phase_count = estimate_phase_count(complexity_score)
+        
+        # Log if LLM suggested a different count (for debugging)
+        llm_suggested_phases = int(data.get("estimated_phase_count", 5))
+        if llm_suggested_phases != calculated_phase_count:
+            print(
+                f"[complexity] LLM suggested {llm_suggested_phases} phases, "
+                f"but rubric calculates {calculated_phase_count} for score {complexity_score:.1f}"
+            )
+
         return LLMComplexityResult(
-            complexity_score=float(data.get("complexity_score", 5.0)),
-            estimated_phase_count=int(data.get("estimated_phase_count", 5)),
+            complexity_score=complexity_score,
+            estimated_phase_count=calculated_phase_count,  # Use rubric-based count
             depth_level=depth_level,
             confidence=float(data.get("confidence", 0.8)),
             rationale=str(data.get("rationale", "")),

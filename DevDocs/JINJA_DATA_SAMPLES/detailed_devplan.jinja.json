@@ -1,9 +1,14 @@
 {
-  "phase_number": 3,
-  "phase_title": "Phase 3",
+  "phase_number": 10,
+  "phase_title": "Deployment, Monitoring, and Final Validation",
   "phase_description": "",
-  "project_name": "test",
-  "tech_stack": [],
+  "project_name": "TaskFlow API",
+  "tech_stack": [
+    "FastAPI",
+    "SQLAlchemy",
+    "Alembic",
+    "Redis"
+  ],
   "task_group_size": 3,
   "detail_level": "normal"
 }

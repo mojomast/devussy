@@ -1767,6 +1767,15 @@ class PipelineOrchestrator:
         self.progress_reporter.start_stage("DevPlan Generation", 4)
         logger.info(f"Stage 4/5: Generating devplan ({complexity_profile.estimated_phase_count} phases)")
         
+        # CRITICAL: Set estimated_phases and complexity on project_design from complexity profile
+        # This ensures the basic_devplan template generates the correct number of phases
+        project_design.estimated_phases = complexity_profile.estimated_phase_count
+        project_design.complexity = complexity_profile.depth_level.capitalize()
+        logger.info(
+            f"Set project_design.estimated_phases={complexity_profile.estimated_phase_count} "
+            f"from complexity profile (score={complexity_profile.score:.1f})"
+        )
+        
         # Add code samples to kwargs if available
         if self.code_samples:
             llm_kwargs["code_samples"] = self.code_samples

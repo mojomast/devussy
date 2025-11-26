@@ -356,6 +356,7 @@ TaskFlow API is a task management REST API built with FastAPI and PostgreSQL.
     
     corrected_design = design_doc
     correction_history = []
+    correction_result = None  # Initialize to None
     
     if not validation_report.is_valid or sanity_result.overall_assessment == "problematic":
         print("  Running correction loop...")
@@ -395,19 +396,68 @@ TaskFlow API is a task management REST API built with FastAPI and PostgreSQL.
         save_file("06_correction_loop.md", "# Correction Loop\n\nNo correction needed - design passed all validation checks.")
     
     # =========================================================================
-    # STAGE 6: DevPlan Generation (Mock)
+    # STAGE 6: DevPlan Generation (REAL LLM)
     # =========================================================================
     print("\n" + "=" * 60)
-    print("STAGE 6: DevPlan Generation")
+    print("STAGE 6: DevPlan Generation (Real LLM)")
     print("=" * 60)
     
-    # Generate phases based on complexity
-    phase_count = llm_result.estimated_phase_count
+    from src.pipeline.basic_devplan import BasicDevPlanGenerator
+    from src.pipeline.detailed_devplan import DetailedDevPlanGenerator
+    from src.concurrency import ConcurrencyManager
+    from src.models import ProjectDesign
+    
+    # Create project design from interview data
+    project_design = ProjectDesign(
+        project_name=interview_data["project_name"],
+        objectives=[
+            "Build a scalable task management API",
+            "Implement secure user authentication",
+            "Support real-time notifications",
+            "Achieve high test coverage"
+        ],
+        tech_stack=interview_data.get("frameworks", []),
+        architecture_overview=corrected_design if correction_result else design_doc,
+        dependencies=["FastAPI", "SQLAlchemy", "Alembic", "Redis", "PostgreSQL"],
+        challenges=["Real-time WebSocket scaling", "Secure auth implementation"],
+        mitigations=["Use Redis pub/sub", "Follow OWASP guidelines"],
+        complexity=llm_result.depth_level.capitalize(),
+        estimated_phases=llm_result.estimated_phase_count,
+    )
+    
+    print(f"  Generating {project_design.estimated_phases} phases (depth: {project_design.complexity})...")
+    
+    # Generate basic devplan with LLM
+    basic_gen = BasicDevPlanGenerator(client)
+    concurrency = ConcurrencyManager(max_concurrent=5)
+    
+    print("  Step 1: Generating basic devplan structure...")
+    basic_devplan = await basic_gen.generate(project_design)
+    print(f"    -> Got {len(basic_devplan.phases)} phases from basic devplan")
+    
+    # Generate detailed steps for each phase
+    print("  Step 2: Generating detailed steps for each phase...")
+    detailed_gen = DetailedDevPlanGenerator(client, concurrency)
+    
+    def on_phase_complete(result):
+        print(f"    -> Phase {result.phase.number}: {len(result.phase.steps)} steps ({result.response_chars} chars)")
+    
+    detailed_devplan = await detailed_gen.generate(
+        basic_devplan,
+        project_name=interview_data["project_name"],
+        tech_stack=interview_data.get("frameworks", []),
+        on_phase_complete=on_phase_complete,
+    )
+    
+    print(f"  Generated detailed devplan with {len(detailed_devplan.phases)} phases")
+    
+    # Generate devplan markdown
+    phase_count = len(detailed_devplan.phases)
     depth = llm_result.depth_level
     
-    devplan_md = f"""# Development Plan - TaskFlow API
+    devplan_md = f"""# Development Plan - {interview_data["project_name"]}
 
-## 📋 Project Dashboard
+## Project Dashboard
 
 | Metric | Value |
 |--------|-------|
@@ -416,25 +466,14 @@ TaskFlow API is a task management REST API built with FastAPI and PostgreSQL.
 | Estimated Phases | {phase_count} |
 | Confidence | {llm_result.confidence} |
 
-### 🚀 Phase Overview
+### Phase Overview
 
-| Phase | Name | Status | Est. Duration |
-|-------|------|--------|---------------|
-| 1 | Project Setup & Infrastructure | 🔵 Not Started | 1 week |
-| 2 | Core Database & Models | 🔵 Not Started | 1 week |
-| 3 | Authentication System | 🔵 Not Started | 1 week |
-| 4 | API Endpoints | 🔵 Not Started | 2 weeks |
+| Phase | Name | Steps | Status |
+|-------|------|-------|--------|
 """
     
-    if phase_count > 4:
-        devplan_md += """| 5 | Real-time Features | 🔵 Not Started | 1 week |
-| 6 | Testing & QA | 🔵 Not Started | 1 week |
-"""
-    
-    if phase_count > 6:
-        devplan_md += """| 7 | Performance & Optimization | 🔵 Not Started | 1 week |
-| 8 | Documentation & Deployment | 🔵 Not Started | 1 week |
-"""
+    for phase in detailed_devplan.phases:
+        devplan_md += f"| {phase.number} | {phase.title} | {len(phase.steps)} | Not Started |\n"
     
     devplan_md += """
 <!-- PROGRESS_LOG_START -->
@@ -447,100 +486,56 @@ _No progress yet - project starting_
 <!-- NEXT_TASK_GROUP_START -->
 ## Next Tasks
 
-1. [ ] Initialize project repository with Poetry
-2. [ ] Set up FastAPI project structure
-3. [ ] Configure PostgreSQL and Redis containers
-4. [ ] Create initial Alembic migration
-5. [ ] Set up CI/CD pipeline
-
+"""
+    # Add first 5 tasks from phase 1
+    if detailed_devplan.phases and detailed_devplan.phases[0].steps:
+        for i, step in enumerate(detailed_devplan.phases[0].steps[:5], 1):
+            devplan_md += f"{i}. [ ] {step.number}: {step.description}\n"
+    
+    devplan_md += """
 <!-- NEXT_TASK_GROUP_END -->
 """
     
     save_file("08_devplan.md", devplan_md)
-    print(f"  Generated {phase_count}-phase development plan")
     
-    # Generate individual phase files
-    phases = [
-        ("Phase 1: Project Setup", """
-## Objectives
-- Initialize project repository
-- Set up development environment
-- Configure infrastructure
+    # Generate individual phase files with FULL DETAIL
+    for phase in detailed_devplan.phases:
+        phase_md = f"""# Phase {phase.number}: {phase.title}
+
+**Project**: {interview_data["project_name"]}
+**Total Steps**: {len(phase.steps)}
+**Depth Level**: {depth}
 
 ## Tasks
-- [ ] Create project with Poetry
-- [ ] Set up FastAPI skeleton
-- [ ] Configure Docker Compose for PostgreSQL + Redis
-- [ ] Set up pre-commit hooks
-- [ ] Configure pytest and coverage
 
-## Deliverables
-- Working FastAPI hello-world endpoint
-- Docker Compose with database and cache running
-- CI/CD pipeline configuration
-"""),
-        ("Phase 2: Database & Models", """
-## Objectives
-- Design and implement database schema
-- Create SQLAlchemy models
-- Set up Alembic migrations
+<!-- PHASE_TASKS_START -->
+"""
+        for step in phase.steps:
+            phase_md += f"\n### {step.number}: {step.description}\n"
+            if step.details:
+                for detail in step.details:
+                    phase_md += f"- {detail}\n"
+            else:
+                phase_md += "- (No sub-details generated)\n"
+        
+        phase_md += """
+<!-- PHASE_TASKS_END -->
 
-## Tasks
-- [ ] Create User model with password hashing
-- [ ] Create Project model with ownership
-- [ ] Create Task model with status enum
-- [ ] Write initial migration
-- [ ] Add model validation tests
+## Context
 
-## Deliverables
-- Complete database schema
-- All models with relationships
-- Passing model tests
-"""),
-        ("Phase 3: Authentication", """
-## Objectives
-- Implement JWT-based authentication
-- Create auth endpoints
-- Add security middleware
+<!-- PHASE_CONTEXT_START -->
+This phase is part of the adaptive pipeline with complexity-aware generation.
+<!-- PHASE_CONTEXT_END -->
 
-## Tasks
-- [ ] Implement JWT token generation
-- [ ] Create /auth/register endpoint
-- [ ] Create /auth/login endpoint
-- [ ] Create /auth/refresh endpoint
-- [ ] Add authentication dependency
-- [ ] Write auth integration tests
+## Outcomes
 
-## Deliverables
-- Working auth flow
-- Protected endpoint middleware
-- Auth test coverage > 90%
-"""),
-        ("Phase 4: API Endpoints", """
-## Objectives
-- Implement all CRUD endpoints
-- Add input validation
-- Implement rate limiting
-
-## Tasks
-- [ ] Projects CRUD endpoints
-- [ ] Tasks CRUD endpoints
-- [ ] Add Pydantic request/response models
-- [ ] Implement rate limiting middleware
-- [ ] Write endpoint integration tests
-
-## Deliverables
-- All API endpoints functional
-- OpenAPI documentation
-- Integration test coverage > 80%
-"""),
-    ]
+<!-- PHASE_OUTCOMES_START -->
+<!-- Updates added as tasks complete -->
+<!-- PHASE_OUTCOMES_END -->
+"""
+        save_file(f"phase{phase.number}.md", phase_md)
     
-    for i, (title, content) in enumerate(phases, 1):
-        phase_md = f"# {title}\n{content}"
-        save_file(f"phase{i}.md", phase_md)
-    
-    print(f"  Generated {len(phases)} phase files")
+    print(f"  Generated {len(detailed_devplan.phases)} detailed phase files")
     
     # =========================================================================
     # STAGE 7: Handoff Prompt
