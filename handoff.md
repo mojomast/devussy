@@ -991,10 +991,71 @@ cd devussy-web && npm run dev
 # 8. Approve (or Approve Anyway) to proceed
 ```
 
-**Next Steps:**
-1. Add React Testing Library tests for new DesignView behavior
-2. Add visual regression tests for ValidationReport/CorrectionTimeline
-3. Update frontend documentation
+---
+
+### 2025-11-26 - Frontend Testing & Documentation Agent
+**Completed:**
+- Set up Jest + React Testing Library for frontend component tests:
+  - Added `jest.config.js` and `jest.setup.js` configuration
+  - Installed testing dependencies (@testing-library/react, jest, jest-environment-jsdom)
+- Created comprehensive test suites (72 tests total, all passing):
+  - `ComplexityAssessment.test.tsx` - 22 tests covering rendering, depth levels, confidence, loading, refresh
+  - `ValidationReport.test.tsx` - 29 tests covering valid/invalid reports, severity, auto-correct, sanity review
+  - `CorrectionTimeline.test.tsx` - 21 tests covering iterations, progress, status, badges
+- Set up Storybook for visual regression testing:
+  - Initialized Storybook 10.0.8 with Next.js adapter
+  - Added Chromatic for visual regression snapshots
+  - Created stories for all 3 adaptive pipeline components
+- Added Storybook stories for component variants:
+  - `ComplexityAssessment.stories.tsx` - Minimal, Standard, Detailed, Loading, LowConfidence variants
+  - `ValidationReport.stories.tsx` - Valid, Invalid, Severe, WithSanityReview variants
+  - `CorrectionTimeline.stories.tsx` - Success, MaxIterations, ManualReview, InProgress variants
+- Updated README with Adaptive Pipeline documentation:
+  - Added "Adaptive Complexity Pipeline" section to Complete Feature List
+  - Documented complexity analysis, validation, correction loop features
+  - Added CLI usage examples and test commands
+
+**Files Created:**
+- `devussy-web/jest.config.js`
+- `devussy-web/jest.setup.js`
+- `devussy-web/src/components/pipeline/__tests__/ComplexityAssessment.test.tsx`
+- `devussy-web/src/components/pipeline/__tests__/ValidationReport.test.tsx`
+- `devussy-web/src/components/pipeline/__tests__/CorrectionTimeline.test.tsx`
+- `devussy-web/src/components/pipeline/ComplexityAssessment.stories.tsx`
+- `devussy-web/src/components/pipeline/ValidationReport.stories.tsx`
+- `devussy-web/src/components/pipeline/CorrectionTimeline.stories.tsx`
+
+**Files Modified:**
+- `devussy-web/package.json` - Added test scripts (test, test:watch, test:coverage, chromatic)
+- `README.md` - Added Adaptive Pipeline documentation section
+
+**How to run tests:**
+```bash
+# Run all frontend component tests (72 tests)
+cd devussy-web && npm test
+
+# Run with coverage
+cd devussy-web && npm run test:coverage
+
+# Run Storybook for visual testing
+cd devussy-web && npm run storybook
+
+# Build Storybook for production
+cd devussy-web && npm run build-storybook
+```
+
+**Phase 2 Completion Status:**
+- [x] Core UI Components (ComplexityAssessment, ValidationReport, CorrectionTimeline)
+- [x] Wired components into DesignView pipeline flow
+- [x] Frontend state management updated with new stages
+- [x] React Testing Library tests (72 tests passing)
+- [x] Storybook stories for visual regression
+- [x] Documentation updates (README)
+
+**Remaining items (nice-to-have):**
+- Playwright E2E tests for full user flows
+- Percy/Chromatic CI integration (requires API keys)
+- Additional component tests for DesignView integration
 
 ---
 
