@@ -1059,6 +1059,42 @@ cd devussy-web && npm run build-storybook
 
 ---
 
+### 2025-11-26 - LLM Integration Planning Agent
+**Current Status:**
+- ⚠️ **3 adaptive phases are MOCKED** - hardened prompts exist but NOT wired to real LLM
+
+**Hardened Prompts (Ready to Use):**
+| Phase | File | Purpose | Token Savings |
+|-------|------|---------|---------------|
+| 1 | `PHASE_1_HARDENED.md` | Complexity analysis → JSON | ~74% reduction |
+| 2 | `PHASE_2_HARDENED.md` | Sanity review → JSON | Strict limits |
+| 3 | `PHASE_3_HARDENED.md` | Design correction → JSON | Minimal edits |
+
+**Files Needing LLM Integration:**
+1. `src/interview/complexity_analyzer.py` - Currently uses static keyword matching
+2. `src/pipeline/llm_sanity_reviewer.py` - Currently returns hardcoded mock data
+3. `src/pipeline/design_correction_loop.py` - Currently appends fake footer text
+
+**To Test UI Locally:**
+```bash
+# Terminal 1: Start FastAPI backend
+cd devussy-web/streaming_server
+python -m uvicorn app:app --reload --port 8000
+
+# Terminal 2: Start Next.js frontend
+cd devussy-web
+npm run dev
+
+# Open http://localhost:3000 and run adaptive pipeline
+```
+
+**Next Steps:**
+1. Wire hardened prompts into backend classes (add `*_with_llm()` async methods)
+2. Update FastAPI endpoints to call LLM methods instead of mocks
+3. Test through UI with real API calls
+
+---
+
 ### For Frontend Work
 
 **Reuse existing:**

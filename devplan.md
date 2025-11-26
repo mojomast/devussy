@@ -1894,6 +1894,17 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 <!-- PROGRESS_LOG_START -->
 ### Progress Log
 
+**2025-11-26 - LLM Integration Planning**
+- Identified 3 mocked phases needing real LLM integration:
+  1. `complexity_analyzer.py` - static keyword matching → LLM-driven analysis
+  2. `llm_sanity_reviewer.py` - mock confidence/risks → LLM semantic review
+  3. `design_correction_loop.py` - fake footer → LLM-powered corrections
+- Hardened prompts documented in `adaptive_llm_implementation/`:
+  - PHASE_1_HARDENED.md (~74% token reduction vs original)
+  - PHASE_2_HARDENED.md (strict JSON schema, max item limits)
+  - PHASE_3_HARDENED.md (minimal edits constraint, change tracking)
+- Next: Wire hardened prompts to backend classes, test via UI
+
 **2025-11-26 - Frontend & API Integration Agent**
 - Created `ComplexityAssessment.tsx` component in `devussy-web/src/components/pipeline/`:
   - Visual score gauge with SVG animation
@@ -1973,35 +1984,61 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
-### Next Task Group (Current Sprint)
+### Next Task Group (Current Sprint): LLM Integration for Adaptive Pipeline
 
-1. ✅ **Add CLI command for adaptive pipeline** - DONE: `run-adaptive-pipeline` command added
-2. ✅ **E2E tests with real LLM** - DONE: 11 tests total (8 mocked + 3 real LLM)
-3. ✅ **Increase test coverage** - DONE: 87% coverage achieved
-4. ✅ **Start Frontend Phase 2** - DONE: `ComplexityAssessment.tsx` component created
-5. ✅ **Wire frontend to adaptive endpoints** - DONE: FastAPI SSE endpoints added
-6. ✅ **Wire ComplexityAssessment into pipeline flow** - DONE: Integrated into DesignView
-7. ✅ **Create ValidationReport component** - DONE: Full validation display with LLM sanity review
-8. ✅ **Create CorrectionTimeline component** - DONE: Visual iteration history with progress
-9. ✅ **Wire ValidationReport into design approval flow** - DONE: Show validation before approve
-10. ✅ **Wire CorrectionTimeline into correction loop UI** - DONE: Real-time iteration updates
-11. ✅ **Update frontend state management** - DONE: Added complexity/validation stages to PipelineStage type
-12. ✅ **Add frontend component tests** - DONE: 72 Jest tests for ComplexityAssessment, ValidationReport, CorrectionTimeline
-13. ✅ **Add visual regression tests** - DONE: Storybook + Chromatic configured with component stories
-14. ✅ **Documentation updates** - DONE: README updated with Adaptive Pipeline section
+**STATUS:** Backend phases are MOCKED - hardened prompts exist but not wired to real LLM calls.
 
-### Phase 2 Complete! 🎉
+**Hardened Prompts Location:** `adaptive_llm_implementation/`
+- `PHASE_1_HARDENED.md` - Complexity analysis prompt (JSON schema)
+- `PHASE_2_HARDENED.md` - Sanity review prompt (JSON schema)
+- `PHASE_3_HARDENED.md` - Design correction prompt (JSON schema)
 
-All adaptive pipeline frontend work is complete. The system now has:
-- Full complexity analysis → validation → correction loop in UI
-- 72 component tests passing
-- Storybook stories for all adaptive components
-- Updated documentation
+**Files to Integrate:**
 
-**Next Sprint (Optional Enhancements):**
-1. Playwright E2E tests for full browser automation
-2. CI/CD integration for Chromatic visual regression
-3. Performance optimization for large designs
+| # | File | Current State | Hardened Prompt | Integration Task |
+|---|------|---------------|-----------------|------------------|
+| 1 | `src/interview/complexity_analyzer.py` | Static keyword matching | PHASE_1_HARDENED.md | Add LLM call with JSON parsing |
+| 2 | `src/pipeline/llm_sanity_reviewer.py` | Returns mock data | PHASE_2_HARDENED.md | Add LLM call with JSON parsing |
+| 3 | `src/pipeline/design_correction_loop.py` | Appends fake footer | PHASE_3_HARDENED.md | Add LLM call with JSON parsing |
+
+**Implementation Steps:**
+
+1. **Phase 1 - Complexity Analyzer LLM Integration**
+   - Add `async analyze_with_llm(interview_data)` method
+   - Use PHASE_1_HARDENED prompt with interview JSON as context
+   - Parse JSON response into `ComplexityProfile` dataclass
+   - Keep static `analyze()` as fallback for tests
+
+2. **Phase 2 - Sanity Reviewer LLM Integration**
+   - Add `async review_with_llm(design_text, validation_report)` method
+   - Use PHASE_2_HARDENED prompt with design + validation context
+   - Parse JSON response into `LLMSanityReviewResult` dataclass
+   - Keep mock `review()` as fallback for tests
+
+3. **Phase 3 - Design Correction LLM Integration**
+   - Add `async correct_with_llm(design_text, issues)` method
+   - Use PHASE_3_HARDENED prompt with design + issues context
+   - Parse JSON response (corrected_design + changes_made)
+   - Keep mock `_apply_corrections()` as fallback for tests
+
+4. **Wire to FastAPI endpoints**
+   - Update `/api/adaptive/complexity` to use LLM method
+   - Update `/api/adaptive/validate` to use LLM method
+   - Update `/api/adaptive/correct` to use LLM method
+
+**Test Locally:**
+```bash
+# Start backend
+cd devussy-web/streaming_server && python -m uvicorn app:app --reload --port 8000
+
+# Start frontend
+cd devussy-web && npm run dev
+
+# Open browser to http://localhost:3000
+# Test adaptive pipeline flow through UI
+```
+
+**Provider Config:** Uses requesty/gpt-5-nano (from conftest.py)
 <!-- NEXT_TASK_GROUP_END -->
 
 ---
