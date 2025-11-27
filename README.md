@@ -445,15 +445,6 @@ Checkpoint keys are printed as the pipeline runs (e.g., `myproj_pipeline`).
 **For advanced streaming configuration, concurrency tuning, and detailed backend settings, use the [Web UI](#web-ui-devussy-web) or see `STREAMING_GUIDE.md`.**
 
 ---
-python -m src.cli delete-checkpoint <key>
-
-# Cleanup old checkpoints, keeping the most recent N
-python -m src.cli cleanup-checkpoints --keep 5
-```
-
-Checkpoint keys are printed as the pipeline runs (e.g. `myproj_pipeline`) and can be passed back to CLI commands that support `--resume-from`.
-
----
 
 ## 📁 Key Files & Folders
 
