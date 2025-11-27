@@ -9,13 +9,36 @@
 ![Frontend](https://img.shields.io/badge/frontend-Next.js-000000?logo=nextdotjs&logoColor=white)
 ![UI](https://img.shields.io/badge/UI-Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-brightgreen)
-![Status](https://img.shields.io/badge/status-commit_stage_0.3.0-orange)
+![Status](https://img.shields.io/badge/status-v0.4.0-blue)
 
 # Devussy
 
 *make it go brrrrrrrrrrrrrrrrrrrrrrrrrr*
 
 🔗 **Live Demo:** [dev.ussy.host](https://dev.ussy.host) (limited time testing release with built-in inference)
+
+## 🎉 What's New in v0.4.0
+
+### 🎨 Redesigned User Interface
+- **New Project Window Redesign**: Compact, space-efficient layout that follows Windows XP design language
+  - Reduced window size from 800x750 to 550x650 pixels
+  - Grouped sections with clear headers and icons
+  - Scrollable content area with fixed header and footer
+  - Blue gradient header matching the ModelSettings aesthetic
+
+### 🌈 Full Theme Support
+- **Three Beautiful Themes**:
+  - **Bliss** (Windows XP-style): Clean white/gray/blue aesthetic
+  - **Terminal** (Matrix-style): Green-on-black hacker vibes
+  - **Default**: Adaptive light/dark mode using CSS variables
+- **ModelSettings Theme Integration**: All UI components now respect theme selection
+- **Consistent Design Language**: All windows and components follow unified theme patterns
+
+### ✨ Enhanced User Experience
+- **Improved Space Utilization**: Better use of screen real estate across all windows
+- **Theme-Aware Components**: Buttons, inputs, tabs, and all UI elements adapt to selected theme
+- **Better Visual Hierarchy**: Organized sections with clear borders and headers
+- **Responsive Design**: Components scale better on different screen sizes
 
 </div>
 

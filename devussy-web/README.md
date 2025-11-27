@@ -2,9 +2,34 @@
 
 A Next.js-based web interface for Devussy, featuring real-time streaming, multi-window execution, and concurrent phase generation.
 
-## 🎉 Status: Production Ready
+## 🎉 Status: v0.4.0 - Production Ready
 
-All core features are implemented and fully functional:
+### What's New in v0.4.0 (November 2025)
+
+#### 🎨 Redesigned User Interface
+- **New Project Window**: Compact, space-efficient design (~30% smaller footprint)
+  - Grouped sections with clear headers and icons
+  - Blue gradient header matching design system
+  - Scrollable content area with fixed header/footer
+  - Better organized form fields and options
+
+#### 🌈 Full Theme Support
+- **Three Beautiful Themes**:
+  - **Bliss**: Windows XP-style white/gray/blue aesthetic
+  - **Terminal**: Matrix-style green-on-black hacker theme
+  - **Default**: Adaptive light/dark mode with CSS variables
+- **Theme-Aware Components**: All UI elements respect theme selection
+  - ModelSettings fully themed
+  - Inputs, buttons, tabs, borders all adapt
+  - Consistent visual language across all themes
+
+#### ✨ Enhanced User Experience
+- Improved space utilization throughout the app
+- Better visual hierarchy with organized sections
+- Theme toggle in taskbar (or Start Menu in Bliss theme)
+- Cohesive design language across all windows
+
+### All Core Features Implemented
 - ✅ Interactive interview with streaming
 - ✅ Design generation with real-time output
 - ✅ Development plan with editable phase cards
@@ -12,6 +37,8 @@ All core features are implemented and fully functional:
 - ✅ Complete artifact download with phase documents
 - ✅ Window management and taskbar
 - ✅ Per-stage model configuration
+- ✅ **Full theme support** (new in v0.4.0)
+- ✅ **Redesigned UI** (new in v0.4.0)
 
 ## 🚀 Quick Start
 
@@ -368,5 +395,5 @@ Built with:
 ---
 
 **Status**: Production-ready ✅  
-**Last Updated**: 2025-11-19  
-**Version**: 1.0.0
+**Last Updated**: 2025-11-27  
+**Version**: 0.4.0

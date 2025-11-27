@@ -658,6 +658,10 @@ export default function Page() {
             
             <h1 className="text-2xl font-bold mb-4">Devussy Studio Help</h1>
             <div className="rounded-md p-3 bg-background/80 text-sm text-muted-foreground mb-4">
+              <strong className="text-primary">v0.4.0 - November 2025:</strong> New redesigned UI with full theme support! Try switching between Bliss (Windows XP), Terminal (Matrix), and Default themes for a personalized experience.
+            </div>
+            
+            <div className="rounded-md p-3 bg-background/80 text-sm text-muted-foreground mb-4">
               <strong className="text-primary">Public Demo:</strong> This is a limited time public demo for Devussy. It is in constant development and things may break at times, but we're working on it! Please avoid putting any sensitive secrets here. Thank you for trying Devussy Studio.
             </div>
 
@@ -678,6 +682,47 @@ export default function Page() {
                 <GitBranch className="h-4 w-4" />
                 Visit GitHub Repository
               </a>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">🎉 What's New in v0.4.0</h2>
+            <div className="rounded-md p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-primary/20 mb-4">
+              <h3 className="text-lg font-semibold mb-3">Fresh New Look & Feel</h3>
+              
+              <div className="space-y-3 text-sm">
+                <div>
+                  <strong className="block mb-1 text-primary">🎨 Redesigned New Project Window</strong>
+                  <p className="text-muted-foreground">
+                    Compact, space-efficient design with grouped sections, clear headers, and a beautiful blue gradient header. 
+                    The window now uses ~30% less space while being more organized and easier to navigate.
+                  </p>
+                </div>
+
+                <div>
+                  <strong className="block mb-1 text-primary">🌈 Full Theme Support</strong>
+                  <p className="text-muted-foreground">
+                    Three beautiful themes to choose from:
+                  </p>
+                  <ul className="list-disc list-inside ml-4 mt-1 text-muted-foreground">
+                    <li><strong>Bliss</strong> - Clean Windows XP-style with white/gray/blue colors</li>
+                    <li><strong>Terminal</strong> - Hacker aesthetic with green-on-black matrix vibes</li>
+                    <li><strong>Default</strong> - Adaptive light/dark mode for any environment</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <strong className="block mb-1 text-primary">✨ Enhanced UI Components</strong>
+                  <p className="text-muted-foreground">
+                    All components including ModelSettings, inputs, buttons, and tabs now fully support theme switching.
+                    Everything feels cohesive and polished across all three themes.
+                  </p>
+                </div>
+
+                <div className="mt-3 p-2 bg-primary/10 rounded">
+                  <p className="text-xs text-primary">
+                    <strong>💡 Try it:</strong> Use the Theme Toggle in the taskbar (or Start Menu in Bliss theme) to switch between themes!
+                  </p>
+                </div>
+              </div>
             </div>
 
             <h2 className="text-xl font-semibold mt-6 mb-3">🚀 Getting Started with Devussy</h2>

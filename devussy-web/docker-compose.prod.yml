@@ -4,12 +4,17 @@ services:
     build:
       context: .
       dockerfile: frontend.Dockerfile
+      args:
+        NEXT_PUBLIC_IRC_WS_URL: ${NEXT_PUBLIC_IRC_WS_URL:-wss://dev.ussy.host/irc}
+        NEXT_PUBLIC_IRC_CHANNEL: ${NEXT_PUBLIC_IRC_CHANNEL:-#devussy-chat}
     working_dir: /app
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - USE_LOCAL_API=false
+      - NEXT_PUBLIC_IRC_WS_URL=${NEXT_PUBLIC_IRC_WS_URL:-wss://dev.ussy.host/irc}
+      - NEXT_PUBLIC_IRC_CHANNEL=${NEXT_PUBLIC_IRC_CHANNEL:-#devussy-chat}
     depends_on:
       - streaming-server
 
