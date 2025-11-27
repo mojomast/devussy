@@ -18,8 +18,10 @@ import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import IrcClient from '@/components/addons/irc/IrcClient';
+import { YoloModeToggle } from "@/components/pipeline/YoloMode";
+import { PipelineOverview } from "@/components/pipeline/PipelineOverview";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc' | 'pipeline-guide';
 
 interface WindowState {
   id: string;
@@ -48,6 +50,9 @@ export default function Page() {
 
   // Auto-run State
   const [isAutoRun, setIsAutoRun] = useState(false);
+  
+  // YOLO Mode State (auto-approve all stages)
+  const [yoloMode, setYoloMode] = useState(false);
 
   // Pipeline Data
   const [design, setDesign] = useState<any>(null);
@@ -108,7 +113,10 @@ export default function Page() {
     design: null,
     plan: null,
     execute: null,
-    handoff: null
+    handoff: null,
+    complexity: null,
+    validation: null,
+    correction: null
   });
 
   // Helper to get effective config for current stage
@@ -188,6 +196,8 @@ export default function Page() {
         return { width: 500, height: 650 };
       case 'irc':
         return { width: 800, height: 600 };
+      case 'pipeline-guide':
+        return { width: 900, height: 700 };
       default:
         return { width: 600, height: 400 };
     }
@@ -388,6 +398,12 @@ export default function Page() {
                 </CardTitle>
                 <CardDescription>
                   Interview → Project design → DevPlan phases → Handoff Markdown artifacts
+                  <button
+                    onClick={() => spawnWindow('pipeline-guide', 'Adaptive Pipeline Guide')}
+                    className="block mt-2 text-xs text-primary hover:underline"
+                  >
+                    📖 View 7-Stage Adaptive Pipeline
+                  </button>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -458,6 +474,18 @@ export default function Page() {
                 </div>
               </CardContent>
               <CardFooter className="flex flex-col gap-2">
+                {/* YOLO Mode Toggle */}
+                <div className="w-full flex items-center justify-between p-3 border rounded-lg bg-muted/30 mb-2">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-medium">YOLO Mode</span>
+                    <span className="text-xs text-muted-foreground">Auto-approve all stages without manual review</span>
+                  </div>
+                  <YoloModeToggle
+                    enabled={yoloMode}
+                    onToggle={setYoloMode}
+                  />
+                </div>
+                
                 <Button
                   className="w-full"
                   variant="secondary"
@@ -489,6 +517,9 @@ export default function Page() {
             modelConfig={getEffectiveConfig('design')}
             onDesignComplete={handleDesignComplete}
             autoRun={isAutoRun}
+            enableAdaptive={true}
+            yoloMode={yoloMode}
+            onYoloModeChange={setYoloMode}
           />
         );
       case 'plan':
@@ -628,6 +659,18 @@ export default function Page() {
         );
       case 'irc':
         return <IrcClient />;
+      case 'pipeline-guide':
+        return (
+          <div className="h-full overflow-auto p-6">
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold mb-2">Adaptive Pipeline Architecture</h1>
+              <p className="text-sm text-muted-foreground">
+                Devussy's 7-stage pipeline adapts to project complexity, from tiny prototypes to enterprise systems.
+              </p>
+            </div>
+            <PipelineOverview currentStage={0} compact={false} />
+          </div>
+        );
       default:
         return null;
     }

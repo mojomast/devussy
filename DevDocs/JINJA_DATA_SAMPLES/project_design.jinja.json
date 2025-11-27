@@ -1,14 +1,9 @@
 {
-  "project_name": "Test Project",
-  "requirements": [
-    "Req 1",
-    "Req 2"
-  ],
+  "project_name": "testapp",
   "languages": [
     "Python"
   ],
-  "frameworks": [
-    "FastAPI"
-  ],
-  "apis": []
+  "frameworks": [],
+  "apis": [],
+  "requirements": "testapp is a small CRUD web application that exposes a REST API for managing items and includes a minimal React-based frontend for users to view and modify data. It includes user authentication, persistent storage, automated tests, and CI/CD for automated builds and deployments."
 }

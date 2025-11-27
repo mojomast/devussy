@@ -87,11 +87,47 @@ Your devplan is a **stateless artifact** — pure markdown with no runtime requi
 
 ---
 
-## 🛠️ How It Works: Two Stages
+## 🛠️ How It Works: Adaptive 7-Stage Pipeline
 
 ### Stage 1: Generation (Devussy Software)
 
-Devussy turns your project idea into an initial multi-phase devplan and handoff docs using an **adaptive pipeline** that automatically adjusts complexity based on your project.
+Devussy turns your project idea into an optimal devplan using a **7-stage adaptive pipeline** that automatically scales complexity based on your project:
+
+#### The 7-Stage Adaptive Pipeline
+
+1. **Interview & Requirements** (`interview.json`)
+   - Guided Q&A captures goals, constraints, target stack
+   - Output: structured data with no LLM orchestration yet
+
+2. **Complexity Analyzer** (`complexity_profile.json`)
+   - Pure-Python scoring rubrics rate difficulty
+   - Estimates phase count and selects template depth (minimal/standard/detailed)
+   - Deterministic scoring drives all downstream branching
+
+3. **Adaptive Design Generator** (`design_draft.md`)
+   - LLM combines interview + complexity profile
+   - Small projects stay tiny; big systems get richer multi-module designs
+   - Complexity-aware branching prevents over-engineering
+
+4. **Design Validation & Correction Loop** (`validated_design.md`)
+   - Rule-based checks + LLM sanity reviewer
+   - Catches inconsistencies, hallucinated services, scope creep, missing tests
+   - Iterative correction loop stabilizes design before devplan generation
+
+5. **Adaptive Devplan Generator** (`devplan.md + phases.json`)
+   - Generates dynamic phase count based on validated design + complexity
+   - Explicit tests and acceptance criteria for each milestone
+   - Tiny plans for tiny projects, full roadmaps for complex builds
+
+6. **Pipeline Execution & Checkpoints** (`artifacts + devplan.zip`)
+   - Phases run with streaming output and checkpointing
+   - Schema-validated artifacts ensure consistency
+   - Recoverable at every checkpoint, ready for multiple LLM providers
+
+7. **Frontend, Downloads & Circular Handoff** (`devplan.zip + handoff.md`)
+   - Visualizes complexity, phases, and validation results
+   - One-click export for agent handoffs
+   - Final `handoff.md` instructs next agent how to continue work
 
 **Quick Start - Interactive Interview (Recommended):**
 

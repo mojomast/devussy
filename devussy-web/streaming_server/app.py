@@ -525,7 +525,18 @@ async def handoff_endpoint(request: Request):
         generator = HandoffPromptGenerator()
         # Handoff generator may be synchronous; run in executor
         loop = asyncio.get_running_loop()
-        handoff = await loop.run_in_executor(None, generator.generate, plan, design.project_name, design.architecture_overview or "", str(design.tech_stack) if design.tech_stack else "")
+        # Call with correct parameter names
+        handoff = await loop.run_in_executor(
+            None, 
+            generator.generate,
+            plan,  # devplan parameter
+            design.project_name,  # project_name parameter
+            design.architecture_overview or "",  # project_summary parameter
+            design.architecture_overview or "",  # architecture_notes parameter
+            ", ".join(design.dependencies) if design.dependencies else "",  # dependencies_notes parameter
+            "",  # config_notes parameter
+            5  # task_group_size parameter (default)
+        )
         return JSONResponse(status_code=200, content=handoff.model_dump())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

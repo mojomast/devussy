@@ -659,6 +659,31 @@ export const DesignView = ({
             </div>
 
             <ScrollArea className="flex-1 p-6">
+                {/* Adaptive Pipeline Stage Indicator */}
+                {enableAdaptive && (
+                    <div className="mb-4 p-3 bg-muted/20 border border-border/30 rounded-lg">
+                        <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                                <span className="font-mono text-muted-foreground">ADAPTIVE PIPELINE:</span>
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 rounded ${complexityProfile ? 'bg-green-500/20 text-green-400' : isAnalyzingComplexity ? 'bg-blue-500/20 text-blue-400' : 'bg-muted/30 text-muted-foreground'}`}>
+                                        1. Complexity
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded ${validationReport ? 'bg-green-500/20 text-green-400' : isValidating ? 'bg-blue-500/20 text-blue-400' : 'bg-muted/30 text-muted-foreground'}`}>
+                                        2. Validation
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded ${correctionHistory && correctionHistory.total_iterations > 0 ? 'bg-green-500/20 text-green-400' : isCorrecting ? 'bg-blue-500/20 text-blue-400' : 'bg-muted/30 text-muted-foreground'}`}>
+                                        3. Correction
+                                    </span>
+                                </div>
+                            </div>
+                            <span className="text-muted-foreground">
+                                {complexityProfile?.depth_level ? `Depth: ${complexityProfile.depth_level}` : 'Analyzing...'}
+                            </span>
+                        </div>
+                    </div>
+                )}
+                
                 {/* Complexity Assessment Panel */}
                 {enableAdaptive && showComplexity && (isAnalyzingComplexity || complexityProfile) && (
                     <div className="mb-6">

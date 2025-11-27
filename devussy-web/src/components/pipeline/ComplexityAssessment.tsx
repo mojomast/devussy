@@ -361,28 +361,64 @@ export function ComplexityAssessment({
                         <h4 className="text-sm font-medium mb-3 text-muted-foreground">
                             Complexity Factors
                         </h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <MetricCard
-                                icon={Boxes}
-                                label="Project Type"
-                                value={formatBucket(profile.project_type_bucket)}
-                            />
-                            <MetricCard
-                                icon={Layers}
-                                label="Technical Complexity"
-                                value={formatBucket(profile.technical_complexity_bucket)}
-                            />
-                            <MetricCard
-                                icon={Boxes}
-                                label="Integrations"
-                                value={formatBucket(profile.integration_bucket)}
-                            />
-                            <MetricCard
-                                icon={Users}
-                                label="Team Size"
-                                value={formatBucket(profile.team_size_bucket)}
-                            />
-                        </div>
+                        
+                        {/* Show bucket-based factors if available (static analysis) */}
+                        {(profile.project_type_bucket || profile.technical_complexity_bucket || 
+                          profile.integration_bucket || profile.team_size_bucket) && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                {profile.project_type_bucket && (
+                                    <MetricCard
+                                        icon={Boxes}
+                                        label="Project Type"
+                                        value={formatBucket(profile.project_type_bucket)}
+                                    />
+                                )}
+                                {profile.technical_complexity_bucket && (
+                                    <MetricCard
+                                        icon={Layers}
+                                        label="Technical Complexity"
+                                        value={formatBucket(profile.technical_complexity_bucket)}
+                                    />
+                                )}
+                                {profile.integration_bucket && (
+                                    <MetricCard
+                                        icon={Boxes}
+                                        label="Integrations"
+                                        value={formatBucket(profile.integration_bucket)}
+                                    />
+                                )}
+                                {profile.team_size_bucket && (
+                                    <MetricCard
+                                        icon={Users}
+                                        label="Team Size"
+                                        value={formatBucket(profile.team_size_bucket)}
+                                    />
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Show LLM-generated complexity factors if available */}
+                        {profile.complexity_factors && profile.complexity_factors.length > 0 && (
+                            <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground mb-2">Key complexity drivers:</p>
+                                <div className="space-y-1">
+                                    {profile.complexity_factors.map((factor, idx) => (
+                                        <div key={idx} className="flex items-start gap-2 text-sm">
+                                            <span className="text-primary mt-1">•</span>
+                                            <span className="text-muted-foreground">{factor}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Show rationale if available (LLM analysis) */}
+                        {profile.rationale && (
+                            <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/30">
+                                <p className="text-xs font-medium text-muted-foreground mb-1">Analysis Rationale:</p>
+                                <p className="text-sm">{profile.rationale}</p>
+                            </div>
+                        )}
                     </div>
                 )}
             </CardContent>
