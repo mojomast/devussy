@@ -1,7 +1,6 @@
 <div align="center">
 
-<!-- Optional: drop a logo image here -->
-<!-- <img src="DEVUSSYLOGO.png" alt="Devussy logo" height="120" /> -->
+<img src="docs/assets/devussy_logo_minimal.png" alt="Devussy logo" height="120" />
 
 [![GitHub](https://img.shields.io/badge/repo-mojomast%2Fdevussy-181717?logo=github)](https://github.com/mojomast/devussy)
 ![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)
@@ -92,9 +91,9 @@ Your devplan is a **stateless artifact** — pure markdown with no runtime requi
 
 ### Stage 1: Generation (Devussy Software)
 
-Devussy turns your project idea into an initial multi-phase devplan and handoff docs.
+Devussy turns your project idea into an initial multi-phase devplan and handoff docs using an **adaptive pipeline** that automatically adjusts complexity based on your project.
 
-From the repo (or a pip install of this project):
+**Quick Start - Interactive Interview (Recommended):**
 
 ```bash
 # Clone + editable install
@@ -102,80 +101,58 @@ git clone https://github.com/mojomast/devussy.git
 cd devussy
 pip install -e .
 
-# Sanity check
-python -m src.cli version
-```
-
-Then run an interactive session:
-
-```bash
+# Run the interactive adaptive pipeline
 python -m src.cli interactive
 ```
 
-**What happens in practice:**
+**What happens:**
 
-- You provide a project description via a terminal interview
-- Devussy generates a design and devplan, then uses the terminal UI to stream ~5 phases in parallel:
-  - Planning / scoping
-  - Architecture & design
-  - Implementation planning
-  - Testing / QA strategy
-  - Deployment / release & review
-- You can steer the process via the interactive flow (tweaking constraints, regenerating, etc.)
+1. **Interactive Interview** – You describe your project via console Q&A (type `/done` when finished)
+2. **Adaptive Analysis** – Devussy scores project complexity and selects optimal depth (minimal/standard/detailed)
+3. **Design Generation** – Creates architecture with validation and optional correction loops
+4. **DevPlan Creation** – Generates phase-specific plans with adaptive depth
+5. **Parallel Streaming** – Terminal UI shows ~5 phases being generated in real-time
 
 **Outputs (files):**
 
-- `devplan.md` – complete project plan
-- Phase docs – `phase-*.md` (or similar, depending on templates)
-- `handoff.md` – top-level "read me and resume" handoff instructions
+- `devplan.md` – Complete project plan with anchored sections for circular development
+- `phase*.md` – Per-phase detailed plans (e.g., `phase1.md`, `phase2.md`)
+- `handoff.md` – **The single handoff file** that tells agents what to do next
 
-There are also non-interactive commands for scripted use:
-
-```bash
-python -m src.cli run-full-pipeline \
-  --name "My Web App" \
-  --languages "Python,TypeScript" \
-  --requirements "Build a REST API with auth" \
-  --frameworks "FastAPI,React"
-```
-
-And an adaptive pipeline:
-
-```bash
-python -m src.cli run-adaptive-pipeline \
-  --name "My Project" \
-  --languages "Python,TypeScript" \
-  --requirements "Build a REST API" \
-  --validation \
-  --correction
-```
-
-The adaptive pipeline adjusts phase depth and validation based on project complexity.
+**For advanced usage and visual project management, use the [Web UI](#web-ui-devussy-web) instead.**
 
 ### Stage 2: Execution (Circular Development)
-You (or any agent) then execute each phase one by one.
 
-**Phase 1 (Planning) example:**
+You (or any agent) then execute each phase using the **circular handoff pattern**.
 
-1. **Receive:** `devplan.md` + `phase-1-handoff.md`
-2. **Follow:** `phase-1-handoff.md` instructions
-3. **Do:** Planning work (scope, goals, constraints, etc.)
-4. **Update:** `phase-1.md` (what you discovered)
-5. **Update:** `devplan.md` (new constraints, risks, timeline changes)
-6. **Create:** `phase-2-handoff.md` (instructions for the design phase)
-7. **Handoff:** `phase-1.md` + `devplan.md` + `phase-2-handoff.md` to the next agent
+**How Circular Development Works:**
 
-**Phase 2 (Design) example:**
+Each phase follows this loop:
 
-1. **Receive:** `devplan.md` + `phase-2-handoff.md`
-2. **Follow:** `phase-2-handoff.md` (which reflects Planning phase learnings)
-3. **Do:** Architecture & design work
-4. **Update:** `phase-2.md` (design decisions, tradeoffs)
-5. **Update:** `devplan.md` (architecture, tool choices, constraints)
-6. **Create:** `phase-3-handoff.md`
-7. **Handoff:** `phase-2.md` + `devplan.md` + `phase-3-handoff.md`
+1. **Read** `handoff.md` – Learn what part of which phase doc to focus on
+2. **Execute** – Do the work described in that phase section
+3. **Update Phase Doc** – Record discoveries, decisions, and blockers in the phase file (e.g., `phase1.md`)
+4. **Update DevPlan** – Update anchored sections in `devplan.md` (constraints, risks, timeline)
+5. **Update Handoff** – Modify `handoff.md` to point the next agent to the next slice of work
+6. **Handoff** – Pass `handoff.md` + `devplan.md` + phase docs to next agent (or new context window)
 
-**Phases 3–N** repeat the same pattern. No discovery is lost, and every agent always sees the latest context.
+**Example: Phase 1 → Phase 2 Handoff**
+
+```
+Phase 1 Agent:
+  ├─ Reads: handoff.md ("Focus on Phase 1, sections 1.1-1.3")
+  ├─ Does: Planning work, discovers "Need 3× more compute"
+  ├─ Updates: phase1.md (adds discovery notes)
+  ├─ Updates: devplan.md (updates <!-- PROGRESS_LOG_START --> section)
+  └─ Updates: handoff.md ("Next agent: Focus on Phase 2, section 2.1")
+
+Phase 2 Agent:
+  ├─ Reads: handoff.md ("Focus on Phase 2, section 2.1")
+  ├─ Reads: devplan.md (sees updated compute requirement)
+  └─ Continues: Design work with new constraint
+```
+
+**Key Principle:** `handoff.md` is **always** the single source of truth for "what to do next" – it references which phase doc and which sections within that doc to work on.
 
 ### The Three Artifacts That Travel Together
 
@@ -183,49 +160,57 @@ Each handoff includes three artifacts:
 
 | Artifact | What's In It | Why It Matters |
 |----------|--------------|----------------|
-| Phase Document | Current phase progress, decisions, blockers | Shows what's been done in this phase |
-| `devplan.md` | Full project context + cumulative learnings | Single source of truth across all phases |
-| Handoff Prompt | Instructions for the next phase, updated with constraints | Next phase knows exactly what to do next |
+| `handoff.md` | Current focus area, next steps, which phase/sections to work on | **Single source of truth** for "what to do next" |
+| `devplan.md` | Full project context with anchored sections for updates | Single source of truth for project state |
+| Phase Documents (`phase*.md`) | Phase-specific progress, decisions, blockers | Shows what's been done in each phase |
 
-**Example:**
+**Critical: Always use `handoff.md`** – Not `phase-1-handoff.md` or `phase-2-handoff.md`. There is only **one handoff file** that gets updated to point agents to the correct phase and section.
+
+**Example Flow:**
 
 ```
-Agent A (Phase 1):
+Agent A:
+  └─ Reads: handoff.md ("Work on Phase 1, tasks 1-3")
   └─ Discovers: "We need 3× more compute than planned"
-  └─ Updates: devplan.md
-  └─ Creates: phase-2-handoff.md ("Budget for 3× compute...")
+  └─ Updates: phase1.md (adds discovery notes)
+  └─ Updates: devplan.md (updates <!-- PROGRESS_LOG_START --> anchor)
+  └─ Updates: handoff.md ("Next: Work on Phase 2, task 1 with 3× compute constraint")
 
-Agent B (Phase 2) receives:
-  ├─ phase-1.md ("Phase 1 discovered...")
-  ├─ devplan.md ("Updated budget: 3× compute")
-  └─ phase-2-handoff.md ("Design considering 3× compute...")
+Agent B receives:
+  ├─ handoff.md ("Work on Phase 2, task 1 with 3× compute constraint")
+  ├─ devplan.md (contains updated compute requirement in anchored section)
+  └─ phase1.md (shows Phase 1 discoveries)
 ```
 
-No "hidden" context. No re-explanations.
+No "hidden" context. No re-explanations. No per-phase handoff files.
 
 ---
 
 ## Agent-Ready Artifacts (Drop-In Folder for Any Coding Agent)
 
-Every pipeline run writes a deterministic set of files to `docs/` and/or `output_*` (e.g. `output_0/`):
+Every pipeline run writes a deterministic set of files to `docs/` and/or `output_*` (e.g., `output_0/`):
 
-- `devplan.md` – Top-level multi-phase plan
-- Per-phase files – `phase-*.md` or equivalent, depending on template
-- `handoff.md` – The primary "read this first" file for downstream agents
+- `devplan.md` – Top-level multi-phase plan with **anchored sections** (see `AGENTS.md`)
+- `phase*.md` – Per-phase files (e.g., `phase1.md`, `phase2.md`)
+- `handoff.md` – **The single handoff file** that tells agents what to focus on next
 - Supporting config/checkpoint files (for resuming runs)
 
 This layout is designed so you can treat the output like a portable project brief:
 
-1. Start and finish one phase of development with one agent (Prompt any agent to read the handoff file in the project directory and wait for it to have finished and updated handoff.md)
-2. In another coding agent (ChatGPT, Claude, Roo Code, Cursor, etc.), with a fresh context window, tell them to read  `handoff.md` and resume development, along with any steering instructions you want to include.
-3. Wait for the agent to finish it's defined slice of the phase and to update `handoff.md` so you can switch to a fresh context window with any agent you choose.
+1. **Start Phase Slice** – Prompt any agent to read `handoff.md` and execute the specified tasks
+2. **Agent Works** – Agent reads specified phase doc sections, does the work, updates anchored sections
+3. **Agent Updates Handoff** – Agent updates `handoff.md` to point to next slice of work
+4. **Switch Context** – In another coding agent (ChatGPT, Claude, Roo Code, Cursor, etc.), tell them to read `handoff.md` and continue
+5. **Repeat** – Each agent follows `handoff.md` → updates phase docs → updates `devplan.md` → updates `handoff.md`
 
-Because everything is plain markdown with stable headings and anchors (see `AGENTS.md`, `DEVPLAN_FOR_NEXT_AGENT.md`, `HANDOFF_FOR_NEXT_AGENT.md`), any agent can safely:
+Because everything is plain markdown with **stable anchors** (see `AGENTS.md`), any agent can safely:
 
 - Understand the current project state
-- See which phases are done vs TODO
-- Append progress and new tasks without breaking the structure
-- Keep the same folder committed in git as the single source of truth
+- See which phases/tasks are done vs TODO
+- Update anchored sections without breaking structure
+- Keep the same folder committed in git as single source of truth
+
+**For more details on anchor-based context management, see `AGENTS.md` in the repo root.**
 
 ---
 
@@ -288,8 +273,9 @@ python -m src.cli version
 
 ---
 
-## Configure API keys
-Devussy reads standard env vars (or a `.env` file in the repo root):
+## ⚙️ Configure API Keys
+
+Devussy reads standard environment variables (or a `.env` file in the repo root):
 
 ```bash
 # OpenAI
@@ -306,65 +292,46 @@ REQUESTY_API_KEY=...
 AETHER_API_KEY=...
 ```
 
-You can also set per-stage keys (e.g. `DESIGN_API_KEY`, `DEVPLAN_API_KEY`) if you want different providers or models per phase.
+You can also set per-stage keys (e.g., `DESIGN_API_KEY`, `DEVPLAN_API_KEY`) if you want different providers or models per phase.
+
+**For visual configuration and advanced settings, use the [Web UI](#web-ui-devussy-web).**
 
 ---
 
-## Quick start (CLI)
+## 💻 Command Line Usage
 
-### 1. Interactive single-window workflow (recommended)
+### Primary Command: Interactive Adaptive Pipeline
 
 ```bash
 python -m src.cli interactive
 ```
 
-This will:
+This single command runs the complete adaptive pipeline with an interactive interview.
 
-- Run a console-based LLM interview (type `/done` when finished)
-- Stream the design to the console (`[design]` prefix)
-- Stream a basic devplan to the console (`[devplan]` prefix)
-- Open the Textual terminal UI and stream multiple phases in parallel
+**What it does:**
 
-### 2. Legacy interview launcher
+1. Runs a console-based LLM interview about your project
+2. Automatically scores project complexity (minimal/standard/detailed)
+3. Generates validated design with optional correction loops
+4. Creates depth-aware devplan with phase-specific plans
+5. Streams all phases in parallel using the Textual terminal UI
 
-```bash
-python -m src.entry
-```
+**For all other features** (project management, visual editing, advanced configuration), use the [Web UI](#web-ui-devussy-web).
 
-This uses the original interactive flow. Streaming is controlled by config; for the best UX, prefer `src.cli interactive`.
-
-### 3. Full pipeline (non-interactive)
+### Utility Commands
 
 ```bash
-python -m src.cli run-full-pipeline \
-  --name "My Web App" \
-  --languages "Python,TypeScript" \
-  --requirements "Build a REST API with auth" \
-  --frameworks "FastAPI,React"
+# Check version
+python -m src.cli version
+
+# List saved checkpoints
+python -m src.cli list-checkpoints
+
+# Cleanup old checkpoints (keep 5 most recent)
+python -m src.cli cleanup-checkpoints --keep 5
 ```
 
----
-
-## Adaptive complexity pipeline
-Run the adaptive pipeline:
-
-```bash
-python -m src.cli run-adaptive-pipeline \
-  --name "My Project" \
-  --languages "Python,TypeScript" \
-  --requirements "Build a REST API" \
-  --validation \
-  --correction
-```
-
-This pipeline:
-
-- Scores project complexity and selects a depth level
-- Validates the design for consistency / scope / hallucinations
-- Optionally runs a correction loop until quality criteria are met
-- Emits design + DevPlan aligned with the chosen depth
-
-Supporting implementation lives under `adaptive_llm_implementation/` and is covered by dedicated tests.
+**Note:** Non-interactive pipeline commands (`run-full-pipeline`, `run-adaptive-pipeline`) are available but not recommended for general use. The interactive mode provides the best user experience.
 
 ---
 
@@ -395,34 +362,6 @@ Then visit [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## Streaming & Concurrency (Backend)
-
-Devussy supports per-phase streaming and parallel phase generation.
-
-**Key ideas:**
-
-- Each phase (Design, DevPlan, Handoff) can enable/disable streaming
-- A global streaming flag + config file provide sensible fallbacks
-- `max_concurrent_requests` controls how many API calls & phases run in parallel
-
-You can tune these via:
-
-- `config/config.yaml`
-- Env vars like:
-
-```bash
-STREAMING_ENABLED=true
-STREAMING_DESIGN_ENABLED=true
-STREAMING_DEVPLAN_ENABLED=false
-STREAMING_HANDOFF_ENABLED=true
-
-MAX_CONCURRENT_REQUESTS=5
-```
-
-For deeper details, see `STREAMING_GUIDE.md`.
-
----
-
 ## Checkpoints
 
 The pipeline saves checkpoints so you can pause and resume.
@@ -440,38 +379,39 @@ python -m src.cli delete-checkpoint <key>
 python -m src.cli cleanup-checkpoints --keep 5
 ```
 
+Checkpoint keys are printed as the pipeline runs (e.g., `myproj_pipeline`).
+
+**For advanced streaming configuration, concurrency tuning, and detailed backend settings, use the [Web UI](#web-ui-devussy-web) or see `STREAMING_GUIDE.md`.**
+
+---
+python -m src.cli delete-checkpoint <key>
+
+# Cleanup old checkpoints, keeping the most recent N
+python -m src.cli cleanup-checkpoints --keep 5
+```
+
 Checkpoint keys are printed as the pipeline runs (e.g. `myproj_pipeline`) and can be passed back to CLI commands that support `--resume-from`.
 
 ---
 
-## Layout & Docs
+## 📁 Key Files & Folders
 
-**Notable folders/files:**
+**Agent Documentation (Start Here):**
+- `AGENTS.md` – **Critical**: Anchor-based context management patterns
+- `handoff.md` – The single handoff file that guides circular development
+- `devplan.md` – Main project plan with anchored sections
+- `phase*.md` – Per-phase detailed plans
 
-- `src/` – Core pipeline, CLI, interview engine, adapters
+**Code & Templates:**
+- `src/` – Core pipeline, CLI, interview engine, LLM adapters
+- `templates/` – Jinja templates for document generation
 - `adaptive_llm_implementation/` – Adaptive complexity & validation logic
-- `devussy-web/` – Next.js frontend and dev server
-- `config/` – Generated YAML config for runs
-- `templates/` – Jinja templates for designs, devplans, handoff docs
-- `docs/`, `output_*/` – Generated artifacts
-- `AGENTS.md`, `WARP.md`, `START_HERE.md` – Guidance for AI agents and tools
-- `devarchive/` – Legacy docs and helper scripts
 
----
+**Output:**
+- `docs/`, `output_*/` – Generated project artifacts
 
-## Tests
-
-Tests live under `tests/` plus a few top-level integration scripts.
-
-**Typical flow:**
-
-```bash
-# Run all tests
-pytest -q
-
-# Format / lint
-black src && isort src && flake8 src
-```
+**Web UI:**
+- `devussy-web/` – Next.js frontend for visual project management
 
 ---
 
@@ -526,7 +466,7 @@ A stateless devplan has no hidden state, no database, no runtime dependencies. I
 
 **Q: What if I discover new constraints during Phase 2?**
 
-Update `devplan.md` and create a new `phase-3-handoff.md` with the new constraints. The next phase follows the updated handoff prompt.
+Update the anchored sections in `devplan.md` (using the `<!-- PROGRESS_LOG_START -->` and `<!-- NEXT_TASK_GROUP_START -->` anchors), then update `handoff.md` to point the next agent to the relevant phase section with the new constraints. There's only one `handoff.md` file that gets continuously updated.
 
 **Q: Can my team collaborate on one devplan?**
 
