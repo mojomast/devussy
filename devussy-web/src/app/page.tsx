@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowRight, Sparkles, Layers, Code2, GitBranch, MessageSquare, Zap, Play } from "lucide-react";
+import { ArrowRight, Sparkles, Layers, Code2, GitBranch, MessageSquare, Zap, Play, Settings } from "lucide-react";
 import { WindowFrame } from "@/components/window/WindowFrame";
 import { DesignView } from "@/components/pipeline/DesignView";
 import { PlanView } from "@/components/pipeline/PlanView";
@@ -181,7 +181,7 @@ export default function Page() {
   const getWindowSize = (type: WindowType): { width: number; height: number } => {
     switch (type) {
       case 'init':
-        return { width: 800, height: 750 };  // Fits form content comfortably
+        return { width: 550, height: 650 };  // Compact, scrollable design
       case 'interview':
         return { width: 700, height: 600 };
       case 'design':
@@ -414,116 +414,152 @@ export default function Page() {
     switch (window.type) {
       case 'init':
         return (
-          <div className="h-full flex items-center justify-center p-8">
-            <Card className="w-full max-w-md border-primary/10 shadow-2xl">
-              <CardHeader>
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <Sparkles className="h-6 w-6 text-primary" />
-                  New Project
-                </CardTitle>
-                <CardDescription>
-                  Interview → Project design → DevPlan phases → Handoff Markdown artifacts
+          <div className="h-full flex flex-col bg-gradient-to-b from-white to-gray-50 overflow-hidden">
+            {/* Header Section */}
+            <div className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 border-b border-blue-700">
+              <div className="flex items-center gap-3">
+                <Sparkles className="h-7 w-7" />
+                <div>
+                  <h1 className="text-xl font-bold">New Project</h1>
+                  <p className="text-xs text-blue-100">Interview → Design → DevPlan → Handoff Artifacts</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Content Area - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Quick Start Section */}
+              <div className="bg-white border border-gray-400 rounded p-3 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-300">
+                  <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-blue-600" />
+                    Quick Start
+                  </h2>
                   <button
                     onClick={() => spawnWindow('pipeline-guide', 'Adaptive Pipeline Guide')}
-                    className="block mt-2 text-xs text-primary hover:underline"
+                    className="text-xs text-blue-600 hover:text-blue-800 underline font-semibold"
                   >
-                    📖 View 7-Stage Adaptive Pipeline
+                    📖 Pipeline Guide
                   </button>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button
-                  className="w-full font-bold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0"
-                  size="lg"
+                </div>
+                
+                <button
                   onClick={handleTryItNow}
+                  className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all hover:shadow-lg"
                 >
-                  <Play className="mr-2 h-5 w-5 fill-current" />
+                  <Play className="w-5 h-5 fill-current" />
                   Try it now (One-click sample)
-                </Button>
+                </button>
+              </div>
 
-                <div className="relative py-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">Or Start Fresh</span>
-                  </div>
+              {/* Interactive Interview Section */}
+              <div className="bg-white border border-gray-400 rounded p-3 space-y-3 shadow-sm">
+                <div className="pb-2 border-b border-gray-300">
+                  <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-blue-600" />
+                    Guided Setup
+                  </h2>
                 </div>
-
-                <Button
-                  className="w-full font-bold"
-                  variant="outline"
-                  size="lg"
+                
+                <button
                   onClick={handleStartInterview}
+                  className="w-full px-4 py-2.5 bg-white border-2 border-blue-500 text-blue-600 rounded font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors"
                 >
-                  <MessageSquare className="mr-2 h-4 w-4" />
+                  <MessageSquare className="w-4 h-4" />
                   Start Interactive Interview
-                </Button>
+                </button>
+              </div>
 
-                <div className="relative py-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">Or Manual Input</span>
-                  </div>
+              {/* Manual Input Section */}
+              <div className="bg-white border border-gray-400 rounded p-3 space-y-3 shadow-sm">
+                <div className="pb-2 border-b border-gray-300">
+                  <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <Code2 className="w-4 h-4 text-blue-600" />
+                    Manual Configuration
+                  </h2>
                 </div>
 
-                <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium">Project Name</label>
-                  <Input
-                    id="name"
-                    placeholder="e.g., E-commerce Platform"
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                  />
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label htmlFor="name" className="text-xs font-bold text-gray-700 block">
+                      Project Name
+                    </label>
+                    <input
+                      id="name"
+                      type="text"
+                      placeholder="e.g., E-commerce Platform"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      className="w-full border border-gray-400 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="languages" className="text-xs font-bold text-gray-700 block">
+                      Languages & Stack
+                    </label>
+                    <input
+                      id="languages"
+                      type="text"
+                      placeholder="Python, Next.js, PostgreSQL..."
+                      value={languages}
+                      onChange={(e) => setLanguages(e.target.value)}
+                      className="w-full border border-gray-400 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="requirements" className="text-xs font-bold text-gray-700 block">
+                      Requirements
+                    </label>
+                    <textarea
+                      id="requirements"
+                      placeholder="I want a web app that..."
+                      value={requirements}
+                      onChange={(e) => setRequirements(e.target.value)}
+                      rows={4}
+                      className="w-full border border-gray-400 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label htmlFor="languages" className="text-sm font-medium">Languages & Stack</label>
-                  <Input
-                    id="languages"
-                    placeholder="Python, Next.js, PostgreSQL..."
-                    value={languages}
-                    onChange={(e) => setLanguages(e.target.value)}
-                  />
+              </div>
+
+              {/* Options Section */}
+              <div className="bg-white border border-gray-400 rounded p-3 space-y-3 shadow-sm">
+                <div className="pb-2 border-b border-gray-300">
+                  <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-blue-600" />
+                    Options
+                  </h2>
                 </div>
-                <div className="space-y-2">
-                  <label htmlFor="requirements" className="text-sm font-medium">Requirements</label>
-                  <Textarea
-                    id="requirements"
-                    placeholder="I want a web app that..."
-                    className="min-h-[100px]"
-                    value={requirements}
-                    onChange={(e) => setRequirements(e.target.value)}
-                  />
-                </div>
-              </CardContent>
-              <CardFooter className="flex flex-col gap-2">
-                {/* YOLO Mode Toggle */}
-                <div className="w-full flex items-center justify-between p-3 border rounded-lg bg-muted/30 mb-2">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-sm font-medium">YOLO Mode</span>
-                    <span className="text-xs text-muted-foreground">Auto-approve all stages without manual review</span>
+
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-bold text-gray-800">YOLO Mode</span>
+                    <span className="text-xs text-gray-600">Auto-approve all stages without manual review</span>
                   </div>
                   <YoloModeToggle
                     enabled={yoloMode}
                     onToggle={setYoloMode}
                   />
                 </div>
-                
-                <Button
-                  className="w-full"
-                  variant="secondary"
-                  onClick={handleSkipInterview}
-                  disabled={!projectName || !requirements}
-                >
-                  Skip Interview & Initialize <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-                <p className="text-xs text-center text-muted-foreground mt-2">
-                  Works with OpenAI / generic OpenAI-compatible / Requesty / Aether / AgentRouter
-                </p>
-              </CardFooter>
-            </Card>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex-shrink-0 bg-gray-100 border-t border-gray-400 p-3 space-y-2">
+              <button
+                onClick={handleSkipInterview}
+                disabled={!projectName || !requirements}
+                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded font-bold text-sm flex items-center justify-center gap-2 shadow transition-colors"
+              >
+                Skip Interview & Initialize
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <p className="text-xs text-center text-gray-600">
+                Works with OpenAI / generic OpenAI-compatible / Requesty / Aether / AgentRouter
+              </p>
+            </div>
           </div>
         );
       case 'interview':
