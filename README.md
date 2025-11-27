@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/devussy_logo_minimal.png" alt="Devussy logo" height="120" />
+<img src="docs/assets/devussy_logo_minimal.png" alt="Devussy logo" width="100%" />
 
 [![GitHub](https://img.shields.io/badge/repo-mojomast%2Fdevussy-181717?logo=github)](https://github.com/mojomast/devussy)
 ![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)
@@ -13,7 +13,7 @@
 
 # Devussy
 
-*compose. code. conduct.*
+*make it go brrrrrrrrrrrrrrrrrrrrrrrrrr*
 
 🔗 **Live Demo:** [dev.ussy.host](https://dev.ussy.host) (limited time testing release with built-in inference)
 

@@ -1,0 +1,2 @@
+devussy run-full-pipeline --name "no-repo-test" --languages "Python" --requirements "Build new project from scratch" --output-dir "." --verbose
+devussy run-full-pipeline --resume-from "no-repo-test_pipeline" --output-dir "." --verbose

@@ -1,0 +1,540 @@
+<div align="center">
+
+<!-- Optional: drop a logo image here -->
+<!-- <img src="DEVUSSYLOGO.png" alt="Devussy logo" height="120" /> -->
+
+[![GitHub](https://img.shields.io/badge/repo-mojomast%2Fdevussy-181717?logo=github)](https://github.com/mojomast/devussy)
+![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)
+![Backend](https://img.shields.io/badge/backend-FastAPI-009688?logo=fastapi&logoColor=white)
+![TUI](https://img.shields.io/badge/TUI-Textual-333333)
+![Frontend](https://img.shields.io/badge/frontend-Next.js-000000?logo=nextdotjs&logoColor=white)
+![UI](https://img.shields.io/badge/UI-Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-brightgreen)
+![Status](https://img.shields.io/badge/status-commit_stage_0.3.0-orange)
+
+# Devussy
+
+*compose. code. conduct.*
+
+🔗 **Live Demo:** [dev.ussy.host](https://dev.ussy.host) (limited time testing release with built-in inference)
+
+</div>
+
+---
+
+## 📋 Overview
+
+**Devussy** — Circular Development Methodology & Toolkit
+
+Build software faster with stateless, agent-agnostic development plans.
+
+Devussy isn't just software — it's a methodology for organizing development work so that plans are:
+
+- **🔄 Reusable** – One plan works across humans and LLMs
+- **📦 Portable** – Export as plain markdown, no runtime state
+- **🤖 Agent-agnostic** – Any coding agent can pick up where the last one stopped
+
+**Core concept:** Generate an optimal `devplan.md` for your project **once**, then execute it in a loop of **Circular Development**, passing clean handoff artifacts between phases and agents.
+
+---
+
+## ❌ The Problem
+
+Traditional workflows suffer from:
+
+- **Context loss** – Each new phase or agent has to re-read or rediscover prior work
+- **Friction in handoffs** – Every human or AI handoff means re-explaining the project
+- **Brittle plans** – Prose docs are hard to update and hard for agents to execute consistently
+- **No clear next steps** – Every handoff needs bespoke "ok, now please do X, Y, Z" instructions
+
+---
+
+## ✅ The Devussy Solution: Circular Development
+
+Devussy generates an optimal development plan for your project, then you execute it using **Circular Development**:
+
+1. **Generate Once** – create `devplan.md` and per-phase scaffolding using Devussy  
+2. **Execute Phase by Phase** – follow the handoff prompt for each phase  
+3. **Update as You Go** – each phase updates its own doc **and** `devplan.md`  
+4. **Handoff Seamlessly** – pass the phase document + devplan + next handoff to the next agent  
+5. **Repeat** – each phase follows its predecessor’s updated handoff prompt  
+
+Your devplan is a **stateless artifact** — pure markdown with no runtime requirements or hidden state.
+
+---
+
+## 💡 Why This Matters
+
+### 👤 For Solo Developers
+
+- Generate a complete plan at the start of a project  
+- Execute each phase systematically, one at a time  
+- Come back months later: `devplan.md` still has the full picture  
+- Hand off to Claude/GPT mid-project: all context lives in the artifacts
+
+### 👥 For Teams
+
+- Senior dev generates the devplan  
+- Junior dev receives: phase doc + `devplan.md` + handoff prompt  
+- Junior executes Phase 2 with complete context  
+- No more "what were you thinking here?" meetings
+
+### 🤖 For AI-Assisted Development
+
+- One devplan works with **any** LLM (Claude, GPT-4/5, Mistral, custom agents, etc.)  
+- Handoff between LLMs without rewriting prompts  
+- Each phase adapts based on what the previous phase learned  
+- Stateless handoff means **zero vendor lock-in**
+
+---
+
+## 🛠️ How It Works: Two Stages
+
+### Stage 1: Generation (Devussy Software)
+
+Devussy turns your project idea into an initial multi-phase devplan and handoff docs.
+
+From the repo (or a pip install of this project):
+
+```bash
+# Clone + editable install
+git clone https://github.com/mojomast/devussy.git
+cd devussy
+pip install -e .
+
+# Sanity check
+python -m src.cli version
+```
+
+Then run an interactive session:
+
+```bash
+python -m src.cli interactive
+```
+
+**What happens in practice:**
+
+You provide a project description via a terminal interview
+
+Devussy generates a design and devplan, then uses the terminal UI to stream ~5 phases in parallel
+
+Planning / scoping
+
+Architecture & design
+
+Implementation planning
+
+Testing / QA strategy
+
+Deployment / release & review
+
+You can steer the process via the interactive flow (tweaking constraints, regenerating, etc.) 
+Outputs (files):
+
+devplan.md – complete project plan
+
+Phase docs – phase-*.md (or similar, depending on templates)
+
+handoff.md – top-level “read me and resume” handoff instructions
+
+There are also non-interactive commands for scripted use:
+
+bash
+python -m src.cli run-full-pipeline \
+  --name "My Web App" \
+  --languages "Python,TypeScript" \
+  --requirements "Build a REST API with auth" \
+  --frameworks "FastAPI,React"
+And an adaptive pipeline:
+
+bash
+python -m src.cli run-adaptive-pipeline \
+  --name "My Project" \
+  --languages "Python,TypeScript" \
+  --requirements "Build a REST API" \
+  --validation \
+  --correction
+The adaptive pipeline adjusts phase depth and validation based on project complexity. 
+Stage 2: Execution (Circular Development)
+You (or any agent) then execute each phase one by one.
+
+**Phase 1 (Planning) example:**
+
+1. **Receive:** `devplan.md` + `phase-1-handoff.md`
+2. **Follow:** `phase-1-handoff.md` instructions
+3. **Do:** Planning work (scope, goals, constraints, etc.)
+4. **Update:** `phase-1.md` (what you discovered)
+5. **Update:** `devplan.md` (new constraints, risks, timeline changes)
+6. **Create:** `phase-2-handoff.md` (instructions for the design phase)
+7. **Handoff:** `phase-1.md` + `devplan.md` + `phase-2-handoff.md` to the next agent
+
+**Phase 2 (Design) example:**
+
+1. **Receive:** `devplan.md` + `phase-2-handoff.md`
+2. **Follow:** `phase-2-handoff.md` (which reflects Planning phase learnings)
+3. **Do:** Architecture & design work
+4. **Update:** `phase-2.md` (design decisions, tradeoffs)
+5. **Update:** `devplan.md` (architecture, tool choices, constraints)
+6. **Create:** `phase-3-handoff.md`
+7. **Handoff:** `phase-2.md` + `devplan.md` + `phase-3-handoff.md`
+
+**Phases 3–N** repeat the same pattern. No discovery is lost, and every agent always sees the latest context.
+
+### The Three Artifacts That Travel Together
+
+Each handoff includes three artifacts:
+
+| Artifact | What's In It | Why It Matters |
+|----------|--------------|----------------|
+| Phase Document | Current phase progress, decisions, blockers | Shows what's been done in this phase |
+| `devplan.md` | Full project context + cumulative learnings | Single source of truth across all phases |
+| Handoff Prompt | Instructions for the next phase, updated with constraints | Next phase knows exactly what to do next |
+
+**Example:**
+
+```
+Agent A (Phase 1):
+  └─ Discovers: "We need 3× more compute than planned"
+  └─ Updates: devplan.md
+  └─ Creates: phase-2-handoff.md ("Budget for 3× compute...")
+
+Agent B (Phase 2) receives:
+  ├─ phase-1.md ("Phase 1 discovered...")
+  ├─ devplan.md ("Updated budget: 3× compute")
+  └─ phase-2-handoff.md ("Design considering 3× compute...")
+```
+
+No "hidden" context. No re-explanations.
+
+---
+
+## Agent-Ready Artifacts (Drop-In Folder for Any Coding Agent)
+
+Every pipeline run writes a deterministic set of files to `docs/` and/or `output_*` (e.g. `output_0/`):
+
+- `devplan.md` – Top-level multi-phase plan
+- Per-phase files – `phase-*.md` or equivalent, depending on template
+- `handoff.md` – The primary "read this first" file for downstream agents
+- Supporting config/checkpoint files (for resuming runs)
+
+This layout is designed so you can treat the output like a portable project brief:
+
+1. Zip the generated folder (`docs/` or `output_0/`, etc.)
+2. In another coding agent (ChatGPT, Claude, Roo Code, Cursor, etc.), upload that folder or at least `handoff.md`
+3. Tell the agent something like:
+   > "You're taking over a Devussy project. Read handoff.md, then continue implementation from the next unfinished phase."
+
+Because everything is plain markdown with stable headings and anchors (see `AGENTS.md`, `DEVPLAN_FOR_NEXT_AGENT.md`, `HANDOFF_FOR_NEXT_AGENT.md`), any agent can safely:
+
+Understand the current project state
+
+See which phases are done vs TODO
+
+Append progress and new tasks without breaking the structure
+
+Keep the same folder committed in git as the single source of truth
+
+What’s in this branch (adaptive-llm-clean)
+This branch focuses on a cleaned-up, adaptive LLM pipeline plus the existing CLI / TUI engine and web UI: 
++1
+
+Core pipeline
+
+Multi-stage flow: Interview → Design → DevPlan → Detailed DevPlan (per-phase) → Handoff
+
+Provider-agnostic LLM client layer (OpenAI, OpenAI-compatible, Requesty, Aether, AgentRouter, etc.)
+
+Async, checkpointed execution with resumable runs
+
+Adaptive complexity pipeline
+
+Automatic complexity scoring and depth selection (minimal / standard / detailed)
+
+Phase count estimation and depth-aware templates
+
+Design validation with rule-based + LLM checks
+
+Optional correction loop that iterates until the design is “good enough”
+
+Interfaces
+
+CLI for one-shot or scripted runs (python -m src.cli ...)
+
+Interactive terminal UI (Textual) that streams multiple phases live
+
+Next.js web UI in devussy-web/ with SSE streaming and basic analytics
+
+Agent-friendly docs
+
+Stable anchor comments in planning docs
+
+AGENTS.md, START_HERE.md, DEVPLAN_FOR_NEXT_AGENT.md, HANDOFF_FOR_NEXT_AGENT.md to guide AI tooling
+
+Requirements
+Python 3.9+
+
+Node.js 18+ (for the Next.js frontend)
+
+An LLM API key (OpenAI, Aether, Requesty, AgentRouter, or other OpenAI-compatible provider) 
+Install
+Clone and install in editable mode:
+
+bash
+git clone https://github.com/mojomast/devussy.git
+cd devussy
+pip install -e .
+Sanity-check the CLI:
+
+bash
+python -m src.cli version
+Configure API keys
+Devussy reads standard env vars (or a .env file in the repo root):
+
+bash
+# OpenAI
+OPENAI_API_KEY=sk-...
+
+# Generic OpenAI-compatible
+GENERIC_API_KEY=...
+GENERIC_BASE_URL=https://api.your-openai-compatible.com/v1
+
+# Requesty
+REQUESTY_API_KEY=...
+
+# Aether AI
+AETHER_API_KEY=...
+
+You can also set per-stage keys (e.g. DESIGN_API_KEY, DEVPLAN_API_KEY) if you want different providers or models per phase. 
+Quick start (CLI)
+1. Interactive single-window workflow (recommended)
+bash
+python -m src.cli interactive
+This will:
+
+Run a console-based LLM interview (type /done when finished)
+
+Stream the design to the console ([design] prefix)
+
+Stream a basic devplan to the console ([devplan] prefix)
+
+Open the Textual terminal UI and stream multiple phases in parallel 
+2. Legacy interview launcher
+bash
+python -m src.entry
+This uses the original interactive flow. Streaming is controlled by config; for the best UX, prefer src.cli interactive. 
+3. Full pipeline (non-interactive)
+bash
+python -m src.cli run-full-pipeline \
+  --name "My Web App" \
+  --languages "Python,TypeScript" \
+  --requirements "Build a REST API with auth" \
+  --frameworks "FastAPI,React"
+Adaptive complexity pipeline
+Run the adaptive pipeline:
+
+bash
+python -m src.cli run-adaptive-pipeline \
+  --name "My Project" \
+  --languages "Python,TypeScript" \
+  --requirements "Build a REST API" \
+  --validation \
+  --correction
+This pipeline:
+
+- Scores project complexity and selects a depth level
+- Validates the design for consistency / scope / hallucinations
+- Optionally runs a correction loop until quality criteria are met
+- Emits design + DevPlan aligned with the chosen depth
+
+Supporting implementation lives under `adaptive_llm_implementation/` and is covered by dedicated tests.
+
+---
+
+## Web UI (devussy-web/)
+
+The bundled Next.js app gives you a visual, multi-window view of the pipeline with live streaming.
+
+From the repo root:
+
+```bash
+# Terminal 1: Python streaming backend
+python devussy-web/dev_server.py
+
+# Terminal 2: Next.js frontend
+cd devussy-web
+npm install      # first run only
+npm run dev
+```
+
+Then visit [http://localhost:3000](http://localhost:3000).
+
+**Highlights:**
+
+- Draggable windows for each phase (interview, design, devplan, handoff)
+- Real-time streaming via Server-Sent Events (SSE)
+- Per-phase model configuration with shared defaults
+- Lightweight analytics stored locally in `analytics.db` with opt-out support
+
+---
+
+## Streaming & Concurrency (Backend)
+
+Devussy supports per-phase streaming and parallel phase generation.
+
+**Key ideas:**
+
+- Each phase (Design, DevPlan, Handoff) can enable/disable streaming
+- A global streaming flag + config file provide sensible fallbacks
+- `max_concurrent_requests` controls how many API calls & phases run in parallel
+
+You can tune these via:
+
+- `config/config.yaml`
+- Env vars like:
+
+```bash
+STREAMING_ENABLED=true
+STREAMING_DESIGN_ENABLED=true
+STREAMING_DEVPLAN_ENABLED=false
+STREAMING_HANDOFF_ENABLED=true
+
+MAX_CONCURRENT_REQUESTS=5
+```
+
+For deeper details, see `STREAMING_GUIDE.md`.
+
+---
+
+## Checkpoints
+
+The pipeline saves checkpoints so you can pause and resume.
+
+**Common commands:**
+
+```bash
+# List existing checkpoints
+python -m src.cli list-checkpoints
+
+# Delete a specific checkpoint
+python -m src.cli delete-checkpoint <key>
+
+# Cleanup old checkpoints, keeping the most recent N
+python -m src.cli cleanup-checkpoints --keep 5
+```
+
+Checkpoint keys are printed as the pipeline runs (e.g. `myproj_pipeline`) and can be passed back to CLI commands that support `--resume-from`.
+
+---
+
+## Layout & Docs
+
+**Notable folders/files:**
+
+- `src/` – Core pipeline, CLI, interview engine, adapters
+- `adaptive_llm_implementation/` – Adaptive complexity & validation logic
+- `devussy-web/` – Next.js frontend and dev server
+- `config/` – Generated YAML config for runs
+- `templates/` – Jinja templates for designs, devplans, handoff docs
+- `docs/`, `output_*/` – Generated artifacts
+- `AGENTS.md`, `WARP.md`, `START_HERE.md` – Guidance for AI agents and tools
+- `devarchive/` – Legacy docs and helper scripts
+
+---
+
+## Tests
+
+Tests live under `tests/` plus a few top-level integration scripts.
+
+**Typical flow:**
+
+```bash
+# Run all tests
+pytest -q
+
+# Format / lint
+black src && isort src && flake8 src
+```
+
+---
+
+## Circular Development Philosophy
+
+Software development isn't linear — it's circular:
+
+- You plan, you discover constraints, you update the plan
+- You build, you hit edge cases, you iterate
+- You test, you find bugs, you refine
+
+Devussy bakes that into the process:
+
+- **Devplans are living documents** — Updated as each phase learns
+- **Agents/teams collaborate on a single plan** — Stateless, no hidden state
+- **Handoff prompts adapt** — Each phase's instructions include previous discoveries
+- **Progress is always captured** — `devplan.md` remains your single source of truth
+
+---
+
+## When to Use Devussy
+✅ Use Devussy if:
+
+You’re starting a new project from scratch
+
+You want to hand off between humans and AI seamlessly
+
+Your projects naturally split into multiple phases of work
+
+You want a structured, reusable plan
+
+You’re tired of re-explaining context to new team members/agents
+
+❌ Probably not for you if:
+
+You’re only doing a tiny one-off task
+
+You have a rigid, non-iterative waterfall process
+
+You don’t need multi-phase handoffs or AI-assisted dev at all
+
+FAQ
+Q: How is Devussy different from other planning tools?
+Most planning tools create a plan and stop. Devussy generates an initial plan and gives you a methodology for executing it with stateless handoffs. You can hand off devplan.md + phase artifacts to any agent (human or AI) and they have full context.
+
+Q: Can I use Devussy with my favorite LLM?
+Yes. Devussy supports any LLM with an OpenAI-style API. Providers like OpenAI, Aether, Requesty, AgentRouter, and generic OpenAI-compatible endpoints are supported. 
+Q: What makes a devplan “stateless”?
+A stateless devplan has no hidden state, no database, no runtime dependencies. It’s pure markdown. You can read it on day 1 or day 365 and get the same context. You can hand it to any agent without setup.
+
+Q: What if I discover new constraints during Phase 2?
+Update devplan.md and create a new phase-3-handoff.md with the new constraints. The next phase follows the updated handoff prompt.
+
+Q: Can my team collaborate on one devplan?
+Yes. Devplans are markdown files, so you can:
+
+Put them in Git and use PRs
+
+Share them via Slack/Discord
+
+Edit collaboratively with conflict resolution
+
+Q: Does Devussy support existing codebases?
+Not yet! Stay tuned!
+## Notes for AI Agents
+
+If you're an AI agent working on this repo:
+
+- Read `AGENTS.md` and `START_HERE.md` first
+- Only load anchored sections (e.g. between `<!-- PROGRESS_LOG_START -->` / `END`) to keep context lean
+- Use safe write helpers and never remove anchor comments when updating docs
+
+---
+
+## Contributing
+
+Issues, PRs, and vibes are welcome. See `DevDocs/` and `START_HERE.md` for internal dev notes and roadmap.
+
+---
+
+<p align="center">
+  <em>Built with ❤️ for developers who want their plans to travel with them.</em>
+</p>
+

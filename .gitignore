@@ -65,10 +65,12 @@ START_HERE.txt
 
 # Generated project outputs (in root)
 /devplan.md
+/handoff.md
 /handoff_prompt.md
 /project_design.md
 /phase*.md
 /rerun_commands.txt
+WARP.md
 
 # Standalone script and config
 interview_standalone.py
