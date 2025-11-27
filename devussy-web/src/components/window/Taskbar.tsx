@@ -244,48 +244,47 @@ export const Taskbar: React.FC<TaskbarProps> = ({
         );
     }
 
-    // Default / Terminal Theme Taskbar (Floating Glass)
+    // Default / Terminal Theme Taskbar (Floating Glass on Desktop, Fixed Bar on Mobile)
     return (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 p-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 shadow-2xl transition-all hover:bg-black/70">
-            <div className="px-2 border-r border-white/10 mr-1 flex items-center">
+        <div className="fixed bottom-0 left-0 right-0 z-[100] flex items-center gap-2 p-2 bg-black/80 backdrop-blur-md border-t border-white/10 md:bottom-4 md:left-1/2 md:-translate-x-1/2 md:right-auto md:border md:rounded-xl md:bg-black/60 md:w-auto">
+            <div className="hidden md:flex px-2 border-r border-white/10 mr-1 items-center">
                 <Layout className="h-5 w-5 text-primary" />
             </div>
 
-            {/* New Project Button */}
-            <button
-                onClick={onNewProject}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
-                title="New Project"
-            >
-                <Plus className="h-4 w-4" />
-                <span>New</span>
-            </button>
-
-            {/* Help Button */}
-            <button
-                onClick={onHelp}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
-                title="Help"
-            >
-                <HelpCircle className="h-4 w-4" />
-                <span>Help</span>
-            </button>
-
-            {/* IRC Button */}
-            <button
-                onClick={onOpenIrc}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
-                title="IRC Chat"
-            >
-                <MessageSquare className="h-4 w-4" />
-                <span>Chat</span>
-            </button>
+            {/* Main actions - flex-shrink-0 to prevent them from shrinking on mobile */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                    onClick={onNewProject}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
+                    title="New Project"
+                >
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden md:inline">New</span>
+                </button>
+                <button
+                    onClick={onHelp}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
+                    title="Help"
+                >
+                    <HelpCircle className="h-4 w-4" />
+                    <span className="hidden md:inline">Help</span>
+                </button>
+                <button
+                    onClick={onOpenIrc}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
+                    title="IRC Chat"
+                >
+                    <MessageSquare className="h-4 w-4" />
+                    <span className="hidden md:inline">Chat</span>
+                </button>
+            </div>
 
             {windows.length > 0 && (
                 <div className="h-6 w-px bg-white/10 mx-1" />
             )}
 
-            <div className="flex-1 flex items-center gap-1 overflow-x-auto">
+            {/* Scrollable window list */}
+            <div className="flex-1 flex items-center gap-1 overflow-x-auto min-w-0">
                 {windows.map((window) => {
                     const isActive = activeWindowId === window.id;
                     const isMinimized = minimizedWindowIds.includes(window.id);
@@ -295,23 +294,19 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                             key={window.id}
                             onClick={() => onWindowClick(window.id)}
                             className={cn(
-                                "relative group flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all min-w-[120px] max-w-[200px]",
+                                "relative group flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all w-full md:w-auto md:min-w-[120px] md:max-w-[200px]",
                                 "text-muted-foreground hover:bg-white/5 hover:text-white",
                                 isActive && !isMinimized && "bg-white/10 text-white shadow-inner",
                                 isMinimized && "opacity-50 hover:opacity-100"
                             )}
                         >
                             <div className={cn(
-                                "h-2 w-2 rounded-full transition-colors",
+                                "h-2 w-2 rounded-full transition-colors flex-shrink-0",
                                 isActive && !isMinimized ? "bg-green-500" : "bg-white/20 group-hover:bg-white/50"
                             )} />
                             <span className="truncate flex-1 text-left">{window.title}</span>
-
-                            {/* Tooltip-ish indicator for minimized */}
                             {isMinimized && (
-                                <div className="absolute -top-1 -right-1">
-                                    <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse" />
-                                </div>
+                                <div className="absolute top-1 right-1 h-2 w-2 bg-blue-500 rounded-full" />
                             )}
                         </button>
                     );

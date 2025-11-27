@@ -576,3 +576,47 @@
   outline: 1px dotted #000000;
   outline-offset: 2px;
 }
+
+/* Theme: Cyberpunk */
+[data-theme="cyberpunk"] {
+  --background: #0d0221;
+  --foreground: #00f0ff;
+  --card: rgba(1, 22, 39, 0.8);
+  --card-foreground: #f0f;
+  --popover: #011627;
+  --popover-foreground: #00f0ff;
+  --primary: #f0f;
+  --primary-foreground: #0d0221;
+  --secondary: #00f0ff;
+  --secondary-foreground: #0d0221;
+  --muted: #011627;
+  --muted-foreground: #00f0ff;
+  --accent: #f0f;
+  --accent-foreground: #0d0221;
+  --destructive: #ff3333;
+  --border: #f0f;
+  --input: #011627;
+  --ring: #f0f;
+}
+
+/* Theme: Retro */
+[data-theme="retro"] {
+  --background: #f1f1f1;
+  --foreground: #333;
+  --card: #fff;
+  --card-foreground: #333;
+  --popover: #fff;
+  --popover-foreground: #333;
+  --primary: #ff5722;
+  --primary-foreground: #fff;
+  --secondary: #ffc107;
+  --secondary-foreground: #333;
+  --muted: #eee;
+  --muted-foreground: #666;
+  --accent: #ff9800;
+  --accent-foreground: #fff;
+  --destructive: #f44336;
+  --border: #ccc;
+  --input: #fff;
+  --ring: #ff5722;
+}

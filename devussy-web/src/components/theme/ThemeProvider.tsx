@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-export type Theme = 'default' | 'terminal' | 'bliss';
+export type Theme = 'default' | 'terminal' | 'bliss' | 'cyberpunk' | 'retro';
 
 interface ThemeContextType {
     theme: Theme;
@@ -19,7 +19,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setMounted(true);
         // Load theme from localStorage
         const savedTheme = localStorage.getItem('devussy-theme') as Theme;
-        if (savedTheme && ['default', 'terminal', 'bliss'].includes(savedTheme)) {
+        if (savedTheme && ['default', 'terminal', 'bliss', 'cyberpunk', 'retro'].includes(savedTheme)) {
             setThemeState(savedTheme);
             document.documentElement.setAttribute('data-theme', savedTheme);
         }

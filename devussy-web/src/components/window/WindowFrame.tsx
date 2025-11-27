@@ -5,6 +5,7 @@ import { motion, useDragControls } from 'framer-motion';
 import { Minus, X } from 'lucide-react';
 import { cn } from '@/utils';
 import { useTheme } from '@/components/theme/ThemeProvider';
+import { useWindowSize } from '@/hooks/useWindowSize';
 
 interface WindowFrameProps {
     id?: string;
@@ -38,6 +39,10 @@ export function WindowFrame({
     const { theme } = useTheme();
     const dragControls = useDragControls();
     const [isMaximized, setIsMaximized] = useState(false);
+
+    const { width: screenWidth } = useWindowSize();
+    const isMobile = screenWidth < 768; // md breakpoint
+
     const [size, setSize] = useState(initialSize);
     const [position, setPosition] = useState(initialPosition);
 
@@ -104,14 +109,22 @@ export function WindowFrame({
     if (theme === 'bliss') {
         return (
             <motion.div
-                drag={!isMaximized}
+                drag={!isMaximized && !isMobile}
                 dragControls={dragControls}
                 dragMomentum={false}
                 initial="hidden"
                 animate={isMinimized ? "minimized" : isMaximized ? "maximized" : "visible"}
                 variants={variants}
                 onPointerDown={onFocus}
-                style={{
+                style={isMobile ? {
+                    position: 'fixed',
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    height: '100%',
+                    zIndex: style?.zIndex || (isActive ? 50 : 10),
+                    ...style,
+                } : {
                     position: isMaximized ? 'fixed' : 'absolute',
                     left: isMaximized ? 0 : position.x,
                     top: isMaximized ? 0 : position.y,
@@ -171,7 +184,7 @@ export function WindowFrame({
                 </div>
 
                 {/* Resize Handles */}
-                {!isMaximized && (
+                {!isMaximized && !isMobile && (
                     <>
                         <div onPointerDown={(e) => handleResizeStart(e, 'se')} className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize z-50" />
                         <div onPointerDown={(e) => handleResizeStart(e, 'sw')} className="absolute bottom-0 left-0 h-4 w-4 cursor-sw-resize z-50" />
@@ -215,7 +228,7 @@ export function WindowFrame({
         >
             <div
                 onPointerDown={(e) => dragControls.start(e)}
-                className="flex h-10 shrink-0 cursor-grab items-center justify-between border-b border-white/10 bg-white/5 px-4 active:cursor-grabbing select-none"
+                className={cn("flex h-10 shrink-0 items-center justify-between border-b border-white/10 bg-white/5 px-4 select-none", { "cursor-grab active:cursor-grabbing": !isMobile })}
             >
                 <div className="flex items-center gap-2">
                     <div className="h-3 w-3 rounded-full bg-red-500/20" />
@@ -232,7 +245,7 @@ export function WindowFrame({
                 {children}
             </div>
 
-            {!isMaximized && (
+            {!isMaximized && !isMobile && (
                 <>
                     <div onPointerDown={(e) => handleResizeStart(e, 'se')} className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize z-50" />
                     <div onPointerDown={(e) => handleResizeStart(e, 'sw')} className="absolute bottom-0 left-0 h-4 w-4 cursor-sw-resize z-50" />
