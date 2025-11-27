@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History, ArrowLeft } from "lucide-react";
+import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History, ArrowLeft, MessageSquare } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ComplexityAssessment, ComplexityProfile, ComplexityBadge } from './ComplexityAssessment';
 import { ValidationReport, ValidationReportData, SanityReviewResult, ValidationBadge, ValidationIssue } from './ValidationReport';
 import { CorrectionTimeline, CorrectionHistory, CorrectionBadge } from './CorrectionTimeline';
@@ -18,6 +18,7 @@ interface DesignViewProps {
     modelConfig: ModelConfig;
     onDesignComplete: (design: any) => void;
     onGoBack?: () => void;
+    onRequestRefinement?: () => void;  // Callback to open refinement window
     autoRun?: boolean;
     enableAdaptive?: boolean;  // Enable adaptive complexity analysis
     yoloMode?: boolean;
@@ -31,6 +32,7 @@ export const DesignView = ({
     modelConfig,
     onDesignComplete,
     onGoBack,
+    onRequestRefinement,
     autoRun = false,
     enableAdaptive = true,
     yoloMode = false,
@@ -62,6 +64,9 @@ export const DesignView = ({
     const [isCorrecting, setIsCorrecting] = useState(false);
     const [currentCorrectionIteration, setCurrentCorrectionIteration] = useState(0);
     const [showCorrection, setShowCorrection] = useState(true);
+    
+    // Refinement prompt state (when not in YOLO mode)
+    const [showRefinementPrompt, setShowRefinementPrompt] = useState(false);
 
     // Ref to track the current abort controller
     const abortControllerRef = React.useRef<AbortController | null>(null);
@@ -380,6 +385,8 @@ export const DesignView = ({
                             }
 
                             if (data.done && data.design) {
+                                console.log('[DesignView] Received structured design:', data.design);
+                                console.log('[DesignView] Design fields:', Object.keys(data.design));
                                 setDesignData(data.design);
                                 return;
                             }
@@ -449,27 +456,32 @@ export const DesignView = ({
 
     const hasAutoAdvanced = React.useRef(false);
 
-    // Auto-advance when complete - include complexity profile and validation in design data
-    // Only auto-advance if validation passed (or validation is disabled)
+    // Auto-advance when complete - only in YOLO mode
+    // Otherwise show refinement prompt for user decision
     useEffect(() => {
-        const canAutoAdvance = autoRun && 
-            !isGenerating && 
+        const isFullyComplete = !isGenerating && 
             !isAnalyzingComplexity && 
             !isValidating &&
             !isCorrecting &&
             designContent && 
-            !hasAutoAdvanced.current &&
-            // Only auto-advance if validation passed or not running adaptive
-            (!enableAdaptive || (validationReport?.is_valid));
+            !hasAutoAdvanced.current;
             
-        if (canAutoAdvance) {
+        if (!isFullyComplete) return;
+        
+        // In YOLO mode: auto-advance immediately (skip validation checks)
+        if (yoloMode && autoRun) {
             const timer = setTimeout(() => {
                 hasAutoAdvanced.current = true;
                 handleApprove();
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [autoRun, isGenerating, isAnalyzingComplexity, isValidating, isCorrecting, designContent, validationReport, enableAdaptive]);
+        
+        // Not in YOLO mode: show refinement prompt instead of auto-advancing
+        if (!yoloMode && !showRefinementPrompt) {
+            setShowRefinementPrompt(true);
+        }
+    }, [yoloMode, autoRun, isGenerating, isAnalyzingComplexity, isValidating, isCorrecting, designContent, showRefinementPrompt]);
 
     const handleApprove = () => {
         const designWithMetadata = {
@@ -479,6 +491,8 @@ export const DesignView = ({
             sanity_review: sanityReview,
             correction_history: correctionHistory
         };
+        console.log('[DesignView] Passing design to next stage:', designWithMetadata);
+        console.log('[DesignView] Design has fields:', Object.keys(designWithMetadata));
         onDesignComplete(designWithMetadata);
     };
     
@@ -637,6 +651,19 @@ export const DesignView = ({
                         Regenerate
                     </Button>
                     
+                    {/* Refinement Button */}
+                    {designContent && !isGenerating && onRequestRefinement && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onRequestRefinement}
+                            className="gap-2"
+                        >
+                            <MessageSquare className="h-4 w-4" />
+                            Refine Design
+                        </Button>
+                    )}
+                    
                     {/* YOLO Mode Toggle */}
                     {onYoloModeChange && (
                         <YoloModeToggle
@@ -682,6 +709,47 @@ export const DesignView = ({
                             </span>
                         </div>
                     </div>
+                )}
+                
+                {/* Refinement Prompt (when not in YOLO mode) */}
+                {showRefinementPrompt && !yoloMode && designContent && (
+                    <Card className="mb-6 border-primary/50 bg-primary/5">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <MessageSquare className="h-5 w-5 text-primary" />
+                                Ready to Continue
+                            </CardTitle>
+                            <CardDescription>
+                                Design generation is complete. Would you like to refine the design before generating phases?
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                    if (onRequestRefinement) {
+                                        onRequestRefinement();
+                                    }
+                                }}
+                                disabled={!onRequestRefinement}
+                            >
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Yes, Refine Design
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                onClick={() => {
+                                    setShowRefinementPrompt(false);
+                                    hasAutoAdvanced.current = true;
+                                    handleApprove();
+                                }}
+                            >
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                No, Continue to Plan
+                            </Button>
+                        </CardContent>
+                    </Card>
                 )}
                 
                 {/* Complexity Assessment Panel */}

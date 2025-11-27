@@ -207,28 +207,39 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
             # Launch a task to run the generator with streaming handler
             async def run_generation():
                 try:
-                    await generator.generate(
+                    # Generate returns the structured ProjectDesign object
+                    design_result = await generator.generate(
                         project_name=project_name,
                         languages=languages,
                         requirements=requirements,
                         streaming_handler=streaming_handler,
                     )
+                    # Send the structured design object as the final event
+                    await queue.put({'done': True, 'design': design_result.model_dump()})
                 except Exception as e:
                     # Log the error and push it to the queue so the client knows something went wrong
                     print(f"ERROR in run_generation: {e}")
-                    await queue.put(None) # Signal end of stream on error for now
+                    import traceback
+                    traceback.print_exc()
+                    await queue.put({'error': str(e)})
+                    await queue.put(None) # Signal end of stream on error
                 finally:
-                    # Ensure the queue gets termination signal if generator finishes with no completion handler
+                    # Ensure the queue gets termination signal if generator finishes
                     await queue.put(None)
 
             generation_task = asyncio.create_task(run_generation())
 
             # Yield tokens as SSE
             while True:
-                token = await queue.get()
-                if token is None:
+                item = await queue.get()
+                if item is None:
                     break
-                yield f"data: {json.dumps({'content': token})}\n\n"
+                elif isinstance(item, dict):
+                    # Handle done/error messages with full design object
+                    yield f"data: {json.dumps(item)}\n\n"
+                else:
+                    # Regular token
+                    yield f"data: {json.dumps({'content': item})}\n\n"
                 # Yield a newline to flush the buffer immediately
                 yield ":\n\n"
 
@@ -632,9 +643,17 @@ async def plan_basic(request: Request):
     if not design_data:
         raise HTTPException(status_code=400, detail="Missing design data")
 
+    # Debug logging
+    print(f"[plan_basic] Received design data with keys: {list(design_data.keys())}")
+    print(f"[plan_basic] project_name: {design_data.get('project_name', 'MISSING')}")
+    print(f"[plan_basic] objectives count: {len(design_data.get('objectives', []))}")
+    print(f"[plan_basic] tech_stack count: {len(design_data.get('tech_stack', []))}")
+    print(f"[plan_basic] Has architecture_overview: {bool(design_data.get('architecture_overview'))}")
+
     try:
         design = ProjectDesign(**design_data)
     except Exception as e:
+        print(f"[plan_basic] ERROR parsing ProjectDesign: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
     # Optional overrides
@@ -823,6 +842,319 @@ async def get_models():
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Design & Plan Refinement Endpoints (Interactive Iteration)
+# =============================================================================
+
+@app.post("/api/design/refine")
+async def design_refine(request: Request):
+    """Interactive design refinement via chat interface.
+    
+    Takes design + chat history and streams conversational responses
+    to help users iterate on the design before generating phases.
+    """
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
+    data = await request.json()
+    design_data = data.get('design')
+    project_name = data.get('projectName', '')
+    requirements = data.get('requirements', '')
+    chat_history = data.get('chatHistory', [])
+    user_message = data.get('userMessage', '')
+    
+    if not design_data or not user_message:
+        raise HTTPException(status_code=400, detail="Missing design or user message")
+    
+    config = load_config()
+    config.llm.streaming_enabled = True
+    
+    async def event_generator():
+        try:
+            llm_client = create_llm_client(config)
+            
+            # Build conversation context
+            conversation = []
+            for msg in chat_history:
+                if msg['role'] != 'system':
+                    conversation.append(f"{msg['role'].upper()}: {msg['content']}")
+            conversation.append(f"USER: {user_message}")
+            
+            # Build prompt with design context
+            design_summary = f"""
+Project: {project_name}
+Requirements: {requirements}
+
+Current Design:
+- Objectives: {', '.join(design_data.get('objectives', []))}
+- Tech Stack: {', '.join(design_data.get('tech_stack', []))}
+- Dependencies: {', '.join(design_data.get('dependencies', []))}
+"""
+            
+            prompt = f"""You are helping refine a project design through conversation. 
+
+{design_summary}
+
+Chat History:
+{chr(10).join(conversation)}
+
+Provide helpful, concise responses to guide the user toward a better design. Focus on:
+- Identifying potential issues
+- Suggesting improvements
+- Clarifying technical approaches
+- Ensuring requirements are met
+
+Respond conversationally and constructively."""
+            
+            queue: asyncio.Queue = asyncio.Queue()
+            
+            class StreamHandler:
+                async def on_token_async(self, token: str):
+                    await queue.put({'content': token})
+                async def on_completion_async(self, full_response: str):
+                    await queue.put({'done': True})
+                async def __aenter__(self):
+                    return self
+                async def __aexit__(self, exc_type, exc, tb):
+                    return False
+            
+            handler = StreamHandler()
+            
+            async def run_chat():
+                await llm_client.generate_completion_streaming(
+                    prompt,
+                    callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
+                    streaming_handler=handler
+                )
+            
+            task = asyncio.create_task(run_chat())
+            
+            while True:
+                item = await queue.get()
+                if item.get('content'):
+                    yield f"data: {json.dumps({'content': item['content']})}\n\n"
+                elif item.get('done'):
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
+                    
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"Error in design refinement: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.post("/api/design/review")
+async def design_automated_review(request: Request):
+    """Run automated design review using design_review pipeline."""
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
+    data = await request.json()
+    design_data = data.get('design')
+    project_name = data.get('projectName', '')
+    
+    if not design_data:
+        raise HTTPException(status_code=400, detail="Missing design")
+    
+    try:
+        design = ProjectDesign(**design_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid design: {e}")
+    
+    config = load_config()
+    config.llm.streaming_enabled = True
+    
+    async def event_generator():
+        try:
+            from src.pipeline.design_review import DesignReviewRefiner
+            
+            llm_client = create_llm_client(config)
+            reviewer = DesignReviewRefiner(llm_client)
+            
+            # Run review (returns updated design + report)
+            updated_design, report, changed = await reviewer.refine(design)
+            
+            # Stream the report as response
+            for char in report:
+                yield f"data: {json.dumps({'content': char})}\n\n"
+                await asyncio.sleep(0.001)  # Small delay for readability
+            
+            yield f"data: {json.dumps({'done': True, 'changed': changed})}\n\n"
+            
+        except Exception as e:
+            print(f"Error in automated review: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.post("/api/plan/refine")
+async def plan_refine(request: Request):
+    """Interactive plan refinement via chat interface.
+    
+    Takes plan + design + chat history and streams conversational responses
+    to help users iterate on phases before execution.
+    """
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
+    data = await request.json()
+    plan_data = data.get('plan')
+    design_data = data.get('design')
+    project_name = data.get('projectName', '')
+    chat_history = data.get('chatHistory', [])
+    user_message = data.get('userMessage', '')
+    
+    if not plan_data or not user_message:
+        raise HTTPException(status_code=400, detail="Missing plan or user message")
+    
+    config = load_config()
+    config.llm.streaming_enabled = True
+    
+    async def event_generator():
+        try:
+            llm_client = create_llm_client(config)
+            
+            # Build conversation context
+            conversation = []
+            for msg in chat_history:
+                if msg['role'] != 'system':
+                    conversation.append(f"{msg['role'].upper()}: {msg['content']}")
+            conversation.append(f"USER: {user_message}")
+            
+            # Build prompt with plan context
+            phases = plan_data.get('phases', [])
+            phase_summary = '\n'.join([
+                f"Phase {p.get('number', i+1)}: {p.get('title', 'Untitled')}"
+                for i, p in enumerate(phases)
+            ])
+            
+            plan_context = f"""
+Project: {project_name}
+
+Current Development Plan ({len(phases)} phases):
+{phase_summary}
+"""
+            
+            prompt = f"""You are helping refine a development plan through conversation.
+
+{plan_context}
+
+Chat History:
+{chr(10).join(conversation)}
+
+Provide helpful, concise responses to guide the user toward a better plan. Focus on:
+- Phase ordering and dependencies
+- Coverage of all design requirements
+- Appropriate scope and granularity
+- Missing or redundant phases
+
+Respond conversationally and constructively."""
+            
+            queue: asyncio.Queue = asyncio.Queue()
+            
+            class StreamHandler:
+                async def on_token_async(self, token: str):
+                    await queue.put({'content': token})
+                async def on_completion_async(self, full_response: str):
+                    await queue.put({'done': True})
+                async def __aenter__(self):
+                    return self
+                async def __aexit__(self, exc_type, exc, tb):
+                    return False
+            
+            handler = StreamHandler()
+            
+            async def run_chat():
+                await llm_client.generate_completion_streaming(
+                    prompt,
+                    callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
+                    streaming_handler=handler
+                )
+            
+            task = asyncio.create_task(run_chat())
+            
+            while True:
+                item = await queue.get()
+                if item.get('content'):
+                    yield f"data: {json.dumps({'content': item['content']})}\n\n"
+                elif item.get('done'):
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
+                    
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            print(f"Error in plan refinement: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
+@app.post("/api/plan/review")
+async def plan_automated_review(request: Request):
+    """Run automated plan review to identify issues before execution."""
+    _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
+    data = await request.json()
+    plan_data = data.get('plan')
+    design_data = data.get('design')
+    project_name = data.get('projectName', '')
+    
+    if not plan_data:
+        raise HTTPException(status_code=400, detail="Missing plan")
+    
+    config = load_config()
+    config.llm.streaming_enabled = True
+    
+    async def event_generator():
+        try:
+            llm_client = create_llm_client(config)
+            
+            # Build review prompt
+            phases = plan_data.get('phases', [])
+            phase_list = '\n'.join([
+                f"Phase {p.get('number', i+1)}: {p.get('title', 'Untitled')}\n  {p.get('description', '')[:100]}..."
+                for i, p in enumerate(phases)
+            ])
+            
+            design_summary = ""
+            if design_data:
+                design_summary = f"""
+Design Context:
+- Objectives: {', '.join(design_data.get('objectives', [])[:3])}
+- Tech Stack: {', '.join(design_data.get('tech_stack', []))}
+"""
+            
+            prompt = f"""Review this development plan for potential issues:
+
+Project: {project_name}
+{design_summary}
+
+Development Plan ({len(phases)} phases):
+{phase_list}
+
+Analyze the plan and provide:
+1. Any missing phases or functionality gaps
+2. Phase ordering issues or dependency problems
+3. Overly broad or narrow phases
+4. Misalignment with design requirements
+5. Overall assessment and recommendations
+
+Format as a clear, structured review."""
+            
+            response = await llm_client.generate_completion(prompt)
+            
+            # Stream the response character by character
+            for char in response:
+                yield f"data: {json.dumps({'content': char})}\n\n"
+                await asyncio.sleep(0.001)
+            
+            yield f"data: {json.dumps({'done': True})}\n\n"
+            
+        except Exception as e:
+            print(f"Error in plan review: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
 
 
 # =============================================================================

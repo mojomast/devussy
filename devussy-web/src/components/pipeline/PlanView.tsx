@@ -3,22 +3,27 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus } from "lucide-react";
+import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus, MessageSquare, ArrowRight } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { PhaseCard, PhaseData } from './PhaseCard';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 interface PlanViewProps {
     design: any;
     modelConfig: ModelConfig;
     onPlanApproved: (plan: any) => void;
+    onRequestRefinement?: () => void;  // Callback to open refinement window
     autoRun?: boolean;
+    yoloMode?: boolean;
 }
 
 export const PlanView = ({
     design,
     modelConfig,
     onPlanApproved,
-    autoRun = false
+    onRequestRefinement,
+    autoRun = false,
+    yoloMode = false
 }: PlanViewProps) => {
     const [plan, setPlan] = useState<any>(null);
     const [planContent, setPlanContent] = useState("");  // Track streaming content
@@ -28,6 +33,9 @@ export const PlanView = ({
     const [isEditing, setIsEditing] = useState(false);  // For raw text editing
     const [viewMode, setViewMode] = useState<'cards' | 'raw'>('cards');  // Toggle between card/raw view
     const [error, setError] = useState<string | null>(null);
+    
+    // Refinement prompt state (when not in YOLO mode)
+    const [showRefinementPrompt, setShowRefinementPrompt] = useState(false);
 
     // Parse phases from raw text content
     const parsePhasesFromText = (text: string): PhaseData[] => {
@@ -118,6 +126,9 @@ export const PlanView = ({
 
     const generatePlan = async () => {
         if (isGeneratingRef.current) return;
+
+        console.log('[PlanView] Starting plan generation with design:', design);
+        console.log('[PlanView] Design fields:', design ? Object.keys(design) : 'NO DESIGN');
 
         setIsLoading(true);
         setError(null);
@@ -296,16 +307,27 @@ export const PlanView = ({
 
     const hasAutoApproved = React.useRef(false);
 
-    // Auto-approve effect
+    // Auto-approve effect - only in YOLO mode
+    // Otherwise show refinement prompt for user decision
     useEffect(() => {
-        if (autoRun && plan && !isLoading && phases.length > 0 && !hasAutoApproved.current) {
+        const isComplete = plan && !isLoading && phases.length > 0 && !hasAutoApproved.current;
+        
+        if (!isComplete) return;
+        
+        // In YOLO mode: auto-approve immediately
+        if (yoloMode && autoRun) {
             const timer = setTimeout(() => {
                 hasAutoApproved.current = true;
                 handleApprove();
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [autoRun, plan, isLoading, phases]);
+        
+        // Not in YOLO mode: show refinement prompt
+        if (!yoloMode && !showRefinementPrompt) {
+            setShowRefinementPrompt(true);
+        }
+    }, [yoloMode, autoRun, plan, isLoading, phases, showRefinementPrompt]);
 
     return (
         <div className="flex flex-col h-full">
@@ -353,6 +375,19 @@ export const PlanView = ({
                         Regenerate
                     </Button>
 
+                    {/* Refinement Button */}
+                    {plan && !isLoading && phases.length > 0 && onRequestRefinement && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onRequestRefinement}
+                            className="gap-2"
+                        >
+                            <MessageSquare className="h-4 w-4" />
+                            Refine Phases
+                        </Button>
+                    )}
+
                     <Button
                         size="sm"
                         onClick={handleApprove}
@@ -365,6 +400,47 @@ export const PlanView = ({
             </div>
 
             <ScrollArea className="flex-1 p-6">
+                {/* Refinement Prompt (when not in YOLO mode) */}
+                {showRefinementPrompt && !yoloMode && plan && phases.length > 0 && (
+                    <Card className="mb-6 border-primary/50 bg-primary/5">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <MessageSquare className="h-5 w-5 text-primary" />
+                                Ready to Continue
+                            </CardTitle>
+                            <CardDescription>
+                                Plan generation is complete with {phases.length} phases. Would you like to refine the phases before execution?
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                    if (onRequestRefinement) {
+                                        onRequestRefinement();
+                                    }
+                                }}
+                                disabled={!onRequestRefinement}
+                            >
+                                <MessageSquare className="h-4 w-4 mr-2" />
+                                Yes, Refine Phases
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                onClick={() => {
+                                    setShowRefinementPrompt(false);
+                                    hasAutoApproved.current = true;
+                                    handleApprove();
+                                }}
+                            >
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                No, Start Execution
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+                
                 {isLoading ? (
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 text-muted-foreground">

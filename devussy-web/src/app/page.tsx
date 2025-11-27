@@ -20,8 +20,10 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import IrcClient from '@/components/addons/irc/IrcClient';
 import { YoloModeToggle } from "@/components/pipeline/YoloMode";
 import { PipelineOverview } from "@/components/pipeline/PipelineOverview";
+import { DesignRefinementView } from "@/components/pipeline/DesignRefinementView";
+import { PlanRefinementView } from "@/components/pipeline/PlanRefinementView";
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc' | 'pipeline-guide';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc' | 'pipeline-guide' | 'design-refinement' | 'plan-refinement';
 
 interface WindowState {
   id: string;
@@ -321,6 +323,29 @@ export default function Page() {
     spawnWindow('handoff', 'Project Handoff');
   };
 
+  const handleRequestDesignRefinement = () => {
+    spawnWindow('design-refinement', 'Refine Design');
+  };
+
+  const handleRequestPlanRefinement = () => {
+    spawnWindow('plan-refinement', 'Refine Plan');
+  };
+
+  const handleDesignRefinementComplete = (updatedDesign: any) => {
+    console.log('[page.tsx] Design refinement complete, updating design');
+    setDesign(updatedDesign);
+    // Close refinement window
+    setWindows(prev => prev.filter(w => w.type !== 'design-refinement'));
+    // Can optionally regenerate plan here or let user do it manually
+  };
+
+  const handlePlanRefinementComplete = (updatedPlan: any) => {
+    console.log('[page.tsx] Plan refinement complete, updating plan');
+    setPlan(updatedPlan);
+    // Close refinement window
+    setWindows(prev => prev.filter(w => w.type !== 'plan-refinement'));
+  };
+
 
 
   const handleNewProject = () => {
@@ -516,10 +541,22 @@ export default function Page() {
             languages={languages.split(',').map(l => l.trim()).filter(Boolean)}
             modelConfig={getEffectiveConfig('design')}
             onDesignComplete={handleDesignComplete}
+            onRequestRefinement={handleRequestDesignRefinement}
             autoRun={isAutoRun}
             enableAdaptive={true}
             yoloMode={yoloMode}
             onYoloModeChange={setYoloMode}
+          />
+        );
+      case 'design-refinement':
+        return (
+          <DesignRefinementView
+            design={design}
+            projectName={projectName}
+            requirements={requirements}
+            languages={languages.split(',').map(l => l.trim()).filter(Boolean)}
+            onRefinementComplete={handleDesignRefinementComplete}
+            onCancel={() => setWindows(prev => prev.filter(w => w.type !== 'design-refinement'))}
           />
         );
       case 'plan':
@@ -527,8 +564,20 @@ export default function Page() {
           <PlanView
             design={design}
             onPlanApproved={handlePlanApproved}
+            onRequestRefinement={handleRequestPlanRefinement}
             modelConfig={getEffectiveConfig('plan')}
             autoRun={isAutoRun}
+            yoloMode={yoloMode}
+          />
+        );
+      case 'plan-refinement':
+        return (
+          <PlanRefinementView
+            plan={plan}
+            design={design}
+            projectName={projectName}
+            onRefinementComplete={handlePlanRefinementComplete}
+            onCancel={() => setWindows(prev => prev.filter(w => w.type !== 'plan-refinement'))}
           />
         );
       case 'execute':

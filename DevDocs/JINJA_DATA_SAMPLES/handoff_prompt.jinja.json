@@ -1,9 +1,9 @@
 {
-  "project_name": "TestProject",
+  "project_name": "Bumfighter",
   "current_phase_number": "None",
   "current_phase_name": "No active phase",
   "next_task_id": "1.1",
-  "next_task_description": "Initialize project",
+  "next_task_description": "Create the root project directory structure",
   "blockers": "None known",
   "detail_level": "normal"
 }

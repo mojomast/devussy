@@ -1,9 +1,9 @@
 {
-  "project_name": "testapp",
+  "project_name": "Bumfighter",
   "languages": [
-    "Python"
+    "M.U.G.E.N CNS/CMD Scripting"
   ],
   "frameworks": [],
   "apis": [],
-  "requirements": "testapp is a small CRUD web application that exposes a REST API for managing items and includes a minimal React-based frontend for users to view and modify data. It includes user authentication, persistent storage, automated tests, and CI/CD for automated builds and deployments."
+  "requirements": "A satirical 2D fighting game for M.U.G.E.N featuring 8 resourceful underdog characters with unique weapons, aesthetics, finishers, and personal 'Bum Hymns'. Dark comedy tone that punches up at corrupt systems (landlords, politicians, dystopian capitalism) while maintaining empathy. Hand-drawn/pixel-art hybrid style with expressive visuals and over-the-top special moves. Each fighter needs complete sprite sheets, signature weapon, 3 special moves, 1 super, 1 finisher, home stage, and victory music."
 }
