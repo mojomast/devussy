@@ -1220,6 +1220,52 @@ python run_adaptive_pipeline_test.py
 pytest tests/integration/test_adaptive_pipeline_e2e.py -v
 ```
 
+### 2025-11-26 - Frontend Controls Enhancement Agent
+**Completed:**
+- Added interactive controls to all adaptive pipeline UI components:
+
+**ValidationReport.tsx:**
+- Per-issue "Fix This" button for auto-correctable issues
+- Per-issue "Ignore/Unignore" toggle with visual dimming
+- `onFixIssue` and `onIgnoreIssue` callbacks
+- `ignoredIssues` Set state tracking
+
+**CorrectionTimeline.tsx:**
+- "Stop & Accept" button (visible when correction running)
+- Per-iteration "Retry" button for failed iterations
+- `onStopAndAccept` and `onRetryIteration` callbacks
+
+**ComplexityAssessment.tsx:**
+- Depth level override dropdown (minimal/standard/detailed)
+- Collapsible dropdown with current selection indicator
+- `onDepthOverride` callback
+
+**YoloMode.tsx (NEW):**
+- YOLO mode toggle button with tiny kangaroo SVG icon 🦘
+- Bouncing animation when enabled
+- `YoloModeToggle` and `YoloModeBadge` components
+- Auto-approve all stages without manual intervention
+
+**DesignView.tsx:**
+- Added "Back" button with `onGoBack` callback
+- Integrated YOLO mode toggle in header
+- Wired all new component callbacks:
+  - `handleFixIssue`, `handleIgnoreIssue` for ValidationReport
+  - `handleStopAndAccept` for CorrectionTimeline
+  - `handleDepthOverride` for ComplexityAssessment
+- Added `ignoredIssues` state management
+
+**Files Created:**
+- `devussy-web/src/components/pipeline/YoloMode.tsx` (~90 lines)
+
+**Files Modified:**
+- `devussy-web/src/components/pipeline/ValidationReport.tsx`
+- `devussy-web/src/components/pipeline/CorrectionTimeline.tsx`
+- `devussy-web/src/components/pipeline/ComplexityAssessment.tsx`
+- `devussy-web/src/components/pipeline/DesignView.tsx`
+
+**All TypeScript compiles without errors.**
+
 ---
 
 ### For Frontend Work

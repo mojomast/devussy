@@ -11,7 +11,9 @@ import {
     CheckCircle2,
     Clock,
     Users,
-    Boxes
+    Boxes,
+    RefreshCw,
+    ChevronDown
 } from "lucide-react";
 
 /**
@@ -33,6 +35,8 @@ interface ComplexityAssessmentProps {
     isLoading?: boolean;
     showDetails?: boolean;
     onRefresh?: () => void;
+    onDepthOverride?: (depth: 'minimal' | 'standard' | 'detailed') => void;
+    allowDepthOverride?: boolean;
 }
 
 /**
@@ -179,8 +183,11 @@ export function ComplexityAssessment({
     profile, 
     isLoading = false, 
     showDetails = true,
-    onRefresh 
+    onRefresh,
+    onDepthOverride,
+    allowDepthOverride = true
 }: ComplexityAssessmentProps) {
+    const [showDepthDropdown, setShowDepthDropdown] = React.useState(false);
     const depthConfig = DEPTH_CONFIG[profile.depth_level];
     const confidenceInfo = getConfidenceIndicator(profile.confidence);
     const ConfidenceIcon = confidenceInfo.icon;
@@ -234,11 +241,22 @@ export function ComplexityAssessment({
 
                     {/* Key metrics */}
                     <div className="flex-1 grid grid-cols-2 gap-4">
-                        {/* Depth Level */}
-                        <div className={`p-4 rounded-lg border ${depthConfig.borderColor} ${depthConfig.bgColor}`}>
-                            <div className="flex items-center gap-2 mb-1">
-                                <Microscope className={`h-4 w-4 ${depthConfig.color}`} />
-                                <span className="text-sm font-medium">Depth Level</span>
+                        {/* Depth Level - with override dropdown */}
+                        <div className={`relative p-4 rounded-lg border ${depthConfig.borderColor} ${depthConfig.bgColor}`}>
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2">
+                                    <Microscope className={`h-4 w-4 ${depthConfig.color}`} />
+                                    <span className="text-sm font-medium">Depth Level</span>
+                                </div>
+                                {allowDepthOverride && onDepthOverride && (
+                                    <button
+                                        onClick={() => setShowDepthDropdown(!showDepthDropdown)}
+                                        className="p-1 hover:bg-muted/50 rounded transition-colors"
+                                        title="Override depth level"
+                                    >
+                                        <ChevronDown className={`h-4 w-4 transition-transform ${showDepthDropdown ? 'rotate-180' : ''}`} />
+                                    </button>
+                                )}
                             </div>
                             <p className={`text-lg font-bold ${depthConfig.color}`}>
                                 {depthConfig.label}
@@ -246,6 +264,34 @@ export function ComplexityAssessment({
                             <p className="text-xs text-muted-foreground mt-1">
                                 {depthConfig.description}
                             </p>
+                            
+                            {/* Depth override dropdown */}
+                            {showDepthDropdown && onDepthOverride && (
+                                <div className="absolute top-full left-0 right-0 mt-1 z-10 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
+                                    {(Object.keys(DEPTH_CONFIG) as Array<'minimal' | 'standard' | 'detailed'>).map((level) => {
+                                        const config = DEPTH_CONFIG[level];
+                                        const isActive = level === profile.depth_level;
+                                        return (
+                                            <button
+                                                key={level}
+                                                onClick={() => {
+                                                    onDepthOverride(level);
+                                                    setShowDepthDropdown(false);
+                                                }}
+                                                className={`w-full px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors flex items-center justify-between ${
+                                                    isActive ? 'bg-muted/30' : ''
+                                                }`}
+                                            >
+                                                <div>
+                                                    <span className={`font-medium ${config.color}`}>{config.label}</span>
+                                                    <p className="text-xs text-muted-foreground">{config.description}</p>
+                                                </div>
+                                                {isActive && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                         {/* Phase Count */}

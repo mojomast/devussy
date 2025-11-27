@@ -56,6 +56,9 @@ interface ValidationReportProps {
     sanityReview?: SanityReviewResult | null;
     isLoading?: boolean;
     onRequestCorrection?: () => void;
+    onFixIssue?: (issue: ValidationIssue, index: number) => void;
+    onIgnoreIssue?: (issue: ValidationIssue, index: number) => void;
+    ignoredIssues?: Set<number>;
     showDetails?: boolean;
 }
 
@@ -115,15 +118,27 @@ function formatCheckName(name: string): string {
 }
 
 /**
- * Individual issue card
+ * Individual issue card with controls
  */
-function IssueCard({ issue }: { issue: ValidationIssue }) {
+function IssueCard({ 
+    issue, 
+    index,
+    isIgnored = false,
+    onFix,
+    onIgnore 
+}: { 
+    issue: ValidationIssue; 
+    index: number;
+    isIgnored?: boolean;
+    onFix?: (issue: ValidationIssue, index: number) => void;
+    onIgnore?: (issue: ValidationIssue, index: number) => void;
+}) {
     const config = getSeverityConfig(issue.severity);
     const SeverityIcon = config.icon;
     const CheckIcon = getCheckIcon(issue.check_name);
 
     return (
-        <div className={`p-4 rounded-lg border ${config.borderColor} ${config.bgColor}`}>
+        <div className={`p-4 rounded-lg border ${config.borderColor} ${config.bgColor} ${isIgnored ? 'opacity-50' : ''} transition-opacity`}>
             <div className="flex items-start gap-3">
                 <SeverityIcon className={`h-5 w-5 mt-0.5 ${config.color}`} />
                 <div className="flex-1 min-w-0">
@@ -138,6 +153,11 @@ function IssueCard({ issue }: { issue: ValidationIssue }) {
                                 Auto-fix
                             </span>
                         )}
+                        {isIgnored && (
+                            <span className="text-xs px-2 py-0.5 bg-gray-500/20 text-gray-400 rounded-full">
+                                Ignored
+                            </span>
+                        )}
                     </div>
                     <p className="text-sm">{issue.message}</p>
                     {issue.location && (
@@ -149,6 +169,43 @@ function IssueCard({ issue }: { issue: ValidationIssue }) {
                         <p className="text-xs text-muted-foreground mt-2 italic">
                             💡 {issue.suggestion}
                         </p>
+                    )}
+                    
+                    {/* Issue action buttons */}
+                    {(onFix || onIgnore) && (
+                        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/30">
+                            {onFix && issue.auto_correctable && !isIgnored && (
+                                <button
+                                    onClick={() => onFix(issue, index)}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded-md transition-colors"
+                                >
+                                    <Wrench className="h-3 w-3" />
+                                    Fix This
+                                </button>
+                            )}
+                            {onIgnore && (
+                                <button
+                                    onClick={() => onIgnore(issue, index)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-colors ${
+                                        isIgnored 
+                                            ? 'bg-green-500/10 hover:bg-green-500/20 text-green-400'
+                                            : 'bg-muted/50 hover:bg-muted text-muted-foreground'
+                                    }`}
+                                >
+                                    {isIgnored ? (
+                                        <>
+                                            <CheckCircle2 className="h-3 w-3" />
+                                            Unignore
+                                        </>
+                                    ) : (
+                                        <>
+                                            <XCircle className="h-3 w-3" />
+                                            Ignore
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -267,6 +324,9 @@ export function ValidationReport({
     sanityReview,
     isLoading = false,
     onRequestCorrection,
+    onFixIssue,
+    onIgnoreIssue,
+    ignoredIssues,
     showDetails = true
 }: ValidationReportProps) {
     if (isLoading) {
@@ -384,7 +444,14 @@ export function ValidationReport({
                             Issues ({report.issues.length})
                         </h4>
                         {report.issues.map((issue, index) => (
-                            <IssueCard key={index} issue={issue} />
+                            <IssueCard 
+                                key={index} 
+                                issue={issue} 
+                                index={index}
+                                isIgnored={ignoredIssues?.has(index)}
+                                onFix={onFixIssue}
+                                onIgnore={onIgnoreIssue}
+                            />
                         ))}
                     </div>
                 )}

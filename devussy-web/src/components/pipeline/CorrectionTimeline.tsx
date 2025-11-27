@@ -12,7 +12,9 @@ import {
     Clock,
     Wrench,
     Target,
-    Loader2
+    Loader2,
+    Square,
+    RotateCcw
 } from "lucide-react";
 
 /**
@@ -48,6 +50,8 @@ interface CorrectionTimelineProps {
     isRunning?: boolean;
     currentIteration?: number;
     showDetails?: boolean;
+    onStopAndAccept?: () => void;
+    onRetryIteration?: (iterationNumber: number) => void;
 }
 
 /**
@@ -97,12 +101,14 @@ function IterationNode({
     iteration, 
     isLast, 
     isCurrent,
-    showDetails 
+    showDetails,
+    onRetry
 }: { 
     iteration: CorrectionIteration; 
     isLast: boolean;
     isCurrent: boolean;
     showDetails: boolean;
+    onRetry?: (iterationNumber: number) => void;
 }) {
     const isSuccess = iteration.validation_result.is_valid;
     
@@ -147,6 +153,16 @@ function IterationNode({
                             <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
                                 {Math.round(iteration.llm_review_confidence * 100)}% confidence
                             </span>
+                        )}
+                        {/* Retry button for failed iterations */}
+                        {!isSuccess && !isCurrent && onRetry && (
+                            <button
+                                onClick={() => onRetry(iteration.iteration_number)}
+                                className="flex items-center gap-1 px-2 py-0.5 text-xs bg-muted hover:bg-muted/80 rounded-md transition-colors"
+                            >
+                                <RotateCcw className="h-3 w-3" />
+                                Retry
+                            </button>
                         )}
                     </div>
 
@@ -223,7 +239,9 @@ export function CorrectionTimeline({
     history, 
     isRunning = false,
     currentIteration,
-    showDetails = true
+    showDetails = true,
+    onStopAndAccept,
+    onRetryIteration
 }: CorrectionTimelineProps) {
     const statusConfig = getStatusConfig(isRunning ? 'in_progress' : history.final_status);
     const StatusIcon = statusConfig.icon;
@@ -242,11 +260,24 @@ export function CorrectionTimeline({
                         </CardDescription>
                     </div>
                     
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${statusConfig.bgColor} border ${statusConfig.borderColor}`}>
-                        <StatusIcon className={`h-4 w-4 ${statusConfig.color} ${isRunning ? 'animate-spin' : ''}`} />
-                        <span className={`text-sm font-medium ${statusConfig.color}`}>
-                            {statusConfig.label}
-                        </span>
+                    <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${statusConfig.bgColor} border ${statusConfig.borderColor}`}>
+                            <StatusIcon className={`h-4 w-4 ${statusConfig.color} ${isRunning ? 'animate-spin' : ''}`} />
+                            <span className={`text-sm font-medium ${statusConfig.color}`}>
+                                {statusConfig.label}
+                            </span>
+                        </div>
+                        
+                        {/* Stop & Accept button - only show when running */}
+                        {isRunning && onStopAndAccept && (
+                            <button
+                                onClick={onStopAndAccept}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-lg transition-colors"
+                            >
+                                <Square className="h-3.5 w-3.5" />
+                                Stop & Accept
+                            </button>
+                        )}
                     </div>
                 </div>
             </CardHeader>
@@ -282,6 +313,7 @@ export function CorrectionTimeline({
                                 isLast={index === history.iterations.length - 1}
                                 isCurrent={isRunning && currentIteration === iteration.iteration_number}
                                 showDetails={showDetails}
+                                onRetry={onRetryIteration}
                             />
                         ))}
                     </div>

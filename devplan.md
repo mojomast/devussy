@@ -2010,6 +2010,16 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 - Updated PipelineStage type with new stages (complexity, validation, correction)
 - Added icons and labels for new pipeline stages
 
+**2025-11-26 - Frontend Controls Enhancement Agent**
+- Added interactive controls to all adaptive pipeline UI components:
+  - ValidationReport: Per-issue "Fix This" and "Ignore" toggles
+  - CorrectionTimeline: "Stop & Accept" button, per-iteration "Retry"
+  - ComplexityAssessment: Depth level override dropdown
+  - YoloMode: New YOLO toggle with kangaroo icon for auto-approve mode
+  - DesignView: "Back" button, YOLO mode integration, all callbacks wired
+- Created `YoloMode.tsx` component with KangarooIcon SVG
+- All TypeScript compiles without errors
+
 **2025-11-26 - Testing & Validation Agent**
 - Fixed test failures in adaptive pipeline tests:
   - Fixed `DesignValidator.validate()` signature mismatch in `compose.py`
@@ -2024,38 +2034,33 @@ This devplan transforms Devussy from a static one-size-fits-all pipeline into an
 <!-- PROGRESS_LOG_END -->
 
 <!-- NEXT_TASK_GROUP_START -->
-### Next Task Group (Current Sprint): Phase Count & Content Fixes Complete ✅
+### Next Task Group (Current Sprint): Frontend Controls Complete ✅
 
-**STATUS:** All adaptive pipeline issues resolved!
+**STATUS:** All interactive controls added to adaptive pipeline UI!
 
 **Completed in This Session:**
-- ✅ Diagnosed root cause: LLM phase count not enforced by static rubric
-- ✅ Fixed `complexity_analyzer.py:_parse_llm_response()` to use `estimate_phase_count()` rubric
-- ✅ Fixed `compose.py` to wire `project_design.estimated_phases` from complexity profile
-- ✅ Updated `run_adaptive_pipeline_test.py` to use real devplan generators (not mocks)
-- ✅ Verified: Score 15 → 10 phases, each with 8-10 detailed steps
+- ✅ ValidationReport: Per-issue "Fix This" and "Ignore" toggles
+- ✅ CorrectionTimeline: "Stop & Accept" button, per-iteration "Retry"
+- ✅ ComplexityAssessment: Depth level override dropdown
+- ✅ YoloMode.tsx: YOLO toggle with kangaroo icon 🦘 for auto-approve
+- ✅ DesignView: "Back" button, YOLO mode, all callbacks wired
+- ✅ All TypeScript compiles without errors
 
-**Key Changes:**
+**New Components/Props:**
 
-| File | Change |
-|------|--------|
-| `src/interview/complexity_analyzer.py` | Enforce static rubric in `_parse_llm_response()` |
-| `src/pipeline/compose.py` | Set `project_design.estimated_phases` and `.complexity` from profile |
-| `run_adaptive_pipeline_test.py` | Use `BasicDevPlanGenerator` + `DetailedDevPlanGenerator` |
-
-**Test Commands:**
-```bash
-# Run adaptive pipeline with rich output
-python run_adaptive_pipeline_test.py
-
-# Run pytest suite
-pytest tests/integration/test_adaptive_pipeline_e2e.py -v
-```
+| Component | New Props | Purpose |
+|-----------|-----------|---------|
+| ValidationReport | `onFixIssue`, `onIgnoreIssue`, `ignoredIssues` | Per-issue controls |
+| CorrectionTimeline | `onStopAndAccept`, `onRetryIteration` | Loop controls |
+| ComplexityAssessment | `onDepthOverride`, `allowDepthOverride` | Override depth |
+| YoloMode | `enabled`, `onToggle` | Auto-approve toggle |
+| DesignView | `onGoBack`, `yoloMode`, `onYoloModeChange` | Navigation + YOLO |
 
 **Next Steps for Fresh Agent:**
-1. Run full E2E tests to confirm no regressions
-2. Test via web UI with various project complexities
-3. Consider adding more validation rules for edge cases
+1. Wire parent component to handle YOLO mode state
+2. Implement actual Fix This backend call
+3. Add tests for new component callbacks
+4. Consider adding confirmation modal for YOLO mode
 <!-- NEXT_TASK_GROUP_END -->
 
 ---

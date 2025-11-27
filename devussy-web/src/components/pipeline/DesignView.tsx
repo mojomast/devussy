@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History } from "lucide-react";
+import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History, ArrowLeft } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComplexityAssessment, ComplexityProfile, ComplexityBadge } from './ComplexityAssessment';
-import { ValidationReport, ValidationReportData, SanityReviewResult, ValidationBadge } from './ValidationReport';
+import { ValidationReport, ValidationReportData, SanityReviewResult, ValidationBadge, ValidationIssue } from './ValidationReport';
 import { CorrectionTimeline, CorrectionHistory, CorrectionBadge } from './CorrectionTimeline';
+import { YoloModeToggle, YoloModeBadge } from './YoloMode';
 
 interface DesignViewProps {
     projectName: string;
@@ -16,8 +17,11 @@ interface DesignViewProps {
     languages: string[];
     modelConfig: ModelConfig;
     onDesignComplete: (design: any) => void;
+    onGoBack?: () => void;
     autoRun?: boolean;
     enableAdaptive?: boolean;  // Enable adaptive complexity analysis
+    yoloMode?: boolean;
+    onYoloModeChange?: (enabled: boolean) => void;
 }
 
 export const DesignView = ({
@@ -26,8 +30,11 @@ export const DesignView = ({
     languages,
     modelConfig,
     onDesignComplete,
+    onGoBack,
     autoRun = false,
-    enableAdaptive = true
+    enableAdaptive = true,
+    yoloMode = false,
+    onYoloModeChange
 }: DesignViewProps) => {
     const [designContent, setDesignContent] = useState("");
     const [designData, setDesignData] = useState<any>(null);
@@ -35,6 +42,9 @@ export const DesignView = ({
     const [viewMode, setViewMode] = useState<'preview' | 'raw'>('preview');
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // Ignored issues state for ValidationReport
+    const [ignoredIssues, setIgnoredIssues] = useState<Set<number>>(new Set());
     
     // Adaptive complexity state
     const [complexityProfile, setComplexityProfile] = useState<ComplexityProfile | null>(null);
@@ -475,15 +485,61 @@ export const DesignView = ({
     // Check if approval should be blocked
     const isApprovalBlocked = isGenerating || isAnalyzingComplexity || isValidating || isCorrecting || !designContent;
     const hasValidationIssues = validationReport && !validationReport.is_valid;
+    
+    // Handler for fixing individual issues
+    const handleFixIssue = async (issue: ValidationIssue, index: number) => {
+        // TODO: Implement single-issue fix via backend
+        console.log('Fix issue:', issue, 'at index:', index);
+    };
+    
+    // Handler for ignoring/unignoring issues
+    const handleIgnoreIssue = (issue: ValidationIssue, index: number) => {
+        setIgnoredIssues(prev => {
+            const next = new Set(prev);
+            if (next.has(index)) {
+                next.delete(index);
+            } else {
+                next.add(index);
+            }
+            return next;
+        });
+    };
+    
+    // Handler for stopping correction loop and accepting current state
+    const handleStopAndAccept = () => {
+        // TODO: Signal backend to stop correction loop
+        setIsCorrecting(false);
+    };
+    
+    // Handler for depth level override
+    const handleDepthOverride = (depth: 'minimal' | 'standard' | 'detailed') => {
+        if (complexityProfile) {
+            setComplexityProfile({ ...complexityProfile, depth_level: depth });
+        }
+    };
 
     return (
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
                 <div className="flex items-center gap-4">
+                    {/* Go Back button */}
+                    {onGoBack && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onGoBack}
+                            className="gap-1"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            Back
+                        </Button>
+                    )}
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                         <LayoutGrid className="h-5 w-5" />
                         System Design
                     </h2>
+                    {/* YOLO mode badge */}
+                    <YoloModeBadge enabled={yoloMode} />
                     {/* Show badges in header when panels collapsed */}
                     <div className="flex items-center gap-2">
                         {complexityProfile && !showComplexity && (
@@ -580,6 +636,15 @@ export const DesignView = ({
                     >
                         Regenerate
                     </Button>
+                    
+                    {/* YOLO Mode Toggle */}
+                    {onYoloModeChange && (
+                        <YoloModeToggle
+                            enabled={yoloMode}
+                            onToggle={onYoloModeChange}
+                            disabled={isGenerating || isAnalyzingComplexity}
+                        />
+                    )}
 
                     <Button
                         size="sm"
@@ -614,6 +679,8 @@ export const DesignView = ({
                                 profile={complexityProfile}
                                 showDetails={true}
                                 onRefresh={() => analyzeComplexity()}
+                                onDepthOverride={handleDepthOverride}
+                                allowDepthOverride={true}
                             />
                         ) : null}
                     </div>
@@ -639,6 +706,9 @@ export const DesignView = ({
                                 report={validationReport}
                                 sanityReview={sanityReview}
                                 onRequestCorrection={validationReport.auto_correctable_count > 0 ? runCorrectionLoop : undefined}
+                                onFixIssue={handleFixIssue}
+                                onIgnoreIssue={handleIgnoreIssue}
+                                ignoredIssues={ignoredIssues}
                                 showDetails={true}
                             />
                         ) : null}
@@ -654,6 +724,7 @@ export const DesignView = ({
                                 isRunning={isCorrecting}
                                 currentIteration={currentCorrectionIteration}
                                 showDetails={true}
+                                onStopAndAccept={handleStopAndAccept}
                             />
                         )}
                     </div>
