@@ -79,6 +79,14 @@ RESPONSE FORMAT:
 - Show enthusiasm for their project ideas
 - Use emojis sparingly for key moments
 
+IMPORTANT - USER EMPHASIS CAPTURE:
+When the user says something is "important", "critical", "must have", "essential", or emphasizes a point you cannot cleanly parse into structured fields, capture their EXACT WORDS in the "user_emphasis" array. This ensures no important context is lost between phases.
+
+Examples of when to use user_emphasis:
+- "This is really important: we need to support offline mode"
+- "The most critical thing is that it works on low-bandwidth connections"
+- "Make sure the API is backwards compatible - that's essential"
+
 When interview is complete, output a JSON block with extracted data:
 {
     "project_name": "...",
@@ -90,7 +98,8 @@ When interview is complete, output a JSON block with extracted data:
     "authentication": false,
     "deployment_platform": "...",
     "testing_requirements": "...",
-    "ci_cd": true
+    "ci_cd": true,
+    "user_emphasis": ["exact quote 1", "exact quote 2"]
 }"""
 
     # Design-review specific system prompt used when mode="design_review".
@@ -116,6 +125,9 @@ GUIDELINES:
 - Periodically summarize key risks and decisions.
 - When you have enough information, ask the user to type '/done' to finalize the review.
 
+IMPORTANT - USER EMPHASIS CAPTURE:
+When the user says something is "important", "critical", "must have", "essential", or emphasizes a point you cannot cleanly parse into structured fields, capture their EXACT WORDS in the "user_emphasis" array. This ensures no important context is lost between phases.
+
 FINAL OUTPUT REQUIREMENT:
 At the end of the review (after the user types /done), you MUST produce ONE final JSON summary with this exact shape:
 {
@@ -124,6 +136,7 @@ At the end of the review (after the user types /done), you MUST produce ONE fina
     "new_constraints": ["..."],      // list of new or clarified constraints
     "updated_tech_stack": ["..."],   // updated languages/frameworks/tools
     "integration_risks": ["..."],    // notable integration/architecture risks
+    "user_emphasis": ["..."],        // exact quotes of things user said were important
     "notes": "..."                   // any other guidance or comments
 }
 
@@ -576,6 +589,7 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
             "new_constraints": [],
             "updated_tech_stack": [],
             "integration_risks": [],
+            "user_emphasis": [],
             "notes": "",
         }
 
@@ -633,6 +647,9 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
                 "integration_risks": _as_list(
                     _get("integration_risks", default["integration_risks"])
                 ),
+                "user_emphasis": _as_list(
+                    _get("user_emphasis", default["user_emphasis"])
+                ),
                 "notes": str(_get("notes", default["notes"]) or ""),
             }
 
@@ -675,7 +692,7 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
             if not isinstance(obj, dict):
                 continue
 
-            # Normalize keys for design-review schema
+            # Normalize keys for design-review schema (user_emphasis is optional)
             lower = {str(k).strip().lower(): v for k, v in obj.items()}
             if not {
                 "status",
@@ -693,11 +710,12 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
                 "new_constraints": lower.get("new_constraints") or [],
                 "updated_tech_stack": lower.get("updated_tech_stack") or [],
                 "integration_risks": lower.get("integration_risks") or [],
+                "user_emphasis": lower.get("user_emphasis") or [],
                 "notes": str(lower.get("notes", "")),
             }
 
             # Coerce lists
-            for key in ["new_constraints", "updated_tech_stack", "integration_risks"]:
+            for key in ["new_constraints", "updated_tech_stack", "integration_risks", "user_emphasis"]:
                 val = feedback[key]
                 if isinstance(val, str):
                     # Allow comma- or newline-separated strings
@@ -715,6 +733,7 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
             "new_constraints": [],
             "updated_tech_stack": [],
             "integration_risks": [],
+            "user_emphasis": [],
             "notes": "",
         }
 
@@ -769,6 +788,17 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
                     inputs[input_key] = ",".join(str(v) for v in value)
                 else:
                     inputs[input_key] = str(value)
+        
+        # Add user emphasis - verbatim quotes of important statements
+        user_emphasis = self.extracted_data.get("user_emphasis", [])
+        if user_emphasis:
+            if isinstance(user_emphasis, list):
+                inputs["user_emphasis"] = user_emphasis
+            else:
+                inputs["user_emphasis"] = [str(user_emphasis)]
+        
+        # Add raw interview data for full context preservation
+        inputs["raw_interview_data"] = self.extracted_data
         
         # Add code samples context if available
         if self.code_samples:

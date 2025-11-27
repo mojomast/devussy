@@ -31,6 +31,12 @@ class ProjectDesignGenerator:
         requirements: str,
         frameworks: Optional[List[str]] = None,
         apis: Optional[List[str]] = None,
+        database: Optional[str] = None,
+        deployment_platform: Optional[str] = None,
+        testing_requirements: Optional[str] = None,
+        authentication: Optional[bool] = None,
+        user_emphasis: Optional[List[str]] = None,
+        raw_interview_data: Optional[dict] = None,
         **llm_kwargs: Any,
     ) -> ProjectDesign:
         """Generate a project design from user inputs.
@@ -41,6 +47,12 @@ class ProjectDesignGenerator:
             requirements: Additional project requirements and description
             frameworks: Optional list of frameworks to use
             apis: Optional list of external APIs/services
+            database: Optional database choice
+            deployment_platform: Optional deployment platform
+            testing_requirements: Optional testing requirements
+            authentication: Optional whether auth is needed
+            user_emphasis: Optional list of verbatim user-emphasized statements
+            raw_interview_data: Optional complete raw interview data
             **llm_kwargs: Additional kwargs to pass to the LLM client
 
         Returns:
@@ -55,6 +67,11 @@ class ProjectDesignGenerator:
             "frameworks": frameworks or [],
             "apis": apis or [],
             "requirements": requirements,
+            "database": database,
+            "deployment_platform": deployment_platform,
+            "testing_requirements": testing_requirements,
+            "authentication": authentication,
+            "user_emphasis": user_emphasis or [],
         }
 
         # Render the prompt template
@@ -124,6 +141,15 @@ class ProjectDesignGenerator:
         
         # Store the raw LLM response for full documentation
         design.raw_llm_response = response
+        
+        # Preserve interview context in the design for downstream phases
+        design.user_emphasis = user_emphasis or []
+        design.raw_interview_data = raw_interview_data
+        design.database = database
+        design.deployment_platform = deployment_platform
+        design.testing_requirements = testing_requirements
+        design.authentication = authentication
+        design.apis = apis or []
         
         logger.info("Successfully parsed project design")
 

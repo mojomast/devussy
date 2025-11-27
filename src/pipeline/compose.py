@@ -273,6 +273,12 @@ class PipelineOrchestrator:
         requirements: str,
         frameworks: Optional[List[str]] = None,
         apis: Optional[List[str]] = None,
+        database: Optional[str] = None,
+        deployment_platform: Optional[str] = None,
+        testing_requirements: Optional[str] = None,
+        authentication: Optional[bool] = None,
+        user_emphasis: Optional[List[str]] = None,
+        raw_interview_data: Optional[dict] = None,
         output_dir: str = ".",
         save_artifacts: bool = True,
         provider_override: Optional[str] = None,
@@ -288,6 +294,12 @@ class PipelineOrchestrator:
             requirements: Project requirements
             frameworks: Optional frameworks
             apis: Optional external APIs
+            database: Optional database choice from interview
+            deployment_platform: Optional deployment platform from interview
+            testing_requirements: Optional testing requirements from interview
+            authentication: Optional whether auth is needed
+            user_emphasis: Optional verbatim user-emphasized statements
+            raw_interview_data: Optional complete raw interview data
             output_dir: Directory to save artifacts
             save_artifacts: Whether to save intermediate files
             provider_override: Optional provider to switch to before running
@@ -326,6 +338,12 @@ class PipelineOrchestrator:
                 requirements=requirements,
                 frameworks=frameworks,
                 apis=apis,
+                database=database,
+                deployment_platform=deployment_platform,
+                testing_requirements=testing_requirements,
+                authentication=authentication,
+                user_emphasis=user_emphasis,
+                raw_interview_data=raw_interview_data,
                 **llm_kwargs,
             )
         
@@ -1541,6 +1559,112 @@ class PipelineOrchestrator:
         self.progress_reporter.end_stage("Design Correction")
         return result
 
+    def run_design_iteration_interview(
+        self,
+        project_design: "ProjectDesign",
+        devplan_summary: Optional[str] = None,
+        design_review_md: Optional[str] = None,
+        repo_summary_md: Optional[str] = None,
+    ) -> Tuple["ProjectDesign", dict]:
+        """Run an interactive design review interview to refine the project design.
+
+        This method conducts a focused interview in design_review mode, allowing
+        the user to review and refine the generated design before proceeding to
+        devplan generation. It preserves user emphasis and captures any new
+        constraints or requirements.
+
+        Args:
+            project_design: The generated project design to review
+            devplan_summary: Optional summary of a basic devplan (if available)
+            design_review_md: Optional automatic design review markdown
+            repo_summary_md: Optional repository analysis summary
+
+        Returns:
+            Tuple of (updated ProjectDesign, design_review_feedback dict)
+        """
+        from ..llm_interview import LLMInterviewManager
+        
+        logger.info("Starting design iteration interview")
+        self.progress_reporter.start_stage("Design Iteration Interview", 0)
+
+        # Create a design-review mode interview manager
+        interview_manager = LLMInterviewManager(
+            config=self.config,
+            verbose=False,
+            repo_analysis=self.repo_analysis,
+            markdown_output_manager=self.markdown_output_manager,
+            mode="design_review",
+        )
+
+        # Build design markdown for context
+        design_md = f"# Project Design: {project_design.project_name}\n\n"
+        design_md += f"## Architecture Overview\n\n{project_design.architecture_overview or 'No overview'}\n\n"
+        design_md += "## Tech Stack\n"
+        for tech in project_design.tech_stack:
+            design_md += f"- {tech}\n"
+        if project_design.objectives:
+            design_md += "\n## Objectives\n"
+            for obj in project_design.objectives:
+                design_md += f"- {obj}\n"
+        if project_design.user_emphasis:
+            design_md += "\n## User Emphasized Requirements\n"
+            for emph in project_design.user_emphasis:
+                design_md += f"- \"{emph}\"\n"
+
+        # Set the design review context
+        interview_manager.set_design_review_context(
+            design_md=design_md,
+            devplan_md=devplan_summary,
+            review_md=design_review_md,
+            repo_summary_md=repo_summary_md,
+        )
+
+        # Run the interview
+        interview_manager.run()
+
+        # Extract feedback
+        feedback = interview_manager.to_design_review_feedback()
+        
+        # Update project design with feedback
+        updated_design = project_design.model_copy()
+        
+        # Merge new user emphasis
+        if feedback.get("user_emphasis"):
+            existing_emphasis = set(updated_design.user_emphasis)
+            for emph in feedback["user_emphasis"]:
+                if emph not in existing_emphasis:
+                    updated_design.user_emphasis.append(emph)
+        
+        # Update tech stack if modified
+        if feedback.get("updated_tech_stack"):
+            for tech in feedback["updated_tech_stack"]:
+                if tech not in updated_design.tech_stack:
+                    updated_design.tech_stack.append(tech)
+        
+        # Append new constraints to requirements
+        if feedback.get("new_constraints"):
+            constraints_text = "\n\nAdditional Constraints from Design Review:\n"
+            for constraint in feedback["new_constraints"]:
+                constraints_text += f"- {constraint}\n"
+            if updated_design.architecture_overview:
+                updated_design.architecture_overview += constraints_text
+        
+        # Append integration risks to challenges
+        if feedback.get("integration_risks"):
+            for risk in feedback["integration_risks"]:
+                if risk not in updated_design.challenges:
+                    updated_design.challenges.append(f"[Integration Risk] {risk}")
+        
+        # Append notes as additional context
+        if feedback.get("notes"):
+            if updated_design.architecture_overview:
+                updated_design.architecture_overview += f"\n\nDesign Review Notes: {feedback['notes']}"
+        
+        logger.info("Design iteration interview complete")
+        self.progress_reporter.end_stage("Design Iteration Interview")
+        
+        return updated_design, feedback
+
     async def run_adaptive_pipeline(
         self,
         project_name: str,
@@ -1553,6 +1677,7 @@ class PipelineOrchestrator:
         save_artifacts: bool = True,
         enable_validation: bool = True,
         enable_correction: bool = True,
+        enable_design_iteration: bool = False,
         **llm_kwargs: Any,
     ) -> Tuple[ProjectDesign, DevPlan, HandoffPrompt, Optional[ComplexityProfile]]:
         """Run the full adaptive pipeline with complexity analysis and validation.
@@ -1561,7 +1686,8 @@ class PipelineOrchestrator:
         1. Complexity analysis before design generation
         2. Design validation after generation
         3. Iterative correction loop if issues found
-        4. Scaled output based on complexity profile
+        4. Optional design iteration interview for human refinement
+        5. Scaled output based on complexity profile
 
         Args:
             project_name: Name of the project
@@ -1574,6 +1700,7 @@ class PipelineOrchestrator:
             save_artifacts: Whether to save intermediate files
             enable_validation: Whether to validate design
             enable_correction: Whether to run correction loop
+            enable_design_iteration: Whether to run design iteration interview
             **llm_kwargs: Additional LLM parameters
 
         Returns:
@@ -1607,6 +1734,7 @@ class PipelineOrchestrator:
                     "output_dir": output_dir,
                     "enable_validation": enable_validation,
                     "enable_correction": enable_correction,
+                    "enable_design_iteration": enable_design_iteration,
                 },
             )
             logger.info("Saved checkpoint after complexity analysis")
@@ -1697,6 +1825,34 @@ class PipelineOrchestrator:
                         "Correction History",
                         len(correction_md),
                     )
+
+        # Optional: Design Iteration Interview (if enabled)
+        design_iteration_feedback = None
+        if enable_design_iteration:
+            # Build design review markdown from validation
+            design_review_md = None
+            if validation_report:
+                design_review_md = self._validation_report_to_markdown(validation_report)
+            
+            # Run the design iteration interview
+            project_design, design_iteration_feedback = self.run_design_iteration_interview(
+                project_design=project_design,
+                devplan_summary=None,  # No devplan yet
+                design_review_md=design_review_md,
+                repo_summary_md=None,  # Could add repo analysis summary here
+            )
+            
+            # Save the iteration feedback
+            if save_artifacts and design_iteration_feedback:
+                iteration_md = self._design_iteration_feedback_to_markdown(design_iteration_feedback)
+                self.file_manager.write_markdown(
+                    f"{output_dir}/design_iteration_feedback.md", iteration_md
+                )
+                self.progress_reporter.report_file_created(
+                    f"{output_dir}/design_iteration_feedback.md",
+                    "Design Iteration Feedback",
+                    len(iteration_md),
+                )
 
         # Save checkpoint after design stage
         try:
@@ -1947,10 +2103,49 @@ class PipelineOrchestrator:
             f"**Review Confidence**: {result.review.confidence:.0%}\n",
         ])
         
+        
         if result.review.risks:
             lines.append("\n## Remaining Risks\n")
             for risk in result.review.risks:
                 lines.append(f"- {risk}\n")
+        
+        lines.append(f"\n*Generated: {self._get_timestamp()}*\n")
+        return "".join(lines)
+
+    def _design_iteration_feedback_to_markdown(self, feedback: dict) -> str:
+        """Convert design iteration feedback to markdown format."""
+        lines = [
+            "# Design Iteration Feedback\n",
+            f"**Status**: {feedback.get('status', 'unknown')}\n",
+        ]
+        
+        if feedback.get("updated_requirements"):
+            lines.append("\n## Updated Requirements\n")
+            lines.append(feedback["updated_requirements"] + "\n")
+        
+        if feedback.get("new_constraints"):
+            lines.append("\n## New Constraints\n")
+            for constraint in feedback["new_constraints"]:
+                lines.append(f"- {constraint}\n")
+        
+        if feedback.get("updated_tech_stack"):
+            lines.append("\n## Updated Tech Stack\n")
+            for tech in feedback["updated_tech_stack"]:
+                lines.append(f"- {tech}\n")
+        
+        if feedback.get("integration_risks"):
+            lines.append("\n## Integration Risks\n")
+            for risk in feedback["integration_risks"]:
+                lines.append(f"- {risk}\n")
+        
+        if feedback.get("user_emphasis"):
+            lines.append("\n## User Emphasized Points\n")
+            for emph in feedback["user_emphasis"]:
+                lines.append(f"- \"{emph}\"\n")
+        
+        if feedback.get("notes"):
+            lines.append("\n## Notes\n")
+            lines.append(feedback["notes"] + "\n")
         
         lines.append(f"\n*Generated: {self._get_timestamp()}*\n")
         return "".join(lines)

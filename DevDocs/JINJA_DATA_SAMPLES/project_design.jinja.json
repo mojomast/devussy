@@ -1,9 +1,14 @@
 {
-  "project_name": "BUMfighter",
+  "project_name": "test",
   "languages": [
-    "M.U.G.E.N native scripting"
+    "Python"
   ],
   "frameworks": [],
   "apis": [],
-  "requirements": "Develop a standalone Windows-distributable M.U.G.E.N content pack for BUMfighter, including original sprites, sounds, copy, redesigned menus, and lore, all created within M.U.G.E.N conventions."
+  "requirements": "Test",
+  "database": null,
+  "deployment_platform": null,
+  "testing_requirements": null,
+  "authentication": null,
+  "user_emphasis": []
 }

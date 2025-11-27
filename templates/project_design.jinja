@@ -8,9 +8,39 @@ You are an expert software architect and project planner. A developer is startin
 **External APIs/Services:** {{ apis | join(", ") if apis else "None specified" }}
 **Additional Requirements:** {{ requirements }}
 
+{% if database %}
+**Database:** {{ database }}
+{% endif %}
+
+{% if deployment_platform %}
+**Deployment Platform:** {{ deployment_platform }}
+{% endif %}
+
+{% if testing_requirements %}
+**Testing Requirements:** {{ testing_requirements }}
+{% endif %}
+
+{% if authentication %}
+**Authentication Required:** Yes
+{% endif %}
+
+{% if user_emphasis %}
+## Critical User Requirements (Verbatim)
+
+The user explicitly emphasized the following points as important. These MUST be addressed in the design:
+
+{% for emphasis in user_emphasis %}
+- "{{ emphasis }}"
+{% endfor %}
+{% endif %}
+
 ## Your Task
 
 Create a comprehensive project design document that includes the following sections. Be specific, detailed, and actionable.
+
+{% if user_emphasis %}
+**IMPORTANT**: Pay special attention to the "Critical User Requirements" section above. These are exact quotes from the user about what they consider most important for this project. Ensure your design explicitly addresses each of these points.
+{% endif %}
 
 ### 1. High-Level Project Objectives
 - What is the primary purpose and goal of this project?

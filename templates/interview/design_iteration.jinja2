@@ -1,0 +1,123 @@
+{# Design Iteration Interview Template #}
+{# Used when conducting a design review interview before devplan generation #}
+
+# Design Iteration Review
+
+You are reviewing a generated project design before proceeding to devplan generation.
+This is your opportunity to refine, correct, or add to the design.
+
+## Current Project Design
+
+**Project Name:** {{ project_design.project_name }}
+
+### Objectives
+{% if project_design.objectives %}
+{% for obj in project_design.objectives %}
+- {{ obj }}
+{% endfor %}
+{% else %}
+- No objectives defined
+{% endif %}
+
+### Technology Stack
+{% if project_design.tech_stack %}
+{% for tech in project_design.tech_stack %}
+- {{ tech }}
+{% endfor %}
+{% else %}
+- No tech stack defined
+{% endif %}
+
+{% if project_design.database %}
+### Database
+- {{ project_design.database }}
+{% endif %}
+
+{% if project_design.deployment_platform %}
+### Deployment Platform
+- {{ project_design.deployment_platform }}
+{% endif %}
+
+{% if project_design.apis %}
+### External APIs
+{% for api in project_design.apis %}
+- {{ api }}
+{% endfor %}
+{% endif %}
+
+{% if project_design.user_emphasis %}
+### Previously Emphasized Requirements
+The following points were marked as important during the initial interview:
+
+{% for emphasis in project_design.user_emphasis %}
+- "{{ emphasis }}"
+{% endfor %}
+{% endif %}
+
+### Architecture Overview
+{{ project_design.architecture_overview | default("No architecture overview provided.") }}
+
+{% if project_design.dependencies %}
+### Key Dependencies
+{% for dep in project_design.dependencies %}
+- {{ dep }}
+{% endfor %}
+{% endif %}
+
+{% if project_design.challenges %}
+### Identified Challenges
+{% for challenge in project_design.challenges %}
+- {{ challenge }}
+{% endfor %}
+{% endif %}
+
+{% if project_design.mitigations %}
+### Mitigations
+{% for mitigation in project_design.mitigations %}
+- {{ mitigation }}
+{% endfor %}
+{% endif %}
+
+{% if complexity_profile %}
+### Complexity Assessment
+- **Score:** {{ complexity_profile.score }}/20
+- **Depth Level:** {{ complexity_profile.depth_level }}
+- **Estimated Phases:** {{ complexity_profile.estimated_phase_count }}
+{% endif %}
+
+---
+
+## Validation Results
+
+{% if validation_report %}
+{% if validation_report.is_valid %}
+**Status:** PASSED - No issues found
+{% else %}
+**Status:** NEEDS REVIEW - Issues found
+
+### Issues to Address
+{% for issue in validation_report.issues %}
+- **{{ issue.code }}**: {{ issue.message }}
+{% endfor %}
+{% endif %}
+{% else %}
+*No validation report available*
+{% endif %}
+
+---
+
+## Your Review Focus Areas
+
+Please consider the following areas during this review:
+
+1. **Completeness** - Are all requirements captured?
+2. **Technical Feasibility** - Is the proposed architecture realistic?
+3. **Integration Points** - Are all integration risks identified?
+4. **Missing Requirements** - Did we miss anything important?
+5. **Prioritization** - Should any features be emphasized more?
+
+If something is particularly important to you, make sure to emphasize it clearly so it can be captured for the devplan phase.
+
+---
+
+Type `/done` when you're satisfied with the design and ready to proceed to devplan generation.

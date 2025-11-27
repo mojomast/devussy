@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,21 @@ class ProjectDesign(BaseModel):
     raw_llm_response: Optional[str] = Field(default=None, description="Full raw markdown response from LLM")
     complexity: Optional[str] = Field(default=None, description="Project complexity rating (Low, Medium, High)")
     estimated_phases: Optional[int] = Field(default=None, description="Estimated number of phases required")
+    
+    # Interview context preservation fields
+    user_emphasis: List[str] = Field(
+        default_factory=list,
+        description="Verbatim quotes of things the user emphasized as important during interview"
+    )
+    raw_interview_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Complete raw interview data for full context preservation"
+    )
+    database: Optional[str] = Field(default=None, description="Database choice from interview")
+    deployment_platform: Optional[str] = Field(default=None, description="Deployment platform from interview")
+    testing_requirements: Optional[str] = Field(default=None, description="Testing requirements from interview")
+    authentication: Optional[bool] = Field(default=None, description="Whether authentication is needed")
+    apis: List[str] = Field(default_factory=list, description="External APIs to integrate")
 
     def to_json(self) -> str:
         return self.model_dump_json(indent=2)

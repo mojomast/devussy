@@ -44,6 +44,43 @@ This project was defined through an interactive guided questionnaire. The user p
 
 {{ shared.section_tech_stack(project_design.tech_stack) }}
 
+{% if project_design.database %}
+### Database
+- {{ project_design.database }}
+{% endif %}
+
+{% if project_design.deployment_platform %}
+### Deployment Platform
+- {{ project_design.deployment_platform }}
+{% endif %}
+
+{% if project_design.testing_requirements %}
+### Testing Requirements
+{{ project_design.testing_requirements }}
+{% endif %}
+
+{% if project_design.authentication %}
+### Authentication
+- Authentication is required for this project
+{% endif %}
+
+{% if project_design.apis %}
+### External APIs
+{% for api in project_design.apis %}
+- {{ api }}
+{% endfor %}
+{% endif %}
+
+{% if project_design.user_emphasis %}
+### Critical User Requirements (IMPORTANT)
+
+The user explicitly emphasized the following points. These MUST be addressed in the devplan:
+
+{% for emphasis in project_design.user_emphasis %}
+- "{{ emphasis }}"
+{% endfor %}
+{% endif %}
+
 {{ shared.section_architecture(project_design.architecture_overview) }}
 
 ### Key Dependencies
@@ -60,6 +97,10 @@ This project was defined through an interactive guided questionnaire. The user p
 {% endif %}
 
 ## Your Task
+
+{% if project_design.user_emphasis %}
+**CRITICAL**: The user emphasized specific requirements above. Your devplan MUST explicitly address each of these points with dedicated steps or phases.
+{% endif %}
 
 Create a high-level development plan that organizes the project implementation into **{{ project_design.estimated_phases if project_design.estimated_phases else "5-10" }} logical phases**. Each phase should represent a major milestone or functional area of the project.
 
