@@ -20,14 +20,21 @@ import {
  * Complexity profile data structure matching backend ComplexityProfile
  */
 export interface ComplexityProfile {
-    project_type_bucket: string;
-    technical_complexity_bucket: string;
-    integration_bucket: string;
-    team_size_bucket: string;
-    score: number;
+    project_type_bucket?: string;
+    technical_complexity_bucket?: string;
+    integration_bucket?: string;
+    team_size_bucket?: string;
+    score?: number;
+    complexity_score?: number; // Alternative field name from backend
     estimated_phase_count: number;
     depth_level: 'minimal' | 'standard' | 'detailed';
     confidence: number;
+    // Additional fields from LLM-powered analysis
+    rationale?: string;
+    complexity_factors?: string[];
+    follow_up_questions?: string[];
+    hidden_risks?: string[];
+    needs_clarification?: boolean;
 }
 
 interface ComplexityAssessmentProps {
@@ -69,10 +76,18 @@ const DEPTH_CONFIG = {
 /**
  * Format bucket names for display
  */
-function formatBucket(bucket: string): string {
+function formatBucket(bucket: string | undefined | null): string {
+    if (!bucket) return 'N/A';
     return bucket
         .replace(/_/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
+ * Safely extract score from profile (handles both score and complexity_score fields)
+ */
+function getScore(profile: ComplexityProfile): number {
+    return profile.score ?? profile.complexity_score ?? 5.0;
 }
 
 /**
@@ -235,7 +250,7 @@ export function ComplexityAssessment({
                 <div className="flex items-start gap-8 mb-6">
                     {/* Score gauge */}
                     <div className="flex flex-col items-center">
-                        <ScoreGauge score={profile.score} />
+                        <ScoreGauge score={getScore(profile)} />
                         <p className="text-sm text-muted-foreground mt-2">Complexity Score</p>
                     </div>
 
@@ -329,9 +344,9 @@ export function ComplexityAssessment({
                                 <span className="text-sm font-medium">Scale</span>
                             </div>
                             <p className="text-lg font-bold">
-                                {profile.score <= 3 ? 'Simple' : 
-                                 profile.score <= 7 ? 'Moderate' :
-                                 profile.score <= 12 ? 'Complex' : 'Enterprise'}
+                                {getScore(profile) <= 3 ? 'Simple' : 
+                                 getScore(profile) <= 7 ? 'Moderate' :
+                                 getScore(profile) <= 12 ? 'Complex' : 'Enterprise'}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
                                 Project scale
@@ -385,7 +400,7 @@ export function ComplexityBadge({ profile }: { profile: ComplexityProfile }) {
         <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${depthConfig.bgColor} ${depthConfig.borderColor} border`}>
             <Gauge className={`h-4 w-4 ${depthConfig.color}`} />
             <span className={`font-medium ${depthConfig.color}`}>
-                {profile.score.toFixed(1)}
+                {getScore(profile).toFixed(1)}
             </span>
             <span className="text-muted-foreground">|</span>
             <span className="text-muted-foreground">

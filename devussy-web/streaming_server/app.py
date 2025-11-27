@@ -8,6 +8,7 @@ starting point and will need additional validation and tests.
 
 import time
 from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -57,6 +58,24 @@ def _validate_incoming_request(x_streaming_proxy_key: str | None) -> None:
 
 app = FastAPI()
 
+# Configure CORS origins based on environment
+# In Docker/VPS, ALLOWED_ORIGINS env var can specify production origins
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    # Production: use env var (comma-separated list)
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",")]
+else:
+    # Local development: allow localhost
+    allowed_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Initialize analytics DB on startup
 @app.on_event("startup")
 async def startup_event():
@@ -80,8 +99,9 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         log_session(session_id, client_ip, user_agent)
         # Record request details
         start = time.time()
-        request_body = await request.body()
-        request_size = len(request_body)
+        # DON'T consume request body here - let the endpoint handler read it
+        # This was causing ClientDisconnect errors
+        request_size = 0  # We can't reliably get size without consuming body
         # Process request
         response = await call_next(request)
         # Record response details (duration until response object is ready)
@@ -376,7 +396,11 @@ async def plan_hivemind(request: Request):
 
 @app.post("/api/interview")
 async def interview_endpoint(request: Request):
-    data = await request.json()
+    try:
+        data = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    
     user_input = data.get("userInput")
     history = data.get("history", [])
     model_config = data.get("modelConfig", {})
@@ -401,17 +425,28 @@ async def interview_endpoint(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize interview manager: {e}")
 
+    # Important: conversation_history starts with system prompt
+    # We need to append history AFTER system prompt but BEFORE user message
     if history:
         try:
-            manager.conversation_history.extend(history)
-        except Exception:
-            pass
+            # Validate history format
+            if not isinstance(history, list):
+                raise ValueError("history must be a list")
+            
+            # Filter out system messages from frontend history
+            user_history = [msg for msg in history if isinstance(msg, dict) and msg.get("role") != "system"]
+            
+            # Extend conversation history (after system prompt which is already added in __init__)
+            manager.conversation_history.extend(user_history)
+        except Exception as e:
+            print(f"Warning: Failed to process history: {e}")
+            # Continue without history rather than failing
 
     loop = asyncio.get_running_loop()
     try:
         response_text = await loop.run_in_executor(None, manager._send_to_llm, user_input)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
 
     extracted = manager._extract_structured_data(response_text)
     is_complete = manager._validate_extracted_data(extracted) if extracted else False
