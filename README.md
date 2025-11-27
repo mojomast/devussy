@@ -17,6 +17,8 @@
 
 🔗 **Live Demo:** [dev.ussy.host](https://dev.ussy.host) (limited time testing release with built-in inference)
 
+> ⚠️ **v0.4.0 Status Note:** This release is live at dev.ussy.host but some reiteration phases (validation & correction loops in the adaptive pipeline) are still half-baked. The core pipeline works, but edge cases in the LLM correction loop may produce inconsistent results. Shipping anyway because perfect is the enemy of shipped.
+
 ## 🎉 What's New in v0.4.0
 
 ### 🎨 Redesigned User Interface
