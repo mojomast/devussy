@@ -1,9 +1,9 @@
 {
-  "project_name": "Bumfighter",
+  "project_name": "BUMfighter",
   "languages": [
-    "M.U.G.E.N CNS/CMD Scripting"
+    "M.U.G.E.N native scripting"
   ],
   "frameworks": [],
   "apis": [],
-  "requirements": "A satirical 2D fighting game for M.U.G.E.N featuring 8 resourceful underdog characters with unique weapons, aesthetics, finishers, and personal 'Bum Hymns'. Dark comedy tone that punches up at corrupt systems (landlords, politicians, dystopian capitalism) while maintaining empathy. Hand-drawn/pixel-art hybrid style with expressive visuals and over-the-top special moves. Each fighter needs complete sprite sheets, signature weapon, 3 special moves, 1 super, 1 finisher, home stage, and victory music."
+  "requirements": "Develop a standalone Windows-distributable M.U.G.E.N content pack for BUMfighter, including original sprites, sounds, copy, redesigned menus, and lore, all created within M.U.G.E.N conventions."
 }

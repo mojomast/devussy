@@ -954,12 +954,18 @@ async def design_automated_review(request: Request):
     design_data = data.get('design')
     project_name = data.get('projectName', '')
     
+    print(f"[design_review] Received request for project: {project_name}")
+    print(f"[design_review] Design data keys: {list(design_data.keys()) if design_data else 'None'}")
+    
     if not design_data:
         raise HTTPException(status_code=400, detail="Missing design")
     
     try:
         design = ProjectDesign(**design_data)
+        print(f"[design_review] Successfully parsed design with {len(design.objectives)} objectives")
     except Exception as e:
+        print(f"[design_review] Failed to parse design: {e}")
+        print(f"[design_review] Design data: {json.dumps(design_data, indent=2)[:500]}")
         raise HTTPException(status_code=400, detail=f"Invalid design: {e}")
     
     config = load_config()

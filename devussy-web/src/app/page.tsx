@@ -609,63 +609,271 @@ export default function Page() {
         );
       case 'help':
         return (
-          <div className="h-full overflow-auto p-6 prose prose-invert max-w-none">
+          <div className="h-full overflow-auto p-6 prose prose-invert max-w-none" style={{ backgroundColor: '#1C2125' }}>
+            {/* Devussy Logo with matching background */}
+            <div className="flex justify-center mb-6 -mx-6 -mt-6 px-6 pt-6 pb-6" style={{ backgroundColor: '#1C2125' }}>
+              <img 
+                src="/devussy_logo_minimal.png" 
+                alt="Devussy Logo" 
+                className="w-full h-auto object-contain"
+                style={{ maxWidth: '1344px' }}
+              />
+            </div>
+            
             <h1 className="text-2xl font-bold mb-4">Devussy Studio Help</h1>
             <div className="rounded-md p-3 bg-background/80 text-sm text-muted-foreground mb-4">
               <strong className="text-primary">Public Demo:</strong> This is a limited time public demo for Devussy. It is in constant development and things may break at times, but we're working on it! Please avoid putting any sensitive secrets here. Thank you for trying Devussy Studio.
             </div>
 
-            <h2 className="text-xl font-semibold mt-6 mb-3">Getting Started</h2>
-            <p>Devussy Studio is an AI-powered development pipeline that takes you from requirements to deployment-ready code.</p>
+            <div className="rounded-md p-4 bg-primary/10 border border-primary/20 mb-6">
+              <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                <GitBranch className="h-5 w-5" />
+                GitHub Repository
+              </h2>
+              <p className="text-sm mb-3">
+                For full documentation, installation instructions, and the complete codebase:
+              </p>
+              <a
+                href="https://github.com/mojomast/devussy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium text-sm no-underline"
+              >
+                <GitBranch className="h-4 w-4" />
+                Visit GitHub Repository
+              </a>
+            </div>
 
-            <h3 className="text-lg font-semibold mt-4 mb-2">Pipeline Stages:</h3>
-            <ol className="list-decimal list-inside space-y-2">
-              <li><strong>Interview</strong> - Interactive chat to gather requirements</li>
-              <li><strong>Design</strong> - Generate system architecture and design</li>
-              <li><strong>Plan</strong> - Create detailed development plan with phases</li>
-              <li><strong>Execute</strong> - Generate code for each phase</li>
-              <li><strong>Handoff</strong> - Export project and push to GitHub</li>
+            <h2 className="text-xl font-semibold mt-6 mb-3">🚀 Getting Started with Devussy</h2>
+            <p className="mb-4">
+              Devussy is both a <strong>software tool</strong> and a <strong>methodology</strong> for creating stateless, agent-agnostic development plans that work across humans and AI coding assistants.
+            </p>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">🎯 How to Use This Frontend</h2>
+            <div className="rounded-md p-4 bg-blue-500/10 border border-blue-500/20 mb-4">
+              <h3 className="text-lg font-semibold mb-3">Step-by-Step Pipeline Process:</h3>
+              
+              <div className="space-y-3 text-sm">
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-sm">1</div>
+                  <div className="flex-1">
+                    <strong className="block mb-1">Start a New Project</strong>
+                    <p className="text-muted-foreground">
+                      Click <strong>"+ NEW"</strong> from the taskbar at the bottom of the screen (or from the <strong>Start Menu</strong> if using Bliss theme). 
+                      Then choose <strong>"Try it now"</strong> to run a sample project, or fill out the form with your project name, tech stack, and requirements. 
+                      You can also click <strong>"Start Interactive Interview"</strong> for a guided Q&A session.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-sm">2</div>
+                  <div className="flex-1">
+                    <strong className="block mb-1">Design Generation</strong>
+                    <p className="text-muted-foreground">
+                      The system generates a system architecture using AI. Review the design and click <strong>"Approve Design"</strong> to continue, 
+                      or click <strong>"Refine Design"</strong> to discuss improvements with the AI.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-sm">3</div>
+                  <div className="flex-1">
+                    <strong className="block mb-1">Development Plan Generation</strong>
+                    <p className="text-muted-foreground">
+                      Review the generated phases and click <strong>"Approve & Continue"</strong> to generate detailed phase documents. 
+                      Enable <strong>YOLO Mode</strong> in settings to skip manual approval steps.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-sm">4</div>
+                  <div className="flex-1">
+                    <strong className="block mb-1">Phase Execution</strong>
+                    <p className="text-muted-foreground">
+                      Watch as detailed plans are generated for each phase in parallel. The system creates comprehensive phase documents 
+                      with tasks, acceptance criteria, and implementation details.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center font-bold text-sm">5</div>
+                  <div className="flex-1">
+                    <strong className="block mb-1">Download Artifacts</strong>
+                    <p className="text-muted-foreground">
+                      Click <strong>"Download Project Artifacts"</strong> to get a ZIP file containing all your project documentation. 
+                      This is what you'll use for circular development!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 p-3 bg-primary/10 rounded border border-primary/20">
+                <p className="text-xs">
+                  <strong>💡 Pro Tip:</strong> Use the <strong>Model Settings</strong> button (gear icon in taskbar) to configure different AI models 
+                  for each stage. Adjust <strong>concurrency</strong> to control how many phases generate in parallel.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-md p-4 bg-yellow-500/10 border border-yellow-500/20 mb-4">
+              <h3 className="text-lg font-semibold mb-2">📦 What You Get (The Artifacts)</h3>
+              <p className="mb-2">
+                At the end of the pipeline, you'll download a ZIP file containing:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li><code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> - The single source of truth for what to do next</li>
+                <li><code className="bg-gray-800 px-2 py-1 rounded">devplan.md</code> - Complete project plan with anchored sections</li>
+                <li><code className="bg-gray-800 px-2 py-1 rounded">phase*.md</code> - Per-phase detailed plans (e.g., phase1.md, phase2.md)</li>
+                <li><code className="bg-gray-800 px-2 py-1 rounded">design.md</code> - System architecture and design document</li>
+              </ul>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">🔄 Using Devussy: Circular Development</h2>
+            <p className="mb-4">
+              <strong>The key principle:</strong> Put the downloaded files in a folder and tell <strong>ANY</strong> AI coding assistant (ChatGPT, Claude, Gemini, Cursor, Roo Code, etc.):
+            </p>
+            <div className="rounded-md p-4 bg-green-500/10 border border-green-500/20 mb-4">
+              <code className="text-sm block">"Read handoff.md and start working on the tasks it describes"</code>
+            </div>
+
+            <h3 className="text-lg font-semibold mt-4 mb-2">How Circular Development Works:</h3>
+            <ol className="list-decimal list-inside space-y-3 mb-4">
+              <li>
+                <strong>Agent Reads handoff.md</strong> - Learns what part of which phase to focus on
+              </li>
+              <li>
+                <strong>Agent Does the Work</strong> - Implements features, writes code, etc.
+              </li>
+              <li>
+                <strong>Agent Updates Phase Doc</strong> - Records discoveries and blockers in phase*.md
+              </li>
+              <li>
+                <strong>Agent Updates DevPlan</strong> - Updates anchored sections in devplan.md (constraints, risks, timeline)
+              </li>
+              <li>
+                <strong>Agent Updates Handoff</strong> - Modifies handoff.md to point next agent to next slice of work
+              </li>
+              <li>
+                <strong>Handoff to Next Agent</strong> - Pass the updated files to another agent (or new context window)
+              </li>
             </ol>
 
-            <h2 className="text-xl font-semibold mt-6 mb-3">IRC Chat Addon</h2>
-            <p>Devussy now includes a built-in IRC client accessible via the taskbar or desktop icon.</p>
-            <ul className="list-disc list-inside space-y-1">
+            <div className="rounded-md p-4 bg-blue-500/10 border border-blue-500/20 mb-4">
+              <h3 className="text-lg font-semibold mb-2">🎯 The Three Artifacts That Travel Together</h3>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-600">
+                    <th className="text-left py-2">Artifact</th>
+                    <th className="text-left py-2">Purpose</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-700">
+                    <td className="py-2"><code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code></td>
+                    <td className="py-2">Single source of truth for "what to do next"</td>
+                  </tr>
+                  <tr className="border-b border-gray-700">
+                    <td className="py-2"><code className="bg-gray-800 px-2 py-1 rounded">devplan.md</code></td>
+                    <td className="py-2">Full project context with anchored sections</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2"><code className="bg-gray-800 px-2 py-1 rounded">phase*.md</code></td>
+                    <td className="py-2">Phase-specific progress and decisions</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="text-lg font-semibold mt-4 mb-2">💡 Real Example Flow:</h3>
+            <div className="rounded-md p-4 bg-gray-800/50 mb-4 text-sm font-mono">
+              <p className="mb-2">Agent A:</p>
+              <ul className="list-none space-y-1 ml-4 text-xs">
+                <li>└─ Reads: handoff.md ("Work on Phase 1, tasks 1-3")</li>
+                <li>└─ Discovers: "We need 3× more compute than planned"</li>
+                <li>└─ Updates: phase1.md (adds discovery notes)</li>
+                <li>└─ Updates: devplan.md (updates progress log anchor)</li>
+                <li>└─ Updates: handoff.md ("Next: Phase 2, task 1 with 3× compute")</li>
+              </ul>
+              <p className="mt-3 mb-2">Agent B receives:</p>
+              <ul className="list-none space-y-1 ml-4 text-xs">
+                <li>├─ handoff.md (knows to work on Phase 2 with compute constraint)</li>
+                <li>├─ devplan.md (sees updated compute requirement)</li>
+                <li>└─ phase1.md (sees Phase 1 discoveries)</li>
+              </ul>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">🎨 Web UI Pipeline Stages</h2>
+            <ol className="list-decimal list-inside space-y-2 mb-4">
+              <li><strong>Interview</strong> - Interactive chat to gather requirements</li>
+              <li><strong>Design</strong> - Generate system architecture (with validation)</li>
+              <li><strong>Plan</strong> - Create detailed development plan with phases</li>
+              <li><strong>Execute</strong> - Generate phase-specific detailed plans</li>
+              <li><strong>Handoff</strong> - Download artifacts and start circular development</li>
+            </ol>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">✨ Key Benefits</h2>
+            <ul className="list-disc list-inside space-y-2 mb-4">
+              <li><strong>🔄 Reusable</strong> - One plan works across humans and LLMs</li>
+              <li><strong>📦 Portable</strong> - Export as plain markdown, no runtime state</li>
+              <li><strong>🤖 Agent-agnostic</strong> - Switch between any AI provider freely</li>
+              <li><strong>🔗 No vendor lock-in</strong> - Works with ChatGPT, Claude, Gemini, Cursor, etc.</li>
+              <li><strong>📊 Full context</strong> - Every handoff contains everything needed</li>
+              <li><strong>⚡ Parallel work</strong> - Multiple agents can work on different phases</li>
+            </ul>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">💻 IRC Chat Addon</h2>
+            <p className="mb-2">Devussy includes a built-in IRC client accessible via the taskbar or desktop icon.</p>
+            <ul className="list-disc list-inside space-y-1 mb-4">
               <li>Join <code className="bg-gray-800 px-2 py-1 rounded">#devussy-chat</code> to chat with other users</li>
               <li>Click on usernames to start private messages</li>
-              <li>Server logs are collected in the <strong>Status</strong> tab</li>
               <li>Your IRC nickname is saved automatically</li>
             </ul>
-            <h2 className="text-xl font-semibold mt-6 mb-3">Circular Stateless Development</h2>
-            <p>Devussy enables <strong>agent-agnostic, stateless development</strong> where any AI agent can pick up where another left off.</p>
 
-            <h3 className="text-lg font-semibold mt-4 mb-2">How It Works:</h3>
-            <ol className="list-decimal list-inside space-y-2">
-              <li><strong>Generate Plan</strong> - Use Devussy to create a comprehensive development plan</li>
-              <li><strong>Export Handoff</strong> - Download the plan, design, and context as a zip file</li>
-              <li><strong>Share with Any Agent</strong> - Give the handoff document to any AI coding assistant (Claude, GPT, Gemini, etc.)</li>
-              <li><strong>Agent Reads Context</strong> - Tell the agent: <code className="bg-gray-800 px-2 py-1 rounded">"Read the handoff.md file and implement the next phase"</code></li>
-              <li><strong>Iterate</strong> - Different agents can work on different phases, all following the same plan</li>
-            </ol>
-            <h3 className="text-lg font-semibold mt-4 mb-2">Key Benefits:</h3>
-            <ul className="list-disc list-inside space-y-1">
-              <li>✅ <strong>No vendor lock-in</strong> - Switch between AI providers freely</li>
-              <li>✅ <strong>Consistent quality</strong> - All agents follow the same plan</li>
-              <li>✅ <strong>Parallel development</strong> - Multiple agents can work on different phases</li>
-              <li>✅ <strong>Full context</strong> - Handoff document contains everything needed</li>
-            </ul>
-            <h2 className="text-xl font-semibold mt-6 mb-3">Tips</h2>
-            <ul className="list-disc list-inside space-y-1">
+            <h2 className="text-xl font-semibold mt-6 mb-3">🔧 Tips & Features</h2>
+            <ul className="list-disc list-inside space-y-1 mb-4">
               <li>Use <strong>checkpoints</strong> to save your progress at any stage</li>
-              <li>Edit phases in the Plan view before execution</li>
-              <li>Adjust <strong>concurrency</strong> in settings to control parallel execution</li>
+              <li>Enable <strong>YOLO Mode</strong> to auto-approve all stages without manual review</li>
+              <li>Adjust <strong>concurrency</strong> in model settings to control parallel execution</li>
               <li>Windows can be minimized - find them in the taskbar</li>
               <li>Use the <strong>Start Menu</strong> (Bliss theme) or taskbar to access all features</li>
             </ul>
-            <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>
-            <p>Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your project for detailed technical documentation.</p>
 
-            <h2 className="text-xl font-semibold mt-6 mb-3">Credits</h2>
-            <p>Created by <strong>Kyle Durepos</strong>.</p>
+            <h2 className="text-xl font-semibold mt-6 mb-3">📚 Learn More</h2>
+            <div className="space-y-2 mb-6">
+              <p>
+                <a
+                  href="https://github.com/mojomast/devussy#readme"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-medium"
+                >
+                  → Full README with Installation & CLI Usage
+                </a>
+              </p>
+              <p>
+                <a
+                  href="https://github.com/mojomast/devussy/blob/main/AGENTS.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-medium"
+                >
+                  → AGENTS.md - Critical guidance for AI agents
+                </a>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your downloaded artifacts for detailed technical documentation.
+              </p>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">👨‍💻 Credits</h2>
+            <p className="mb-2">Created by <strong>Kyle Durepos</strong>.</p>
+            <p className="text-sm text-muted-foreground italic">
+              "We out here shippin' code and slammin' Cadillac doors. BRRRRRRRRRRRRRRRRRRRRRRRRRR"
+            </p>
 
             <div className="mt-6 flex items-center justify-between">
               <div className="flex flex-col gap-2">
