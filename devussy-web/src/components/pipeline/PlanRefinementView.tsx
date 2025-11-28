@@ -109,10 +109,19 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let gotDoneSignal = false;
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    // Stream ended - finalize if we have content and didn't get explicit done
+                    if (fullResponse && !gotDoneSignal) {
+                        console.log('[PlanRefinement] Stream ended without done signal, finalizing');
+                        setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+                        setStreamingMessage("");
+                    }
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -132,6 +141,7 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
                             }
 
                             if (data.done) {
+                                gotDoneSignal = true;
                                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                                 setStreamingMessage("");
                                 if (data.updatedPlan) {
@@ -150,7 +160,7 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
                 }
             }
 
-            if (fullResponse) {
+            if (fullResponse && !gotDoneSignal) {
                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                 setStreamingMessage("");
             }
@@ -190,10 +200,19 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let gotDoneSignal = false;
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    // Stream ended - finalize if we have content and didn't get explicit done
+                    if (fullResponse && !gotDoneSignal) {
+                        console.log('[PlanRefinement] Review stream ended without done signal, finalizing');
+                        setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+                        setStreamingMessage("");
+                    }
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -211,6 +230,7 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
                                 setStreamingMessage(fullResponse);
                             }
                             if (data.done) {
+                                gotDoneSignal = true;
                                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                                 setStreamingMessage("");
                                 return;
@@ -222,7 +242,7 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
                 }
             }
 
-            if (fullResponse) {
+            if (fullResponse && !gotDoneSignal) {
                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                 setStreamingMessage("");
             }
