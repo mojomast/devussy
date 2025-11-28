@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, Loader2, MessageSquare } from "lucide-react";
+import { Send, Loader2, MessageSquare, Download } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { cn } from "@/utils";
+import { DownloadButton, formatInterviewAsMarkdown } from "@/components/ui/DownloadButton";
 
 interface Message {
     role: 'user' | 'assistant' | 'system';
@@ -97,8 +98,16 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
                     <MessageSquare className="h-5 w-5" />
                     Project Interview
                 </h2>
-                <div className="text-xs text-muted-foreground">
-                    Chat with AI to define your project requirements
+                <div className="flex items-center gap-2">
+                    <DownloadButton
+                        content={formatInterviewAsMarkdown(history)}
+                        filename="interview_transcript.md"
+                        label="Download"
+                        disabled={history.length === 0}
+                    />
+                    <div className="text-xs text-muted-foreground">
+                        Chat with AI to define your project requirements
+                    </div>
                 </div>
             </div>
 

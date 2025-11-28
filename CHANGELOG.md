@@ -5,6 +5,37 @@ All notable changes to Devussy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-11-27
+
+### ✨ Added - Per-Stage Model Configuration
+- **Extended LLM Configuration**: Added per-stage model configuration for all pipeline phases
+  - `interview_llm` - Project discovery conversation stage
+  - `complexity_llm` - Complexity analysis stage
+  - `validation_llm` - Design validation stage
+  - `correction_llm` - Correction loop stage
+  - `execute_llm` - Phase execution stage
+  - Updated `get_llm_config_for_stage()` to support all stages including `plan` alias
+  - Environment variable support for per-stage API keys
+
+### 📥 Added - Download Buttons for All Pipeline Elements
+- **New DownloadButton Component** (`components/ui/DownloadButton.tsx`)
+  - Reusable download button for markdown file exports
+  - Helper functions for formatting different content types
+
+- **Download Buttons Added to All Pipeline Stages**:
+  - **InterviewView**: Download interview transcript as markdown
+  - **DesignView**: Download generated design document
+  - **ComplexityAssessment**: Download complexity analysis report
+  - **ValidationReport**: Download validation results with sanity review
+  - **CorrectionTimeline**: Download correction loop history
+  - **PlanView**: Download development plan
+  - **ExecutionView**: Download all phase execution results
+  - **HandoffView**: Individual download buttons for each tab (handoff, design, plan, phases)
+
+### 📚 Configuration
+- Updated `config/config.yaml` with documentation for all per-stage LLM settings
+- Extended `src/config.py` with full per-stage configuration loading
+
 ## [0.4.0] - 2025-11-27
 
 ### 🎨 Added - UI/UX Improvements
@@ -86,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.4.1]: https://github.com/mojomast/devussy/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/mojomast/devussy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mojomast/devussy/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mojomast/devussy/compare/v0.1.0...v0.2.0

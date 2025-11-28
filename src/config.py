@@ -210,11 +210,26 @@ class AppConfig(BaseModel):
     hivemind: HiveMindConfig = Field(default_factory=HiveMindConfig)
 
     # Per-stage LLM configurations (optional overrides)
+    interview_llm: Optional[LLMConfig] = Field(
+        default=None, description="LLM config for interview/discovery stage"
+    )
+    complexity_llm: Optional[LLMConfig] = Field(
+        default=None, description="LLM config for complexity analysis stage"
+    )
     design_llm: Optional[LLMConfig] = Field(
         default=None, description="LLM config for project design stage"
     )
+    validation_llm: Optional[LLMConfig] = Field(
+        default=None, description="LLM config for design validation stage"
+    )
+    correction_llm: Optional[LLMConfig] = Field(
+        default=None, description="LLM config for correction loop stage"
+    )
     devplan_llm: Optional[LLMConfig] = Field(
         default=None, description="LLM config for devplan generation stage"
+    )
+    execute_llm: Optional[LLMConfig] = Field(
+        default=None, description="LLM config for phase execution stage"
     )
     handoff_llm: Optional[LLMConfig] = Field(
         default=None, description="LLM config for handoff prompt stage"
@@ -267,7 +282,8 @@ class AppConfig(BaseModel):
         """Return the effective LLM config for a pipeline stage.
 
         Args:
-            stage: Name of the stage (e.g. "design", "devplan", "handoff")
+            stage: Name of the stage (e.g. "interview", "complexity", "design", 
+                   "validation", "correction", "devplan", "plan", "execute", "handoff")
 
         Returns:
             LLMConfig merged with any stage-specific override.
@@ -275,8 +291,14 @@ class AppConfig(BaseModel):
 
         stage = (stage or "").lower()
         override_map = {
+            "interview": self.interview_llm,
+            "complexity": self.complexity_llm,
             "design": self.design_llm,
+            "validation": self.validation_llm,
+            "correction": self.correction_llm,
             "devplan": self.devplan_llm,
+            "plan": self.devplan_llm,  # Alias for devplan
+            "execute": self.execute_llm,
             "handoff": self.handoff_llm,
         }
 
@@ -494,13 +516,33 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
         env_overrides["llm"] = global_llm
     
     # Load per-stage LLM configurations
+    interview_llm = _load_llm_config("interview_")
+    if interview_llm:
+        env_overrides["interview_llm"] = interview_llm
+    
+    complexity_llm = _load_llm_config("complexity_")
+    if complexity_llm:
+        env_overrides["complexity_llm"] = complexity_llm
+    
     design_llm = _load_llm_config("design_")
     if design_llm:
         env_overrides["design_llm"] = design_llm
     
+    validation_llm = _load_llm_config("validation_")
+    if validation_llm:
+        env_overrides["validation_llm"] = validation_llm
+    
+    correction_llm = _load_llm_config("correction_")
+    if correction_llm:
+        env_overrides["correction_llm"] = correction_llm
+    
     devplan_llm = _load_llm_config("devplan_")
     if devplan_llm:
         env_overrides["devplan_llm"] = devplan_llm
+    
+    execute_llm = _load_llm_config("execute_")
+    if execute_llm:
+        env_overrides["execute_llm"] = execute_llm
     
     handoff_llm = _load_llm_config("handoff_")
     if handoff_llm:

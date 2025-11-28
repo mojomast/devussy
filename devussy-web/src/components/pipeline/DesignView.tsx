@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History, ArrowLeft, MessageSquare } from "lucide-react";
+import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History, ArrowLeft, MessageSquare, Download } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ComplexityAssessment, ComplexityProfile, ComplexityBadge } from './ComplexityAssessment';
 import { ValidationReport, ValidationReportData, SanityReviewResult, ValidationBadge, ValidationIssue } from './ValidationReport';
 import { CorrectionTimeline, CorrectionHistory, CorrectionBadge } from './CorrectionTimeline';
 import { YoloModeToggle, YoloModeBadge } from './YoloMode';
+import { DownloadButton, formatComplexityAsMarkdown, formatValidationAsMarkdown, formatCorrectionAsMarkdown } from "@/components/ui/DownloadButton";
 
 interface DesignViewProps {
     projectName: string;
@@ -650,6 +651,15 @@ export const DesignView = ({
                     >
                         Regenerate
                     </Button>
+                    
+                    {/* Download Design Button */}
+                    {designContent && !isGenerating && (
+                        <DownloadButton
+                            content={designContent}
+                            filename={`${projectName || 'project'}_design.md`}
+                            label="Download"
+                        />
+                    )}
                     
                     {/* Refinement Button */}
                     {designContent && !isGenerating && onRequestRefinement && (

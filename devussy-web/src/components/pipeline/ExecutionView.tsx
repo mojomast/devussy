@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, ArrowRight } from "lucide-react";
+import { Terminal, LayoutGrid, List, Loader2, Check, AlertCircle, Clock, Pause, Play, ArrowRight, Download } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { PhaseDetailView } from './PhaseDetailView';
+import { DownloadButton } from "@/components/ui/DownloadButton";
 
 interface PhaseStatus {
     number: number;
@@ -466,6 +467,37 @@ export const ExecutionView = ({
         }
     };
 
+    // Generate markdown content from all phases
+    const generateExecutionMarkdown = (): string => {
+        let md = `# Execution Results: ${projectName}\n\n`;
+        md += `_Generated: ${new Date().toISOString()}_\n\n`;
+        md += `---\n\n`;
+        md += `## Summary\n\n`;
+        md += `| Metric | Value |\n`;
+        md += `|--------|-------|\n`;
+        md += `| **Total Phases** | ${phases.length} |\n`;
+        md += `| **Completed** | ${completedCount} |\n`;
+        md += `| **Status** | ${isExecuting ? 'Running' : completedCount === phases.length ? 'Complete' : 'Pending'} |\n`;
+        md += `\n`;
+
+        phases.forEach((phase: PhaseStatus) => {
+            const statusEmoji = phase.status === 'complete' ? '✅' : 
+                               phase.status === 'running' ? '🔄' : 
+                               phase.status === 'failed' ? '❌' : '⏳';
+            md += `## Phase ${phase.number}: ${phase.title} ${statusEmoji}\n\n`;
+            md += `**Status:** ${phase.status}\n\n`;
+            if (phase.error) {
+                md += `**Error:** ${phase.error}\n\n`;
+            }
+            if (phase.output) {
+                md += `### Output\n\n`;
+                md += `\`\`\`\n${phase.output}\n\`\`\`\n\n`;
+            }
+        });
+
+        return md;
+    };
+
     const renderPhaseColumn = (phase: PhaseStatus) => (
         <div key={phase.number} className={`${getStatusColor(phase.status)} rounded-lg overflow-hidden border flex flex-col h-full`}>
             <PhaseDetailView
@@ -503,6 +535,14 @@ export const ExecutionView = ({
                     >
                         Proceed to Handoff <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
+
+                    {/* Download Execution Results */}
+                    <DownloadButton
+                        content={generateExecutionMarkdown()}
+                        filename={`${projectName || 'project'}_execution.md`}
+                        label="Download"
+                        disabled={phases.length === 0}
+                    />
 
                     {/* Concurrency Control */}
                     <div className="flex items-center gap-2">

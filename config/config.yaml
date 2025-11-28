@@ -8,8 +8,22 @@ temperature: 0.7
 max_tokens: 20000
 
 # Per-Stage LLM Configuration (optional overrides)
-# These map to AppConfig.design_llm/devplan_llm/handoff_llm via src/config.py:_load_llm_config.
+# These map to AppConfig.*_llm via src/config.py:_load_llm_config.
 # Use them when you want explicit stage-specific behavior instead of relying on MODEL/FINAL_MODEL.
+#
+# Interview stage overrides (optional) - Project discovery conversation
+# interview_llm_provider: requesty
+# interview_model: openai/gpt-5-mini
+# interview_temperature: 0.8
+# interview_max_tokens: 4096
+# interview_api_timeout: 120
+#
+# Complexity analysis stage overrides (optional) - Analyzes project scope
+# complexity_llm_provider: requesty
+# complexity_model: openai/gpt-5-mini
+# complexity_temperature: 0.3
+# complexity_max_tokens: 4096
+# complexity_api_timeout: 120
 #
 # Design stage overrides (optional)
 # design_llm_provider: requesty
@@ -19,12 +33,33 @@ max_tokens: 20000
 # design_api_timeout: 300
 # design_reasoning_effort: medium  # one of: low, medium, high
 #
-# DevPlan stage overrides (optional)
+# Validation stage overrides (optional) - Validates generated design
+# validation_llm_provider: requesty
+# validation_model: openai/gpt-5-mini
+# validation_temperature: 0.2
+# validation_max_tokens: 8192
+# validation_api_timeout: 180
+#
+# Correction stage overrides (optional) - Fixes validation issues
+# correction_llm_provider: requesty
+# correction_model: openai/gpt-5
+# correction_temperature: 0.4
+# correction_max_tokens: 20000
+# correction_api_timeout: 300
+#
+# DevPlan/Plan stage overrides (optional)
 devplan_llm_provider: requesty
 devplan_model: openai/gpt-5
 devplan_temperature: 0.3
 devplan_max_tokens: 81920
 devplan_api_timeout: 300
+#
+# Execute stage overrides (optional) - Phase execution/expansion
+# execute_llm_provider: requesty
+# execute_model: openai/gpt-5
+# execute_temperature: 0.5
+# execute_max_tokens: 40000
+# execute_api_timeout: 300
 #
 # Handoff stage overrides (optional)
 handoff_llm_provider: requesty
@@ -34,8 +69,13 @@ handoff_max_tokens: 86000
 handoff_api_timeout: 300
 #
 # You can also set per-stage API keys via environment variables:
+# INTERVIEW_API_KEY=sk-...
+# COMPLEXITY_API_KEY=sk-...
 # DESIGN_API_KEY=sk-...
+# VALIDATION_API_KEY=sk-...
+# CORRECTION_API_KEY=sk-...
 # DEVPLAN_API_KEY=sk-...
+# EXECUTE_API_KEY=sk-...
 # HANDOFF_API_KEY=sk-...
 
 # API Configuration

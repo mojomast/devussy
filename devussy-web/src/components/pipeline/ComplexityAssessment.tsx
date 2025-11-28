@@ -13,8 +13,10 @@ import {
     Users,
     Boxes,
     RefreshCw,
-    ChevronDown
+    ChevronDown,
+    Download
 } from "lucide-react";
+import { DownloadButton, formatComplexityAsMarkdown } from "@/components/ui/DownloadButton";
 
 /**
  * Complexity profile data structure matching backend ComplexityProfile
@@ -234,14 +236,22 @@ export function ComplexityAssessment({
                             Adaptive pipeline configuration based on project analysis
                         </CardDescription>
                     </div>
-                    {onRefresh && (
-                        <button 
-                            onClick={onRefresh}
-                            className="text-sm text-primary hover:underline"
-                        >
-                            Refresh
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <DownloadButton
+                            content={formatComplexityAsMarkdown(profile)}
+                            filename="complexity_assessment.md"
+                            label="Download"
+                            size="sm"
+                        />
+                        {onRefresh && (
+                            <button 
+                                onClick={onRefresh}
+                                className="text-sm text-primary hover:underline"
+                            >
+                                Refresh
+                            </button>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
 

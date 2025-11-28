@@ -12,8 +12,10 @@ import {
     Search,
     Lightbulb,
     Target,
-    Wrench
+    Wrench,
+    Download
 } from "lucide-react";
+import { DownloadButton, formatValidationAsMarkdown } from "@/components/ui/DownloadButton";
 
 /**
  * Validation issue structure matching backend ValidationReport
@@ -364,15 +366,23 @@ export function ValidationReport({
                         </CardDescription>
                     </div>
                     
-                    {!report.is_valid && report.auto_correctable_count > 0 && onRequestCorrection && (
-                        <button 
-                            onClick={onRequestCorrection}
-                            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
-                        >
-                            <Wrench className="h-4 w-4" />
-                            Auto-correct ({report.auto_correctable_count})
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <DownloadButton
+                            content={formatValidationAsMarkdown(report, sanityReview)}
+                            filename="validation_report.md"
+                            label="Download"
+                            size="sm"
+                        />
+                        {!report.is_valid && report.auto_correctable_count > 0 && onRequestCorrection && (
+                            <button 
+                                onClick={onRequestCorrection}
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors"
+                            >
+                                <Wrench className="h-4 w-4" />
+                                Auto-correct ({report.auto_correctable_count})
+                            </button>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
 

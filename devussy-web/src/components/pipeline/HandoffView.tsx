@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Download, Github, CheckCircle, Loader2, FileText, Code, List, Terminal } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import JSZip from 'jszip';
+import { DownloadButton } from "@/components/ui/DownloadButton";
 
 interface HandoffViewProps {
     design: any;
@@ -332,10 +333,20 @@ export const HandoffView = ({
                     <div className="grid gap-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Handoff Instructions</CardTitle>
-                                <CardDescription>
-                                    Final summary and next steps for your project.
-                                </CardDescription>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle>Handoff Instructions</CardTitle>
+                                        <CardDescription>
+                                            Final summary and next steps for your project.
+                                        </CardDescription>
+                                    </div>
+                                    <DownloadButton
+                                        content={handoffContent}
+                                        filename="handoff_instructions.md"
+                                        label="Download MD"
+                                        disabled={!handoffContent || isGenerating}
+                                    />
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 {isGenerating ? (
@@ -406,36 +417,61 @@ export const HandoffView = ({
 
                 {/* Design Tab */}
                 {activeTab === 'design' && (
-                    <div className="prose prose-invert max-w-none">
-                        <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
-                            {formatDesignAsMarkdown(design)}
-                        </pre>
+                    <div className="space-y-4">
+                        <div className="flex justify-end">
+                            <DownloadButton
+                                content={formatDesignAsMarkdown(design)}
+                                filename={`${design?.project_name || 'project'}_design.md`}
+                                label="Download Design"
+                            />
+                        </div>
+                        <div className="prose prose-invert max-w-none">
+                            <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
+                                {formatDesignAsMarkdown(design)}
+                            </pre>
+                        </div>
                     </div>
                 )}
 
                 {/* Plan Tab */}
                 {activeTab === 'plan' && (
-                    <div className="prose prose-invert max-w-none">
-                        <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
-                            {formatPlanAsMarkdown(plan)}
-                        </pre>
+                    <div className="space-y-4">
+                        <div className="flex justify-end">
+                            <DownloadButton
+                                content={formatPlanAsMarkdown(plan)}
+                                filename="development_plan.md"
+                                label="Download Plan"
+                            />
+                        </div>
+                        <div className="prose prose-invert max-w-none">
+                            <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">
+                                {formatPlanAsMarkdown(plan)}
+                            </pre>
+                        </div>
                     </div>
                 )}
 
                 {/* Phases Tab */}
                 {activeTab === 'phases' && (
                     <div className="space-y-4">
-                        <div className="flex flex-wrap gap-2 pb-4 border-b border-border">
-                            {plan?.phases?.map((phase: any) => (
-                                <Button
-                                    key={phase.number || phase.phase_number}
-                                    variant={selectedPhase === (phase.number || phase.phase_number) ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => setSelectedPhase(phase.number || phase.phase_number)}
-                                >
-                                    Phase {phase.number || phase.phase_number}
-                                </Button>
-                            ))}
+                        <div className="flex flex-wrap gap-2 pb-4 border-b border-border items-center justify-between">
+                            <div className="flex flex-wrap gap-2">
+                                {plan?.phases?.map((phase: any) => (
+                                    <Button
+                                        key={phase.number || phase.phase_number}
+                                        variant={selectedPhase === (phase.number || phase.phase_number) ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => setSelectedPhase(phase.number || phase.phase_number)}
+                                    >
+                                        Phase {phase.number || phase.phase_number}
+                                    </Button>
+                                ))}
+                            </div>
+                            <DownloadButton
+                                content={getPhaseMarkdown(selectedPhase)}
+                                filename={`phase_${selectedPhase}.md`}
+                                label="Download Phase"
+                            />
                         </div>
                         <div className="prose prose-invert max-w-none">
                             <pre className="whitespace-pre-wrap font-mono text-sm bg-transparent p-0">

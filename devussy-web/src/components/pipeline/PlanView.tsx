@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus, MessageSquare, ArrowRight } from "lucide-react";
+import { Play, FileText, Loader2, Edit2, LayoutGrid, FileCode, Plus, MessageSquare, ArrowRight, Download } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { PhaseCard, PhaseData } from './PhaseCard';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { DownloadButton } from "@/components/ui/DownloadButton";
 
 interface PlanViewProps {
     design: any;
@@ -374,6 +375,15 @@ export const PlanView = ({
                     >
                         Regenerate
                     </Button>
+
+                    {/* Download Plan Button */}
+                    {planContent && !isLoading && (
+                        <DownloadButton
+                            content={planContent}
+                            filename="development_plan.md"
+                            label="Download"
+                        />
+                    )}
 
                     {/* Refinement Button */}
                     {plan && !isLoading && phases.length > 0 && onRequestRefinement && (

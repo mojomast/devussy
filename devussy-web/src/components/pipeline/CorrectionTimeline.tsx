@@ -14,8 +14,10 @@ import {
     Target,
     Loader2,
     Square,
-    RotateCcw
+    RotateCcw,
+    Download
 } from "lucide-react";
+import { DownloadButton, formatCorrectionAsMarkdown } from "@/components/ui/DownloadButton";
 
 /**
  * Single correction iteration data
@@ -261,6 +263,12 @@ export function CorrectionTimeline({
                     </div>
                     
                     <div className="flex items-center gap-2">
+                        <DownloadButton
+                            content={formatCorrectionAsMarkdown(history)}
+                            filename="correction_history.md"
+                            label="Download"
+                            size="sm"
+                        />
                         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${statusConfig.bgColor} border ${statusConfig.borderColor}`}>
                             <StatusIcon className={`h-4 w-4 ${statusConfig.color} ${isRunning ? 'animate-spin' : ''}`} />
                             <span className={`text-sm font-medium ${statusConfig.color}`}>
