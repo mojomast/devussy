@@ -5,6 +5,27 @@ All notable changes to Devussy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2025-11-27
+
+### ✨ Added - Inline Design Refinement
+- **New InlineRefinementPanel Component** (`components/pipeline/InlineRefinementPanel.tsx`)
+  - Embedded chat interface for design refinement directly below Complexity Assessment
+  - Replaces the separate floating window approach with inline UX
+  - Supports `/analyze` command for automated design review
+  - Supports `/apply` command to finalize and continue
+  - "Apply & Continue" button triggers complexity re-analysis
+
+- **Improved Adaptive Pipeline Integration**
+  - "Refine Design" button now toggles inline panel instead of spawning separate window
+  - After refinement completes, automatically re-runs complexity analysis
+  - Better visual flow: Complexity → Inline Refinement → Validation → Correction
+  - Refinement panel positioned contextually below Complexity Factors
+
+### 🔧 Changed
+- **DesignView.tsx**: Added `showInlineRefinement` state and integrated `InlineRefinementPanel`
+- Refine Design button now shows "Hide Refinement" when panel is open
+- `onRequestReanalysis` callback wired to re-trigger `analyzeComplexity()`
+
 ## [0.4.1] - 2025-11-27
 
 ### ✨ Added - Per-Stage Model Configuration

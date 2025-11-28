@@ -11,6 +11,7 @@ import { ValidationReport, ValidationReportData, SanityReviewResult, ValidationB
 import { CorrectionTimeline, CorrectionHistory, CorrectionBadge } from './CorrectionTimeline';
 import { YoloModeToggle, YoloModeBadge } from './YoloMode';
 import { DownloadButton, formatComplexityAsMarkdown, formatValidationAsMarkdown, formatCorrectionAsMarkdown } from "@/components/ui/DownloadButton";
+import { InlineRefinementPanel } from './InlineRefinementPanel';
 
 interface DesignViewProps {
     projectName: string;
@@ -68,6 +69,9 @@ export const DesignView = ({
     
     // Refinement prompt state (when not in YOLO mode)
     const [showRefinementPrompt, setShowRefinementPrompt] = useState(false);
+    
+    // Inline refinement panel state (embedded chat below complexity)
+    const [showInlineRefinement, setShowInlineRefinement] = useState(false);
 
     // Ref to track the current abort controller
     const abortControllerRef = React.useRef<AbortController | null>(null);
@@ -661,16 +665,16 @@ export const DesignView = ({
                         />
                     )}
                     
-                    {/* Refinement Button */}
-                    {designContent && !isGenerating && onRequestRefinement && (
+                    {/* Refinement Button - toggles inline refinement panel */}
+                    {designContent && !isGenerating && (
                         <Button
-                            variant="outline"
+                            variant={showInlineRefinement ? "secondary" : "outline"}
                             size="sm"
-                            onClick={onRequestRefinement}
+                            onClick={() => setShowInlineRefinement(!showInlineRefinement)}
                             className="gap-2"
                         >
                             <MessageSquare className="h-4 w-4" />
-                            Refine Design
+                            {showInlineRefinement ? "Hide Refinement" : "Refine Design"}
                         </Button>
                     )}
                     
@@ -787,6 +791,29 @@ export const DesignView = ({
                             />
                         ) : null}
                     </div>
+                )}
+
+                {/* Inline Refinement Panel - appears below complexity when toggled */}
+                {enableAdaptive && designData && (
+                    <InlineRefinementPanel
+                        design={designData}
+                        projectName={projectName}
+                        requirements={requirements}
+                        languages={languages}
+                        isOpen={showInlineRefinement}
+                        onClose={() => setShowInlineRefinement(false)}
+                        onRefinementComplete={(updatedDesign) => {
+                            // Update design data after refinement
+                            setDesignData(updatedDesign);
+                            setShowInlineRefinement(false);
+                        }}
+                        onRequestReanalysis={async () => {
+                            // Re-run complexity analysis and validation after refinement
+                            console.log('[DesignView] Re-analyzing after refinement...');
+                            await analyzeComplexity();
+                            // Validation will auto-run after design generation in the existing flow
+                        }}
+                    />
                 )}
 
                 {/* Validation Report Panel */}
