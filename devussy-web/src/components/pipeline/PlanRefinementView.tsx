@@ -39,19 +39,19 @@ export const PlanRefinementView: React.FC<PlanRefinementViewProps> = ({
         },
         {
             role: 'assistant',
-            content: `I'm here to help you review your development plan before execution. Current phases:
+            content: `I'm here to help you refine your development plan before execution. Current phases:
 
 ${phaseList}
 
 You can:
-• Ask me to identify issues or gaps in the phase structure
-• Discuss whether phases are properly ordered
-• Verify phases cover all design requirements
-• Request clarification on any phase
+• Ask me to add, remove, or reorder phases
+• Discuss whether phases are properly scoped
+• Verify phases cover all design requirements  
+• Request phase title or description changes
 
-**Note:** This is a review session to validate the plan. For structural changes (add/remove/reorder phases), regenerate the plan from the Plan window after making design adjustments.
+Type "/analyze" for an automated plan review.
 
-Type "/analyze" for an automated plan review, or "/done" when you're ready to proceed to execution.`
+When you're satisfied with the plan, type "/done" and I'll apply any agreed-upon changes before continuing to execution.`
         }
     ]);
     const [input, setInput] = useState("");
@@ -64,6 +64,99 @@ Type "/analyze" for an automated plan review, or "/done" when you're ready to pr
     useEffect(() => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [history, streamingMessage]);
+
+    // Apply refinements by calling the backend to extract changes from conversation
+    const applyRefinements = async () => {
+        setStreamingMessage("Analyzing conversation and applying changes...");
+        
+        try {
+            const response = await fetch('/api/plan/apply-refinements', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    plan,
+                    design,
+                    projectName,
+                    chatHistory: history
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to apply refinements');
+
+            const reader = response.body?.getReader();
+            if (!reader) throw new Error('No response body');
+
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let fullResponse = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || "";
+
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            if (data.content) {
+                                fullResponse += data.content;
+                                setStreamingMessage(`Analyzing: ${fullResponse.slice(-100)}...`);
+                            }
+
+                            if (data.done) {
+                                const changes = data.changesApplied || [];
+                                const changesSummary = changes.length > 0 
+                                    ? `Applied ${changes.length} change(s):\n${changes.map((c: string) => `• ${c}`).join('\n')}`
+                                    : 'No changes needed - plan is ready as-is.';
+                                
+                                setHistory(prev => [...prev, { 
+                                    role: 'assistant', 
+                                    content: `✓ Refinement complete!\n\n${changesSummary}\n\nContinuing to execution...` 
+                                }]);
+                                setStreamingMessage("");
+                                
+                                // Use updated plan if provided, otherwise use original
+                                const finalPlan = data.updatedPlan || plan;
+                                
+                                // Small delay so user can see the summary
+                                setTimeout(() => {
+                                    onRefinementComplete(finalPlan);
+                                }, 1500);
+                                return;
+                            }
+
+                            if (data.error) {
+                                throw new Error(data.error);
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse SSE:", e);
+                        }
+                    }
+                }
+            }
+        } catch (err: any) {
+            console.error("Apply refinements error:", err);
+            setHistory(prev => [...prev, {
+                role: 'assistant',
+                content: `Failed to apply refinements: ${err.message}\n\nContinuing with original plan...`
+            }]);
+            setStreamingMessage("");
+            // Fall back to original plan
+            setTimeout(() => {
+                onRefinementComplete(plan);
+            }, 1500);
+        } finally {
+            setIsStreaming(false);
+        }
+    };
 
     const sendMessage = async (message: string) => {
         if (!message.trim() || isStreaming) return;
@@ -80,18 +173,9 @@ Type "/analyze" for an automated plan review, or "/done" when you're ready to pr
             return;
         }
 
-        // /done and /apply both finalize and continue to execution
+        // /done and /apply both finalize - call the apply-refinements endpoint
         if (message.trim() === '/apply' || message.trim() === '/done') {
-            // Add a confirmation message before completing
-            setHistory(prev => [...prev, { 
-                role: 'assistant', 
-                content: 'Great! Applying your refinements and continuing to execution...' 
-            }]);
-            setIsStreaming(false);
-            // Small delay so user sees the confirmation
-            setTimeout(() => {
-                onRefinementComplete(plan);
-            }, 500);
+            await applyRefinements();
             return;
         }
 
