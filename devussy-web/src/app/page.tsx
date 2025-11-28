@@ -327,7 +327,11 @@ export default function Page() {
     spawnWindow('design-refinement', 'Refine Design');
   };
 
-  const handleRequestPlanRefinement = () => {
+  const handleRequestPlanRefinement = (planData: any) => {
+    // Set the plan state before opening refinement window
+    if (planData) {
+      setPlan(planData);
+    }
     spawnWindow('plan-refinement', 'Refine Plan');
   };
 

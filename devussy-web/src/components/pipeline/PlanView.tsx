@@ -13,7 +13,7 @@ interface PlanViewProps {
     design: any;
     modelConfig: ModelConfig;
     onPlanApproved: (plan: any) => void;
-    onRequestRefinement?: () => void;  // Callback to open refinement window
+    onRequestRefinement?: (plan: any) => void;  // Callback to open refinement window with current plan
     autoRun?: boolean;
     yoloMode?: boolean;
 }
@@ -390,7 +390,7 @@ export const PlanView = ({
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={onRequestRefinement}
+                            onClick={() => onRequestRefinement(plan)}
                             className="gap-2"
                         >
                             <MessageSquare className="h-4 w-4" />
@@ -428,7 +428,7 @@ export const PlanView = ({
                                 className="flex-1"
                                 onClick={() => {
                                     if (onRequestRefinement) {
-                                        onRequestRefinement();
+                                        onRequestRefinement(plan);
                                     }
                                 }}
                                 disabled={!onRequestRefinement}
