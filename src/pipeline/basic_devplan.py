@@ -306,7 +306,7 @@ class BasicDevPlanGenerator:
                     if item and not item.lower().startswith("summary:") and not item.lower().startswith("major components:"):
                         current_items.append(item)
 
-            elif stripped and not stripped.startswith("#") and current_phase and not current_items and not current_description:
+            elif stripped and not stripped.startswith("#") and current_phase and not current_items:
                 # This is description text (appears after header, before first bullet)
                 # Concatenate non-empty lines that aren't headers or bullets
                 if current_description:

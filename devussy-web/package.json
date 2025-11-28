@@ -31,6 +31,11 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "^4.1.3",
+    "@storybook/addon-a11y": "^10.0.8",
+    "@storybook/addon-docs": "^10.0.8",
+    "@storybook/addon-onboarding": "^10.0.8",
+    "@storybook/addon-vitest": "^10.0.8",
     "@storybook/nextjs": "^10.0.8",
     "@storybook/react": "^10.0.8",
     "@tailwindcss/postcss": "^4",
@@ -45,17 +50,12 @@
     "chromatic": "^13.3.4",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
+    "eslint-plugin-storybook": "^10.0.8",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "storybook": "^10.0.8",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5",
-    "@chromatic-com/storybook": "^4.1.3",
-    "@storybook/addon-docs": "^10.0.8",
-    "@storybook/addon-onboarding": "^10.0.8",
-    "eslint-plugin-storybook": "^10.0.8",
-    "@storybook/addon-a11y": "^10.0.8",
-    "@storybook/addon-vitest": "^10.0.8"
+    "typescript": "5.9.3"
   }
 }

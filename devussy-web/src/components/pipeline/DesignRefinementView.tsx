@@ -104,10 +104,19 @@ What would you like to focus on? Or type "/analyze" for an automated design revi
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let gotDoneSignal = false;
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    // Stream ended - finalize if we have content and didn't get explicit done
+                    if (fullResponse && !gotDoneSignal) {
+                        console.log('[DesignRefinement] Stream ended without done signal, finalizing');
+                        setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+                        setStreamingMessage("");
+                    }
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -127,6 +136,7 @@ What would you like to focus on? Or type "/analyze" for an automated design revi
                             }
 
                             if (data.done) {
+                                gotDoneSignal = true;
                                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                                 setStreamingMessage("");
                                 if (data.updatedDesign) {
@@ -187,10 +197,19 @@ What would you like to focus on? Or type "/analyze" for an automated design revi
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let gotDoneSignal = false;
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    // Stream ended - finalize if we have content and didn't get explicit done
+                    if (fullResponse && !gotDoneSignal) {
+                        console.log('[DesignRefinement] Review stream ended without done signal, finalizing');
+                        setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+                        setStreamingMessage("");
+                    }
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -208,6 +227,7 @@ What would you like to focus on? Or type "/analyze" for an automated design revi
                                 setStreamingMessage(fullResponse);
                             }
                             if (data.done) {
+                                gotDoneSignal = true;
                                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                                 setStreamingMessage("");
                                 return;
@@ -219,7 +239,7 @@ What would you like to focus on? Or type "/analyze" for an automated design revi
                 }
             }
 
-            if (fullResponse) {
+            if (fullResponse && !gotDoneSignal) {
                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                 setStreamingMessage("");
             }

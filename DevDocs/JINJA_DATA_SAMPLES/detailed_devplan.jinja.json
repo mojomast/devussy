@@ -1,8 +1,8 @@
 {
-  "phase_number": 5,
-  "phase_title": "Audio & Visual Polish",
+  "phase_number": 8,
+  "phase_title": "Documentation, Deployment & Release",
   "phase_description": "",
-  "project_name": "Bumfighter",
+  "project_name": "testproject",
   "tech_stack": [],
   "task_group_size": 3,
   "detail_level": "normal"

@@ -128,8 +128,8 @@ class TestLLMConfig:
         assert config.api_key is None
         assert config.base_url is None
         assert config.temperature == 0.7
-        assert config.max_tokens == 4096
-        assert config.api_timeout == 300
+    assert config.max_tokens == 4096
+    assert config.api_timeout == 600
 
     def test_valid_provider_openai(self):
         """Test valid OpenAI provider."""

@@ -1,9 +1,9 @@
 {
-  "project_name": "Bumfighter",
+  "project_name": "testproject",
   "current_phase_number": "None",
   "current_phase_name": "No active phase",
   "next_task_id": "1.1",
-  "next_task_description": "Create the root project directory structure",
+  "next_task_description": "Initialize Git repository and add project metadata files",
   "blockers": "None known",
   "detail_level": "normal"
 }

@@ -44,15 +44,24 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
         }
     }, [history, isLoading]);
 
-    const handleSend = async (text: string) => {
+    const handleSend = async (text: string, retryCount = 0) => {
         if (!text.trim()) return;
 
-        const newHistory = [...history, { role: 'user' as const, content: text }];
-        setHistory(newHistory);
-        setInput("");
+        const MAX_RETRIES = 2;
+        const RETRY_DELAY_MS = 1000;
+
+        // Only update history on first attempt
+        if (retryCount === 0) {
+            const newHistory = [...history, { role: 'user' as const, content: text }];
+            setHistory(newHistory);
+            setInput("");
+        }
         setIsLoading(true);
 
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
+
             const response = await fetch('/api/interview', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -61,9 +70,24 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
                     history: history.filter(m => m.role !== 'system'), // Only send user/assistant messages
                     modelConfig
                 }),
+                signal: controller.signal,
             });
 
-            if (!response.ok) throw new Error('Failed to send message');
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => 'Unknown error');
+                console.error(`Interview API error: ${response.status} - ${errorText}`);
+                
+                // Retry on server errors (5xx) or connection issues
+                if (retryCount < MAX_RETRIES && (response.status >= 500 || response.status === 0)) {
+                    console.log(`Retrying interview request (attempt ${retryCount + 2}/${MAX_RETRIES + 1})...`);
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
+                    return handleSend(text, retryCount + 1);
+                }
+                
+                throw new Error(`Server error (${response.status}): ${errorText.slice(0, 100)}`);
+            }
 
             const data = await response.json();
 
@@ -78,7 +102,25 @@ export const InterviewView: React.FC<InterviewViewProps> = ({
 
         } catch (error) {
             console.error("Interview error:", error);
-            setHistory(prev => [...prev, { role: 'assistant', content: "I'm sorry, I encountered an error. Please try again." }]);
+            
+            // Check if it's a network/abort error and can be retried
+            const isRetryable = error instanceof Error && 
+                (error.name === 'AbortError' || 
+                 error.message.includes('fetch') ||
+                 error.message.includes('network') ||
+                 error.message.includes('Failed to fetch'));
+            
+            if (isRetryable && retryCount < MAX_RETRIES) {
+                console.log(`Retrying interview request after error (attempt ${retryCount + 2}/${MAX_RETRIES + 1})...`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * (retryCount + 1)));
+                return handleSend(text, retryCount + 1);
+            }
+            
+            const errorMessage = error instanceof Error && error.name === 'AbortError'
+                ? "The request timed out. The AI might be busy - please try again."
+                : "I'm sorry, I encountered an error. Please try again.";
+            
+            setHistory(prev => [...prev, { role: 'assistant', content: errorMessage }]);
         } finally {
             setIsLoading(false);
         }

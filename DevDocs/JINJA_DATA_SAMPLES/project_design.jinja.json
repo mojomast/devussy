@@ -1,11 +1,11 @@
 {
-  "project_name": "test",
+  "project_name": "DEVUSSY STORY",
   "languages": [
-    "Python"
+    "Markdown (English)"
   ],
   "frameworks": [],
   "apis": [],
-  "requirements": "Test",
+  "requirements": "A narrative and technical book telling the story of developing DEVUSSY, explaining the circular development, stateless agent\u2011agnostic design, and the project\u2019s evolution. The project design will build the book structure, the devplan will define the chapters, and the phases will correspond to those chapters.",
   "database": null,
   "deployment_platform": null,
   "testing_requirements": null,

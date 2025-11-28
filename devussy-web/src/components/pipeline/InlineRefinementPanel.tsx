@@ -166,10 +166,20 @@ What would you like to focus on?`
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let gotDoneSignal = false;
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    // Stream ended - finalize if we have content and didn't get explicit done
+                    if (fullResponse && !gotDoneSignal) {
+                        console.log('[InlineRefinement] Stream ended without done signal, finalizing');
+                        setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+                        setStreamingMessage("");
+                        setHasChanges(true);
+                    }
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -189,6 +199,7 @@ What would you like to focus on?`
                             }
 
                             if (data.done) {
+                                gotDoneSignal = true;
                                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                                 setStreamingMessage("");
                                 setHasChanges(true);
@@ -208,8 +219,8 @@ What would you like to focus on?`
                 }
             }
 
-            // Finalize if no explicit done signal
-            if (fullResponse) {
+            // Finalize if no explicit done signal (backup - should rarely hit now)
+            if (fullResponse && !gotDoneSignal) {
                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                 setStreamingMessage("");
                 setHasChanges(true);
@@ -250,10 +261,20 @@ What would you like to focus on?`
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let gotDoneSignal = false;
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    // Stream ended - finalize if we have content and didn't get explicit done
+                    if (fullResponse && !gotDoneSignal) {
+                        console.log('[InlineRefinement] Review stream ended without done signal, finalizing');
+                        setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
+                        setStreamingMessage("");
+                        setHasChanges(true);
+                    }
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -271,6 +292,7 @@ What would you like to focus on?`
                                 setStreamingMessage(fullResponse);
                             }
                             if (data.done) {
+                                gotDoneSignal = true;
                                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                                 setStreamingMessage("");
                                 setHasChanges(true);
@@ -283,7 +305,7 @@ What would you like to focus on?`
                 }
             }
 
-            if (fullResponse) {
+            if (fullResponse && !gotDoneSignal) {
                 setHistory(prev => [...prev, { role: 'assistant', content: fullResponse }]);
                 setStreamingMessage("");
                 setHasChanges(true);

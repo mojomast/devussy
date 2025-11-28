@@ -49,6 +49,13 @@ import time
 # Optional secret for proxy authentication
 STREAMING_SECRET = os.getenv("STREAMING_SECRET")
 
+# SSE headers to prevent proxy buffering (Next.js, nginx, etc.)
+SSE_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",  # nginx
+}
+
 def _validate_incoming_request(x_streaming_proxy_key: str | None) -> None:
     """Validate the proxy key if a secret is configured.
     In local Docker deployments the secret is often unset, so the check is skipped.
@@ -247,7 +254,13 @@ async def design_stream(request: Request, x_streaming_proxy_key: str | None = He
             # client disconnected
             return
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    # Add headers to prevent proxy buffering (Next.js, nginx, etc.)
+    headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",  # nginx
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
 @app.post("/api/design")
@@ -330,7 +343,7 @@ async def design_hivemind(request: Request):
         except asyncio.CancelledError:
             return
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/plan/hivemind")
@@ -402,13 +415,15 @@ async def plan_hivemind(request: Request):
         except asyncio.CancelledError:
             return
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/interview")
 async def interview_endpoint(request: Request):
+    print("[DEBUG] /api/interview called")
     try:
         data = await request.json()
+        print(f"[DEBUG] Interview data keys: {list(data.keys())}")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
     
@@ -432,8 +447,12 @@ async def interview_endpoint(request: Request):
     manager = None
     try:
         from src.llm_interview import LLMInterviewManager
+        print("[DEBUG] Importing LLMInterviewManager...")
         manager = LLMInterviewManager(config, verbose=False)
+        print("[DEBUG] LLMInterviewManager initialized")
     except Exception as e:
+        import traceback
+        print(f"[ERROR] Failed to init manager: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to initialize interview manager: {e}")
 
     # Important: conversation_history starts with system prompt
@@ -454,13 +473,39 @@ async def interview_endpoint(request: Request):
             # Continue without history rather than failing
 
     loop = asyncio.get_running_loop()
-    try:
-        response_text = await loop.run_in_executor(None, manager._send_to_llm, user_input)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
+    max_retries = 2
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            print(f"[DEBUG] Calling LLM with input (attempt {attempt + 1}/{max_retries + 1}): {user_input[:100]}...")
+            response_text = await loop.run_in_executor(None, manager._send_to_llm, user_input)
+            print(f"[DEBUG] Got LLM response: {len(response_text)} chars")
+            break  # Success, exit retry loop
+        except Exception as e:
+            import traceback
+            last_error = e
+            error_str = str(e).lower()
+            print(f"[ERROR] LLM call failed (attempt {attempt + 1}): {traceback.format_exc()}")
+            
+            # Retry on transient errors (timeouts, connection issues)
+            is_retryable = any(term in error_str for term in ['timeout', 'connection', 'temporarily', 'rate limit', 'overloaded'])
+            
+            if attempt < max_retries and is_retryable:
+                wait_time = (attempt + 1) * 2  # Exponential backoff: 2s, 4s
+                print(f"[DEBUG] Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                # Re-initialize manager for fresh state on retry
+                manager = LLMInterviewManager(config, verbose=False)
+                if history:
+                    user_history = [msg for msg in history if isinstance(msg, dict) and msg.get("role") != "system"]
+                    manager.conversation_history.extend(user_history)
+            else:
+                raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
 
     extracted = manager._extract_structured_data(response_text)
     is_complete = manager._validate_extracted_data(extracted) if extracted else False
+    print(f"[DEBUG] Interview complete={is_complete}, extracted={extracted is not None}")
     return JSONResponse(status_code=200, content={"response": response_text, "extractedData": extracted, "isComplete": is_complete})
 
 
@@ -711,7 +756,7 @@ async def plan_basic(request: Request):
         except asyncio.CancelledError:
             return
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/plan/detail")
@@ -790,7 +835,7 @@ async def plan_detail(request: Request):
         except asyncio.CancelledError:
             return
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 
@@ -863,8 +908,12 @@ async def design_refine(request: Request):
     chat_history = data.get('chatHistory', [])
     user_message = data.get('userMessage', '')
     
-    if not design_data or not user_message:
-        raise HTTPException(status_code=400, detail="Missing design or user message")
+    print(f"[design_refine] Received: design_data={bool(design_data)}, userMessage='{user_message[:50] if user_message else 'None'}...'")
+    
+    if not design_data:
+        raise HTTPException(status_code=400, detail="Missing design data")
+    if not user_message:
+        raise HTTPException(status_code=400, detail="Missing user message")
     
     config = load_config()
     config.llm.streaming_enabled = True
@@ -921,16 +970,25 @@ Respond conversationally and constructively."""
             handler = StreamHandler()
             
             async def run_chat():
-                await llm_client.generate_completion_streaming(
-                    prompt,
-                    callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
-                    streaming_handler=handler
-                )
+                try:
+                    await llm_client.generate_completion_streaming(
+                        prompt,
+                        callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
+                        streaming_handler=handler
+                    )
+                finally:
+                    # Always signal completion after streaming finishes
+                    await queue.put({'done': True})
             
             task = asyncio.create_task(run_chat())
             
             while True:
-                item = await queue.get()
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=120.0)
+                except asyncio.TimeoutError:
+                    print("[design_refine] Queue timeout - forcing completion")
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
                 if item.get('content'):
                     yield f"data: {json.dumps({'content': item['content']})}\n\n"
                 elif item.get('done'):
@@ -943,7 +1001,7 @@ Respond conversationally and constructively."""
             print(f"Error in design refinement: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/design/review")
@@ -992,7 +1050,7 @@ async def design_automated_review(request: Request):
             print(f"Error in automated review: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/plan/refine")
@@ -1071,16 +1129,25 @@ Respond conversationally and constructively."""
             handler = StreamHandler()
             
             async def run_chat():
-                await llm_client.generate_completion_streaming(
-                    prompt,
-                    callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
-                    streaming_handler=handler
-                )
+                try:
+                    await llm_client.generate_completion_streaming(
+                        prompt,
+                        callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
+                        streaming_handler=handler
+                    )
+                finally:
+                    # Always signal completion after streaming finishes
+                    await queue.put({'done': True})
             
             task = asyncio.create_task(run_chat())
             
             while True:
-                item = await queue.get()
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=120.0)
+                except asyncio.TimeoutError:
+                    print("[plan_refine] Queue timeout - forcing completion")
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
                 if item.get('content'):
                     yield f"data: {json.dumps({'content': item['content']})}\n\n"
                 elif item.get('done'):
@@ -1093,7 +1160,7 @@ Respond conversationally and constructively."""
             print(f"Error in plan refinement: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/plan/review")
@@ -1160,7 +1227,7 @@ Format as a clear, structured review."""
             print(f"Error in plan review: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 # =============================================================================
@@ -1230,13 +1297,21 @@ async def complexity_analysis(request: Request):
                 profile = await analyzer.analyze_with_llm(interview_data)
                 
                 # Prepare result with LLM-specific fields
+                # Convert ScoringRationale dataclass to dict for JSON serialization
+                rationale_dict = {
+                    "score_justification": profile.scoring_rationale.score_justification,
+                    "phase_count_justification": profile.scoring_rationale.phase_count_justification,
+                    "depth_justification": profile.scoring_rationale.depth_justification,
+                    "key_complexity_drivers": profile.scoring_rationale.key_complexity_drivers,
+                    "comparison_anchor": profile.scoring_rationale.comparison_anchor,
+                }
                 result = {
                     "complexity_score": profile.complexity_score,
                     "estimated_phase_count": profile.estimated_phase_count,
                     "depth_level": profile.depth_level,
                     "confidence": profile.confidence,
-                    "rationale": profile.rationale,
-                    "complexity_factors": profile.complexity_factors,
+                    "scoring_rationale": rationale_dict,
+                    "complexity_factors": dict(profile.complexity_factors),
                     "follow_up_questions": profile.follow_up_questions,
                     "hidden_risks": profile.hidden_risks,
                     "llm_powered": True,
@@ -1275,7 +1350,7 @@ async def complexity_analysis(request: Request):
             traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 def _generate_follow_up_questions(profile: ComplexityProfile, interview_data: dict) -> list:
@@ -1313,7 +1388,7 @@ async def design_validation(request: Request):
     """
     data = await request.json()
     design_content = data.get('design_content', '')
-    profile_data = data.get('complexity_profile', {})
+    profile_data = data.get('complexity_profile') or {}
     use_llm = data.get('use_llm', True)
     model_config = data.get('model_config', {})
 
@@ -1422,7 +1497,7 @@ async def design_validation(request: Request):
             traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.post("/api/adaptive/correct")
@@ -1443,9 +1518,9 @@ async def design_correction(request: Request):
     data = await request.json()
     design_content = data.get('design_content', '')
     max_iterations = data.get('max_iterations', 3)
-    profile_data = data.get('complexity_profile', {})
+    profile_data = data.get('complexity_profile') or {}
     use_llm = data.get('use_llm', True)
-    model_config = data.get('model_config', {})
+    model_config = data.get('model_config') or {}
 
     async def event_generator():
         try:
@@ -1510,7 +1585,7 @@ async def design_correction(request: Request):
             traceback.print_exc()
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
+    return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)
 
 
 @app.get("/api/adaptive/profile")

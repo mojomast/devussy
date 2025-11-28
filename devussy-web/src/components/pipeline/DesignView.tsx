@@ -742,6 +742,9 @@ export const DesignView = ({
                                 variant="outline"
                                 className="flex-1"
                                 onClick={() => {
+                                    // First save the design to parent state
+                                    handleApprove();
+                                    // Then open refinement window
                                     if (onRequestRefinement) {
                                         onRequestRefinement();
                                     }
