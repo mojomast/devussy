@@ -224,62 +224,131 @@ COMPLEXITY_ANALYSIS_PROMPT = """IMPORTANT OUTPUT RULES (STRICT):
 9. Follow the schema EXACTLY.
 
 ABOUT THIS TASK:
-You are the Complexity Analysis Model. You will review the full interview data to produce a structured complexity profile describing the difficulty, scope, and risks of the project.
+You are the Complexity Analysis Model. You will holistically analyze the interview data to determine how complex this project is and how it should be structured for development planning.
+
+YOUR ROLE:
+You are an expert software architect who has shipped hundreds of projects. You understand what makes projects simple vs complex based on REAL engineering experience, not arbitrary formulas.
 
 YOU MUST NOT:
 - invent features not in the requirements
 - contradict the provided data
-- hallucinate unknown metrics
-- produce non-deterministic field names
+- use arbitrary numerical scales without justification
 - output any text outside JSON
 
-ALLOWED VALUES:
-depth_level MUST be one of:
-  - "minimal"
-  - "standard"
-  - "detailed"
+---
 
-complexity_score MUST be a number between 0 and 20.
-confidence MUST be a float between 0 and 1.
+## HOLISTIC COMPLEXITY ASSESSMENT
 
-follow_up_questions MUST be questions seeking missing or ambiguous project info.
-hidden_risks MUST identify domain-specific risks not explicitly stated.
+Rather than mapping to predefined buckets, YOU determine the complexity by reasoning about these dimensions:
+
+### 1. SCOPE DIMENSIONS (consider all that apply)
+- **Core functionality**: How many distinct features/capabilities?
+- **Data model**: Simple CRUD? Complex relationships? Event sourcing?
+- **User types**: Single user? Multi-tenant? Role hierarchies?
+- **Integration surface**: Standalone? Few APIs? Many external systems?
+
+### 2. TECHNICAL CHALLENGE DIMENSIONS
+- **Architecture needs**: Monolith? Services? Distributed?
+- **Performance requirements**: Standard? High-throughput? Real-time?
+- **Security/Compliance**: Basic auth? Enterprise SSO? HIPAA/PCI/SOC2?
+- **Data handling**: Simple storage? ETL? ML pipelines? Analytics?
+
+### 3. EXECUTION RISK DIMENSIONS
+- **Team capability**: Solo dev? Small team? Cross-functional?
+- **Timeline pressure**: Relaxed? Standard? Aggressive?
+- **Unknowns**: Well-defined? Ambiguous requirements? R&D elements?
+- **Dependencies**: Self-contained? Waiting on external teams/APIs?
+
+---
+
+## PHASE COUNT REASONING
+
+Determine the number of phases (3-15) based on your holistic assessment:
+
+**Minimal projects (3-4 phases):** Single-purpose tools, simple CRUD apps, CLI utilities, basic scripts with no external dependencies.
+
+**Standard projects (5-7 phases):** Typical web apps, APIs with auth/db, moderate integrations, well-understood domains.
+
+**Complex projects (8-10 phases):** Multi-service architectures, compliance requirements, real-time features, significant integrations, team coordination needs.
+
+**Enterprise projects (11-15 phases):** Large-scale platforms, multiple subsystems, extensive compliance, distributed teams, long-term maintenance considerations.
+
+YOU DECIDE the phase count by reasoning about the project, not by plugging numbers into a formula.
+
+---
+
+## DEPTH LEVEL
+
+Choose depth based on how much detail each phase needs:
+
+- **"minimal"**: Brief task lists, obvious implementation paths, experienced team can fill gaps
+- **"standard"**: Clear specifications, acceptance criteria, reasonable detail for mid-level devs  
+- **"detailed"**: Extensive specs, edge cases documented, junior-friendly, compliance audit trails
+
+---
+
+## CONFIDENCE SCORING
+
+Your confidence (0.0-1.0) reflects how well you understand the project:
+
+- **0.9-1.0**: Crystal clear requirements, well-defined scope, no ambiguity
+- **0.7-0.9**: Good understanding, minor clarifications might help
+- **0.5-0.7**: Significant gaps in requirements, need follow-up questions
+- **< 0.5**: Requirements too vague to assess accurately
+
+If confidence < 0.7, provide meaningful follow_up_questions.
+
+---
 
 EXPECTED JSON SCHEMA (MUST MATCH EXACTLY):
 
 {{
-  "complexity_score": <number>,
-  "estimated_phase_count": <integer>,
+  "complexity_score": <number 0-20>,
+  "estimated_phase_count": <integer 3-15>,
   "depth_level": "<minimal|standard|detailed>",
-  "confidence": <number>,
-  "rationale": "<string>",
+  "confidence": <number 0-1>,
+  "scoring_rationale": {{
+    "score_justification": "<why you chose this specific score - what factors drove it up or down>",
+    "phase_count_justification": "<why this many phases - what work needs to be separated>",
+    "depth_justification": "<why this depth level - what about the project/team demands it>",
+    "key_complexity_drivers": ["<list the 2-4 main things making this project complex or simple>"],
+    "comparison_anchor": "<compare to a well-known project type: 'Similar in complexity to building X because Y'>"
+  }},
   "complexity_factors": {{
-    "integrations": "<string>",
-    "security_compliance": "<string>",
-    "data_privacy": "<string>",
-    "realtime_communication": "<string>",
-    "multi_tenancy": "<string>",
-    "scale": "<string>",
-    "architecture": "<string>",
-    "team_and_timeline": "<string>",
-    "domain_complexity": "<string>",
-    "operational_overhead": "<string>"
+    "integrations": "<none/low/medium/high + brief explanation>",
+    "security_compliance": "<none/low/medium/high + brief explanation>",
+    "data_complexity": "<none/low/medium/high + brief explanation>",
+    "realtime_requirements": "<none/low/medium/high + brief explanation>",
+    "scale_requirements": "<none/low/medium/high + brief explanation>",
+    "architecture_complexity": "<none/low/medium/high + brief explanation>",
+    "team_and_timeline_risk": "<none/low/medium/high + brief explanation>",
+    "domain_complexity": "<none/low/medium/high + brief explanation>"
   }},
   "follow_up_questions": [
-    "<string>"
+    "<meaningful questions to reduce uncertainty - omit if confidence > 0.85>"
   ],
   "hidden_risks": [
-    "<string>"
+    "<domain-specific risks the user may not have considered>"
   ]
 }}
 
 YOUR TASK:
-Analyze the provided interview data and return JSON in the exact schema above, with no extra fields.
+Analyze the provided interview data holistically. Reason through the dimensions above. Produce a complexity assessment where every number is justified by your reasoning, not by formulas.
 
 INTERVIEW DATA:
 {interview_json}
 
 BEGIN NOW."""
+
+
+@dataclass
+class ScoringRationale:
+    """Structured reasoning for why a complexity score was chosen."""
+    score_justification: str = ""
+    phase_count_justification: str = ""
+    depth_justification: str = ""
+    key_complexity_drivers: List[str] = field(default_factory=list)
+    comparison_anchor: str = ""
 
 
 @dataclass
@@ -289,7 +358,7 @@ class LLMComplexityResult:
     estimated_phase_count: int
     depth_level: DepthLevel
     confidence: float
-    rationale: str = ""
+    scoring_rationale: ScoringRationale = field(default_factory=ScoringRationale)
     complexity_factors: Mapping[str, str] = field(default_factory=dict)
     follow_up_questions: List[str] = field(default_factory=list)
     hidden_risks: List[str] = field(default_factory=list)
@@ -324,15 +393,19 @@ class LLMComplexityAnalyzer:
                 estimated_phase_count=static_profile.estimated_phase_count,
                 depth_level=static_profile.depth_level,
                 confidence=static_profile.confidence,
-                rationale="Fallback to static analysis due to LLM error",
+                scoring_rationale=ScoringRationale(
+                    score_justification="Fallback to static analysis due to LLM error",
+                    phase_count_justification="Using static formula fallback",
+                    depth_justification="Derived from static complexity score",
+                ),
             )
 
     def _parse_llm_response(self, response: str) -> LLMComplexityResult:
         """Parse LLM JSON response into structured result.
         
-        The phase count is calculated using the static rubric based on
-        complexity_score to ensure consistency. The LLM's suggested phase
-        count is logged but not used directly.
+        The LLM now holistically determines the phase count based on its
+        reasoning. We trust the LLM's judgment since it provides explicit
+        justification in scoring_rationale.
         """
         # Clean up response - remove potential code fences
         cleaned = response.strip()
@@ -358,29 +431,27 @@ class LLMComplexityAnalyzer:
         # Get complexity score from LLM
         complexity_score = float(data.get("complexity_score", 5.0))
         
-        # CRITICAL FIX: Use static rubric for phase count calculation
-        # This ensures consistent scaling regardless of LLM output variance.
-        # The rubric is:
-        #   score 0-3  -> 3 phases (minimal)
-        #   score 4-7  -> 5 phases (standard)
-        #   score 8-12 -> 7 phases (complex)
-        #   score 13+  -> 9-15 phases (enterprise)
-        calculated_phase_count = estimate_phase_count(complexity_score)
+        # Trust the LLM's phase count - it now provides explicit justification
+        # Clamp to valid range [3, 15]
+        llm_phase_count = int(data.get("estimated_phase_count", 5))
+        estimated_phase_count = max(3, min(15, llm_phase_count))
         
-        # Log if LLM suggested a different count (for debugging)
-        llm_suggested_phases = int(data.get("estimated_phase_count", 5))
-        if llm_suggested_phases != calculated_phase_count:
-            print(
-                f"[complexity] LLM suggested {llm_suggested_phases} phases, "
-                f"but rubric calculates {calculated_phase_count} for score {complexity_score:.1f}"
-            )
+        # Parse the structured scoring rationale
+        rationale_data = data.get("scoring_rationale", {})
+        scoring_rationale = ScoringRationale(
+            score_justification=str(rationale_data.get("score_justification", "")),
+            phase_count_justification=str(rationale_data.get("phase_count_justification", "")),
+            depth_justification=str(rationale_data.get("depth_justification", "")),
+            key_complexity_drivers=rationale_data.get("key_complexity_drivers", []),
+            comparison_anchor=str(rationale_data.get("comparison_anchor", "")),
+        )
 
         return LLMComplexityResult(
             complexity_score=complexity_score,
-            estimated_phase_count=calculated_phase_count,  # Use rubric-based count
+            estimated_phase_count=estimated_phase_count,
             depth_level=depth_level,
             confidence=float(data.get("confidence", 0.8)),
-            rationale=str(data.get("rationale", "")),
+            scoring_rationale=scoring_rationale,
             complexity_factors=data.get("complexity_factors", {}),
             follow_up_questions=data.get("follow_up_questions", []),
             hidden_risks=data.get("hidden_risks", []),

@@ -31,6 +31,8 @@ class BasicDevPlanGenerator:
         feedback_manager: Optional[Any] = None,
         task_group_size: int = 3,
         repo_analysis: Optional[Any] = None,
+        task_decomposition: Optional[Any] = None,
+        complexity_profile: Optional[Any] = None,
         **llm_kwargs: Any,
     ) -> DevPlan:
         """Generate a high-level devplan from a project design.
@@ -40,6 +42,8 @@ class BasicDevPlanGenerator:
             feedback_manager: Optional FeedbackManager for iterative refinement
             task_group_size: Number of tasks per group before updating artifacts
             repo_analysis: Optional RepoAnalysis for existing project context
+            task_decomposition: Optional TaskDecompositionResult from pre-analysis
+            complexity_profile: Optional complexity analysis result
             **llm_kwargs: Additional kwargs to pass to the LLM client
 
         Returns:
@@ -55,6 +59,40 @@ class BasicDevPlanGenerator:
             "task_group_size": task_group_size,
             "detail_level": llm_kwargs.get("detail_level", "normal"),  # Control template verbosity
         }
+        
+        # Add task decomposition if available (PREFERRED - grounds phase generation)
+        if task_decomposition is not None:
+            # Convert dataclasses to dicts for template
+            context["task_decomposition"] = {
+                "tasks": [
+                    {
+                        "id": t.id,
+                        "title": t.title,
+                        "description": t.description,
+                        "category": t.category,
+                        "complexity": t.complexity,
+                        "dependencies": t.dependencies,
+                    }
+                    for t in task_decomposition.tasks
+                ],
+                "phases": [
+                    {
+                        "number": p.number,
+                        "title": p.title,
+                        "objective": p.objective,
+                        "tasks": p.tasks,
+                        "entry_criteria": p.entry_criteria,
+                        "exit_criteria": p.exit_criteria,
+                        "risks": p.risks,
+                    }
+                    for p in task_decomposition.phases
+                ],
+                "phase_rationale": task_decomposition.phase_rationale,
+            }
+            logger.info(
+                f"Using task decomposition with {len(task_decomposition.tasks)} tasks "
+                f"across {len(task_decomposition.phases)} pre-planned phases"
+            )
         
         # Add repo context if available
         if repo_analysis is not None:

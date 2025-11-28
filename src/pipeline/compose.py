@@ -26,6 +26,7 @@ from .handoff_prompt import HandoffPromptGenerator
 from .design_review import DesignReviewRefiner
 from .llm_sanity_reviewer import LLMSanityReviewer, LLMSanityReviewResult
 from .project_design import ProjectDesignGenerator
+from .task_decomposer import TaskDecomposer, TaskDecompositionResult
 
 logger = get_logger(__name__)
 
@@ -160,6 +161,7 @@ class PipelineOrchestrator:
         )
         self.handoff_gen = HandoffPromptGenerator()
         self.design_review_refiner = DesignReviewRefiner(self.devplan_client)
+        self.task_decomposer = TaskDecomposer(self.devplan_client)
 
     def _write_rerun_command_file(
         self,
@@ -1919,9 +1921,48 @@ class PipelineOrchestrator:
                 len(design_content),
             )
 
-        # Stage 4: Generate devplan (with complexity-aware phase count)
-        self.progress_reporter.start_stage("DevPlan Generation", 4)
-        logger.info(f"Stage 4/5: Generating devplan ({complexity_profile.estimated_phase_count} phases)")
+        # Stage 4: Task Decomposition (NEW - grounds phase generation)
+        self.progress_reporter.start_stage("Task Decomposition", 4)
+        logger.info("Stage 4/6: Decomposing design into tasks and planning phases")
+        
+        task_decomposition: Optional[TaskDecompositionResult] = None
+        complexity_data = {
+            "complexity_score": complexity_profile.score,
+            "estimated_phase_count": complexity_profile.estimated_phase_count,
+            "depth_level": complexity_profile.depth_level,
+        }
+        
+        with self.progress_reporter.create_spinner_context("Extracting tasks and planning phases..."):
+            try:
+                task_decomposition = await self.task_decomposer.decompose_and_plan(
+                    project_design,
+                    complexity_profile=complexity_data,
+                )
+                logger.info(
+                    f"Task decomposition complete: {len(task_decomposition.tasks)} tasks "
+                    f"across {len(task_decomposition.phases)} phases"
+                )
+            except Exception as e:
+                logger.warning(f"Task decomposition failed: {e}; proceeding without pre-analysis")
+                task_decomposition = None
+        
+        self.progress_reporter.end_stage("Task Decomposition")
+        
+        # Save task decomposition artifact
+        if save_artifacts and task_decomposition:
+            decomp_md = self._task_decomposition_to_markdown(task_decomposition)
+            self.file_manager.write_markdown(
+                f"{output_dir}/task_decomposition.md", decomp_md
+            )
+            self.progress_reporter.report_file_created(
+                f"{output_dir}/task_decomposition.md",
+                "Task Decomposition",
+                len(decomp_md),
+            )
+
+        # Stage 5: Generate devplan (with task decomposition for grounded phase generation)
+        self.progress_reporter.start_stage("DevPlan Generation", 5)
+        logger.info(f"Stage 5/6: Generating devplan ({complexity_profile.estimated_phase_count} phases)")
         
         # CRITICAL: Set estimated_phases and complexity on project_design from complexity profile
         # This ensures the basic_devplan template generates the correct number of phases
@@ -1940,6 +1981,8 @@ class PipelineOrchestrator:
             basic_devplan = await self.basic_devplan_gen.generate(
                 project_design,
                 repo_analysis=self.repo_analysis,
+                task_decomposition=task_decomposition,
+                complexity_profile=complexity_data,
                 **llm_kwargs,
             )
         
@@ -2108,6 +2151,63 @@ class PipelineOrchestrator:
             lines.append("\n## Remaining Risks\n")
             for risk in result.review.risks:
                 lines.append(f"- {risk}\n")
+        
+        lines.append(f"\n*Generated: {self._get_timestamp()}*\n")
+        return "".join(lines)
+
+    def _task_decomposition_to_markdown(self, result: TaskDecompositionResult) -> str:
+        """Convert TaskDecompositionResult to markdown format."""
+        lines = [
+            "# Task Decomposition Analysis\n",
+            f"**Total Tasks**: {len(result.tasks)}\n",
+            f"**Planned Phases**: {len(result.phases)}\n",
+            "\n## Phase Rationale\n",
+            result.phase_rationale + "\n" if result.phase_rationale else "_No rationale provided_\n",
+        ]
+        
+        # Tasks by category
+        lines.append("\n## Tasks by Category\n")
+        categories: dict[str, list] = {}
+        for task in result.tasks:
+            if task.category not in categories:
+                categories[task.category] = []
+            categories[task.category].append(task)
+        
+        for cat, tasks in sorted(categories.items()):
+            lines.append(f"\n### {cat.title()} ({len(tasks)} tasks)\n")
+            for t in tasks:
+                deps = f" [depends: {', '.join(t.dependencies)}]" if t.dependencies else ""
+                lines.append(f"- **{t.id}**: {t.title} [{t.complexity}]{deps}\n")
+        
+        # Phases
+        lines.append("\n## Planned Phases\n")
+        for phase in result.phases:
+            lines.append(f"\n### Phase {phase.number}: {phase.title}\n")
+            lines.append(f"**Objective**: {phase.objective}\n")
+            lines.append(f"\n**Tasks**: {', '.join(phase.tasks)}\n")
+            
+            if phase.entry_criteria:
+                lines.append("\n**Entry Criteria**:\n")
+                for ec in phase.entry_criteria:
+                    lines.append(f"- {ec}\n")
+            
+            if phase.exit_criteria:
+                lines.append("\n**Exit Criteria**:\n")
+                for ec in phase.exit_criteria:
+                    lines.append(f"- {ec}\n")
+            
+            if phase.risks:
+                lines.append("\n**Risks**:\n")
+                for risk in phase.risks:
+                    lines.append(f"- {risk}\n")
+        
+        # Coverage analysis
+        if result.coverage_analysis:
+            lines.append("\n## Coverage Analysis\n")
+            lines.append(f"- Assigned: {result.coverage_analysis.get('assigned_tasks', 0)}/{result.coverage_analysis.get('total_tasks', 0)} tasks\n")
+            unassigned = result.coverage_analysis.get('unassigned_tasks', [])
+            if unassigned:
+                lines.append(f"- **Unassigned Tasks**: {', '.join(unassigned)}\n")
         
         lines.append(f"\n*Generated: {self._get_timestamp()}*\n")
         return "".join(lines)

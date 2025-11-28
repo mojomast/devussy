@@ -3,6 +3,46 @@
 
 You are an expert project manager and software architect. You have been given a project design document and need to create a high-level development plan that breaks the project into logical phases.
 
+{% if task_decomposition %}
+## 🎯 PRE-ANALYZED TASK BREAKDOWN (CRITICAL - USE THIS)
+
+A detailed task analysis has already been performed. Your job is to FOLLOW this structure, not reinvent it.
+
+### Extracted Tasks ({{ task_decomposition.tasks | length }} total)
+
+{% for task in task_decomposition.tasks %}
+- **{{ task.id }}**: {{ task.title }} [{{ task.category }}/{{ task.complexity }}]
+  - {{ task.description }}
+  {% if task.dependencies %}- Depends on: {{ task.dependencies | join(', ') }}{% endif %}
+
+{% endfor %}
+
+### Pre-Planned Phase Structure
+
+{% for phase in task_decomposition.phases %}
+**Phase {{ phase.number }}: {{ phase.title }}**
+- Objective: {{ phase.objective }}
+- Tasks: {{ phase.tasks | join(', ') }}
+- Entry Criteria: {{ phase.entry_criteria | join('; ') }}
+- Exit Criteria: {{ phase.exit_criteria | join('; ') }}
+{% if phase.risks %}- Risks: {{ phase.risks | join('; ') }}{% endif %}
+
+{% endfor %}
+
+### Phase Rationale
+{{ task_decomposition.phase_rationale }}
+
+---
+
+**YOUR TASK**: Generate the devplan phases EXACTLY as structured above. 
+- Use the same phase numbers and titles
+- Include ALL tasks listed for each phase
+- Expand task descriptions into actionable steps
+- Do NOT add, remove, or move tasks between phases
+- Do NOT invent new phases
+
+{% endif %}
+
 {% if repo_context %}
 {{ shared.section_repo_context(repo_context, detail_level='verbose') }}
 
