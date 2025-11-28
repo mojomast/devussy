@@ -1,11 +1,11 @@
 {
-  "project_name": "DEVUSSY STORY",
+  "project_name": "testussy",
   "languages": [
-    "Markdown (English)"
+    "TypeScript (Node.js)"
   ],
   "frameworks": [],
   "apis": [],
-  "requirements": "A narrative and technical book telling the story of developing DEVUSSY, explaining the circular development, stateless agent\u2011agnostic design, and the project\u2019s evolution. The project design will build the book structure, the devplan will define the chapters, and the phases will correspond to those chapters.",
+  "requirements": "A small test Web API for demonstrating basic CRUD operations and developer workflows. It will expose REST endpoints for a simple resource (e.g., \"items\"), include an OpenAPI spec, basic unit/integration tests, and CI to exercise the pipeline.",
   "database": null,
   "deployment_platform": null,
   "testing_requirements": null,

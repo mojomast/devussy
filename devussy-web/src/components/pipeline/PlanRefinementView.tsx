@@ -39,7 +39,7 @@ export const PlanRefinementView: React.FC<PlanRefinementViewProps> = ({
         },
         {
             role: 'assistant',
-            content: `I'm here to help refine your development plan before execution. Current phases:
+            content: `I'm here to help you review your development plan before execution. Current phases:
 
 ${phaseList}
 
@@ -48,9 +48,10 @@ You can:
 • Discuss whether phases are properly ordered
 • Verify phases cover all design requirements
 • Request clarification on any phase
-• Suggest reordering or combining phases
 
-Type "/analyze" for an automated plan review, or ask me anything about the phases.`
+**Note:** This is a review session to validate the plan. For structural changes (add/remove/reorder phases), regenerate the plan from the Plan window after making design adjustments.
+
+Type "/analyze" for an automated plan review, or "/done" when you're ready to proceed to execution.`
         }
     ]);
     const [input, setInput] = useState("");
@@ -79,8 +80,18 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
             return;
         }
 
-        if (message.trim() === '/apply') {
-            onRefinementComplete(plan);
+        // /done and /apply both finalize and continue to execution
+        if (message.trim() === '/apply' || message.trim() === '/done') {
+            // Add a confirmation message before completing
+            setHistory(prev => [...prev, { 
+                role: 'assistant', 
+                content: 'Great! Applying your refinements and continuing to execution...' 
+            }]);
+            setIsStreaming(false);
+            // Small delay so user sees the confirmation
+            setTimeout(() => {
+                onRefinementComplete(plan);
+            }, 500);
             return;
         }
 
@@ -357,7 +368,7 @@ Type "/analyze" for an automated plan review, or ask me anything about the phase
                     </Button>
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
-                    Commands: <strong>/analyze</strong> - Run automated review • <strong>/apply</strong> - Continue to execution
+                    Commands: <strong>/analyze</strong> - Run automated review • <strong>/done</strong> or <strong>/apply</strong> - Continue to execution
                 </div>
             </div>
         </div>
