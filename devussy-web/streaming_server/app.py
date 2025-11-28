@@ -1165,10 +1165,10 @@ Respond conversationally and constructively."""
 
 @app.post("/api/plan/apply-refinements")
 async def plan_apply_refinements(request: Request):
-    """Apply refinements from conversation to the plan.
+    """Apply refinements from conversation by REGENERATING the plan.
     
-    Analyzes the chat history to extract agreed-upon changes and produces
-    an updated plan with those modifications applied.
+    Takes the design + conversation feedback and generates a new devplan
+    that incorporates all discussed changes.
     """
     _validate_incoming_request(request.headers.get('x-streaming-proxy-key'))
     data = await request.json()
@@ -1179,123 +1179,158 @@ async def plan_apply_refinements(request: Request):
     
     if not plan_data:
         raise HTTPException(status_code=400, detail="Missing plan data")
+    if not design_data:
+        raise HTTPException(status_code=400, detail="Missing design data")
     
     config = load_config()
     config.llm.streaming_enabled = True
+    
+    # Parse design
+    try:
+        design = ProjectDesign(**design_data)
+    except Exception as e:
+        print(f"[plan_apply] Failed to parse design: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid design: {e}")
     
     async def event_generator():
         try:
             llm_client = create_llm_client(config)
             
-            # Build conversation summary for context
-            conversation_text = []
+            # Build conversation summary for refinement context
+            refinement_feedback = []
             for msg in chat_history:
-                if msg['role'] != 'system':
-                    conversation_text.append(f"{msg['role'].upper()}: {msg['content']}")
+                if msg['role'] == 'user':
+                    refinement_feedback.append(f"User requested: {msg['content']}")
+                elif msg['role'] == 'assistant' and msg['content'] and not msg['content'].startswith("I'm here to help"):
+                    # Include meaningful assistant responses (skip the intro)
+                    if len(msg['content']) > 50:  # Skip short acknowledgments
+                        refinement_feedback.append(f"Discussed: {msg['content'][:500]}")
             
-            # Build current plan JSON
+            # Build current phases summary
             phases = plan_data.get('phases', [])
-            phases_json = json.dumps(phases, indent=2)
+            current_phases_summary = '\n'.join([
+                f"Phase {p.get('number', i+1)}: {p.get('title', 'Untitled')} - {p.get('description', '')[:100]}"
+                for i, p in enumerate(phases)
+            ])
             
-            prompt = f"""You are a development plan editor. Based on the conversation below, you must produce an UPDATED version of the development plan that incorporates any changes discussed.
+            # Create a custom prompt that regenerates with feedback
+            refinement_context = f"""
+## REFINEMENT SESSION FEEDBACK (CRITICAL - APPLY THESE CHANGES)
 
-PROJECT: {project_name}
+The user has reviewed the previous development plan and provided feedback through a refinement session. 
+You MUST incorporate their feedback when generating the new plan.
 
-CURRENT PLAN PHASES (JSON):
-```json
-{phases_json}
-```
+### Previous Plan Structure (for reference):
+{current_phases_summary}
 
-REFINEMENT CONVERSATION:
-{chr(10).join(conversation_text)}
+### User Feedback from Refinement Session:
+{chr(10).join(refinement_feedback) if refinement_feedback else 'No specific changes requested - regenerate with same structure.'}
 
-INSTRUCTIONS:
-1. Analyze the conversation to identify any agreed-upon changes to the plan
-2. Apply those changes to produce an updated plan
-3. If no changes were discussed or agreed upon, return the original plan unchanged
-4. Output ONLY valid JSON - no explanation, no markdown fences, just the JSON array of phases
-
-Changes to look for:
-- Phase reordering
-- New phases to add
-- Phases to remove or merge
-- Title or description updates
-- Scope adjustments
-- Dependency clarifications
-
-OUTPUT FORMAT - Return a JSON object with this exact structure:
-{{"phases": [...], "changes_applied": ["description of change 1", "description of change 2"]}}
-
-If no changes: {{"phases": [...original phases...], "changes_applied": []}}
-
-OUTPUT ONLY THE JSON:"""
+### Instructions:
+1. If the user requested adding, removing, reordering, or modifying phases - DO IT
+2. If specific changes were discussed - IMPLEMENT THEM
+3. Keep the overall project scope aligned with the design
+4. Ensure phases are properly numbered and ordered
+5. Each phase should have a clear title, description, and list of tasks
+"""
 
             queue: asyncio.Queue = asyncio.Queue()
-            full_response = ""
             
-            class StreamHandler:
+            class APIHandler:
                 async def on_token_async(self, token: str):
-                    nonlocal full_response
-                    full_response += token
                     await queue.put({'content': token})
-                async def on_completion_async(self, _: str):
-                    await queue.put({'done': True})
-                async def __aenter__(self):
-                    return self
-                async def __aexit__(self, exc_type, exc, tb):
-                    return False
+                async def on_completion_async(self, full_response: str):
+                    await queue.put({'done': True, 'plan': full_response})
             
-            handler = StreamHandler()
+            api_handler = APIHandler()
             
-            async def run_extraction():
+            # Use the BasicDevPlanGenerator with the refinement context
+            generator = BasicDevPlanGenerator(llm_client)
+            
+            async def run_regeneration():
                 try:
+                    # Generate with refinement context injected
+                    # We'll use a modified approach - generate with custom prompt
+                    from src.templates import render_template
+                    
+                    # Build the context with refinement feedback
+                    context = {
+                        "project_design": design,
+                        "task_group_size": 3,
+                        "detail_level": "normal",
+                        "refinement_feedback": refinement_context,
+                    }
+                    
+                    # Render the template
+                    base_prompt = render_template("basic_devplan.jinja", context)
+                    
+                    # Append refinement context to the prompt
+                    full_prompt = f"{base_prompt}\n\n{refinement_context}"
+                    
+                    # Stream the generation
+                    full_response = ""
+                    
+                    async def token_callback(token: str):
+                        nonlocal full_response
+                        full_response += token
+                        await api_handler.on_token_async(token)
+                    
                     await llm_client.generate_completion_streaming(
-                        prompt,
-                        callback=lambda token: asyncio.create_task(handler.on_token_async(token)),
-                        streaming_handler=handler
+                        full_prompt,
+                        callback=lambda t: asyncio.create_task(token_callback(t)),
+                        streaming_handler=api_handler
                     )
+                    
+                    # Parse the response into a DevPlan
+                    try:
+                        parsed_plan = generator._parse_response(full_response, design.project_name)
+                        await queue.put({'done': True, 'plan': parsed_plan.model_dump()})
+                    except Exception as parse_err:
+                        print(f"[plan_apply] Failed to parse plan response: {parse_err}")
+                        # Return raw response for debugging
+                        await queue.put({'done': True, 'raw_response': full_response, 'parseError': str(parse_err)})
+                        
+                except Exception as e:
+                    import traceback
+                    print(f"[plan_apply] Regeneration error: {traceback.format_exc()}")
+                    await queue.put({'error': str(e)})
                 finally:
                     await queue.put({'done': True})
             
-            task = asyncio.create_task(run_extraction())
+            task = asyncio.create_task(run_regeneration())
+            
+            # Track changes for summary
+            changes_applied = []
+            if refinement_feedback:
+                changes_applied = [f.replace("User requested: ", "") for f in refinement_feedback if f.startswith("User requested:")]
             
             while True:
                 try:
-                    item = await asyncio.wait_for(queue.get(), timeout=120.0)
+                    item = await asyncio.wait_for(queue.get(), timeout=180.0)  # 3 min timeout for regeneration
                 except asyncio.TimeoutError:
-                    print("[plan_apply] Queue timeout")
+                    print("[plan_apply] Queue timeout during regeneration")
+                    yield f"data: {json.dumps({'error': 'Regeneration timed out'})}\n\n"
                     break
                     
                 if item.get('content'):
                     yield f"data: {json.dumps({'content': item['content']})}\n\n"
+                elif item.get('error'):
+                    yield f"data: {json.dumps({'error': item['error']})}\n\n"
+                    break
                 elif item.get('done'):
-                    # Parse the LLM response to extract the updated plan
-                    try:
-                        # Clean up potential markdown fences
-                        clean_response = full_response.strip()
-                        if clean_response.startswith('```'):
-                            lines = clean_response.split('\n')
-                            clean_response = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
-                        
-                        result = json.loads(clean_response)
-                        updated_phases = result.get('phases', phases)
-                        changes = result.get('changes_applied', [])
-                        
-                        # Build updated plan
-                        updated_plan = {**plan_data, 'phases': updated_phases}
-                        
-                        yield f"data: {json.dumps({'done': True, 'updatedPlan': updated_plan, 'changesApplied': changes})}\n\n"
-                    except json.JSONDecodeError as e:
-                        print(f"[plan_apply] Failed to parse LLM response: {e}")
-                        print(f"[plan_apply] Response was: {full_response[:500]}")
-                        # Return original plan on parse failure
-                        yield f"data: {json.dumps({'done': True, 'updatedPlan': plan_data, 'changesApplied': [], 'parseError': str(e)})}\n\n"
+                    if item.get('plan'):
+                        updated_plan = item['plan']
+                        yield f"data: {json.dumps({'done': True, 'updatedPlan': updated_plan, 'changesApplied': changes_applied, 'regenerated': True})}\n\n"
+                    elif item.get('parseError'):
+                        # Return original plan on parse failure with error info
+                        yield f"data: {json.dumps({'done': True, 'updatedPlan': plan_data, 'changesApplied': [], 'parseError': item.get('parseError')})}\n\n"
                     break
                     
         except asyncio.CancelledError:
             return
         except Exception as e:
-            print(f"Error applying refinements: {e}")
+            import traceback
+            print(f"Error applying refinements: {traceback.format_exc()}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     
     return StreamingResponse(event_generator(), media_type='text/event-stream', headers=SSE_HEADERS)

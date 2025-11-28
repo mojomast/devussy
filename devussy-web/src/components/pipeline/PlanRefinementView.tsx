@@ -67,7 +67,13 @@ When you're satisfied with the plan, type "/done" and I'll apply any agreed-upon
 
     // Apply refinements by calling the backend to extract changes from conversation
     const applyRefinements = async () => {
-        setStreamingMessage("Analyzing conversation and applying changes...");
+        setStreamingMessage("Regenerating development plan with your feedback...");
+        
+        // Add a message to show we're regenerating
+        setHistory(prev => [...prev, { 
+            role: 'assistant', 
+            content: '🔄 Regenerating development plan with your feedback. This may take a moment...' 
+        }]);
         
         try {
             const response = await fetch('/api/plan/apply-refinements', {
@@ -89,6 +95,7 @@ When you're satisfied with the plan, type "/done" and I'll apply any agreed-upon
             const decoder = new TextDecoder();
             let buffer = "";
             let fullResponse = "";
+            let tokenCount = 0;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -108,28 +115,47 @@ When you're satisfied with the plan, type "/done" and I'll apply any agreed-upon
 
                             if (data.content) {
                                 fullResponse += data.content;
-                                setStreamingMessage(`Analyzing: ${fullResponse.slice(-100)}...`);
+                                tokenCount++;
+                                // Show progress with token count
+                                if (tokenCount % 10 === 0) {
+                                    setStreamingMessage(`Generating new plan... (${tokenCount} tokens)`);
+                                }
                             }
 
                             if (data.done) {
                                 const changes = data.changesApplied || [];
-                                const changesSummary = changes.length > 0 
-                                    ? `Applied ${changes.length} change(s):\n${changes.map((c: string) => `• ${c}`).join('\n')}`
-                                    : 'No changes needed - plan is ready as-is.';
+                                const wasRegenerated = data.regenerated === true;
+                                
+                                let summaryMessage = '';
+                                if (wasRegenerated) {
+                                    summaryMessage = `✓ Plan regenerated successfully!\n\n`;
+                                    if (changes.length > 0) {
+                                        summaryMessage += `Incorporated feedback:\n${changes.map((c: string) => `• ${c}`).join('\n')}\n\n`;
+                                    }
+                                    // Show new phase count
+                                    const newPhaseCount = data.updatedPlan?.phases?.length || 0;
+                                    summaryMessage += `New plan has ${newPhaseCount} phases.\n\n`;
+                                } else {
+                                    summaryMessage = changes.length > 0 
+                                        ? `✓ Applied ${changes.length} change(s):\n${changes.map((c: string) => `• ${c}`).join('\n')}\n\n`
+                                        : '✓ No changes needed - plan is ready as-is.\n\n';
+                                }
+                                summaryMessage += 'Continuing to execution...';
                                 
                                 setHistory(prev => [...prev, { 
                                     role: 'assistant', 
-                                    content: `✓ Refinement complete!\n\n${changesSummary}\n\nContinuing to execution...` 
+                                    content: summaryMessage
                                 }]);
                                 setStreamingMessage("");
                                 
                                 // Use updated plan if provided, otherwise use original
                                 const finalPlan = data.updatedPlan || plan;
+                                console.log('[PlanRefinement] Final plan has', finalPlan?.phases?.length, 'phases');
                                 
                                 // Small delay so user can see the summary
                                 setTimeout(() => {
                                     onRefinementComplete(finalPlan);
-                                }, 1500);
+                                }, 2000);
                                 return;
                             }
 
@@ -146,7 +172,7 @@ When you're satisfied with the plan, type "/done" and I'll apply any agreed-upon
             console.error("Apply refinements error:", err);
             setHistory(prev => [...prev, {
                 role: 'assistant',
-                content: `Failed to apply refinements: ${err.message}\n\nContinuing with original plan...`
+                content: `Failed to regenerate plan: ${err.message}\n\nContinuing with original plan...`
             }]);
             setStreamingMessage("");
             // Fall back to original plan
