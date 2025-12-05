@@ -2,6 +2,62 @@
 
 This file provides guidance to agents when working with code in this repository.
 
+## 🔗 CRITICAL: Anchor-Based Context Management
+
+> **⚠️ READ THIS FIRST - This is the most important pattern in this project.**
+
+Devussy uses **stable HTML comment anchors** for efficient context management and safe file updates. **All agents MUST use anchors** when reading/writing devplan, phase, and handoff files.
+
+### Required Anchors
+
+| File | Anchor | Purpose |
+|------|--------|---------|
+| devplan.md | `<!-- PROGRESS_LOG_START -->` / `<!-- PROGRESS_LOG_END -->` | Track completed work |
+| devplan.md | `<!-- NEXT_TASK_GROUP_START -->` / `<!-- NEXT_TASK_GROUP_END -->` | Current 3-5 tasks to execute |
+| phase*.md | `<!-- PHASE_TASKS_START -->` / `<!-- PHASE_TASKS_END -->` | Phase-specific tasks |
+| phase*.md | `<!-- PHASE_PROGRESS_START -->` / `<!-- PHASE_PROGRESS_END -->` | Outcomes and blockers |
+| handoff_prompt.md | `<!-- QUICK_STATUS_START -->` / `<!-- QUICK_STATUS_END -->` | Status snapshot |
+| handoff_prompt.md | `<!-- HANDOFF_NOTES_START -->` / `<!-- HANDOFF_NOTES_END -->` | Agent handoff notes |
+
+### How to Use Anchors
+
+**Reading (CORRECT):**
+```
+Read devplan.md lines between <!-- NEXT_TASK_GROUP_START --> and <!-- NEXT_TASK_GROUP_END -->
+# Result: ~100 tokens loaded
+```
+
+**Reading (WRONG):**
+```
+Read entire devplan.md
+# Result: ~3000 tokens wasted
+```
+
+**Writing:** Always use `safe_write_devplan()` from `src/file_manager.py`:
+- Creates `.bak` backup before writing
+- Validates anchors exist in new content
+- Refuses to overwrite if anchors missing (writes to `.tmp` instead)
+
+### Token Budget
+
+| File | Section | ~Tokens | When to Read |
+|------|---------|---------|--------------|
+| handoff.md | Progress Log | ~200 | Start of session |
+| devplan.md | NEXT_TASK_GROUP | ~100 | Every turn |
+| devplan.md | PROGRESS_LOG | ~100 | If needed |
+| phase*.md | PHASE_TASKS | ~80 | When working on phase |
+
+**Target: Stay under 500 tokens per turn by reading ONLY anchored sections.**
+
+### Validation
+
+`file_manager.py:_validate_devplan_content()` enforces:
+- Header: `# Development Plan` or `## 📋 Project Dashboard`
+- Phase table: `### 🚀 Phase Overview` with `| Phase |`
+- Anchors: `<!-- PROGRESS_LOG_START -->` and `<!-- NEXT_TASK_GROUP_START -->`
+
+---
+
 ## Critical Commands (Non-Obvious)
 - **Test single file**: `pytest tests/unit/test_cli.py::TestGenerateDesignCommand::test_generate_design_minimal_args -v`
 - **Run integration tests**: `pytest tests/integration/ -v`  

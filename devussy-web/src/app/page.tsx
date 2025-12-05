@@ -17,8 +17,9 @@ import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
 import { Taskbar } from "@/components/window/Taskbar";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import IrcClient from '@/components/addons/irc/IrcClient';
 
-type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings';
+type WindowType = 'init' | 'interview' | 'design' | 'plan' | 'execute' | 'handoff' | 'help' | 'model-settings' | 'irc';
 
 interface WindowState {
   id: string;
@@ -35,9 +36,9 @@ export default function Page() {
   const { theme } = useTheme();
   // Window State Management
   const [windows, setWindows] = useState<WindowState[]>([
-    { id: 'init-1', type: 'init', title: 'Devussy Studio', position: { x: 50, y: 50 }, zIndex: 10 }
+    { id: 'help-1', type: 'help', title: 'Devussy Studio Help', position: { x: 50, y: 50 }, zIndex: 10, size: { width: 700, height: 600 } }
   ]);
-  const [activeWindowId, setActiveWindowId] = useState<string>('init-1');
+  const [activeWindowId, setActiveWindowId] = useState<string>('help-1');
   const [nextZIndex, setNextZIndex] = useState(20);
 
   // Project State (Shared across windows)
@@ -57,6 +58,43 @@ export default function Page() {
   const [dontShowHelpAgain, setDontShowHelpAgain] = useState<boolean>(() => {
     try { return localStorage.getItem('devussy_help_dismissed') === '1'; } catch (e) { return false; }
   });
+
+  const [analyticsOptOut, setAnalyticsOptOut] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const cookies = document.cookie.split(';').map(c => c.trim());
+      const cookie = cookies.find(c => c.startsWith('devussy_analytics_optout='));
+      if (cookie) {
+        const value = (cookie.split('=')[1] || '').toLowerCase();
+        if (value === '1' || value === 'true' || value === 'yes') {
+          setAnalyticsOptOut(true);
+        }
+      }
+    } catch (e) { }
+  }, []);
+
+  // IRC nickname (from localStorage)
+  const [ircNick, setIrcNick] = useState<string>(() => {
+    try { return localStorage.getItem('devussy_irc_nick') || 'Guest'; } catch (e) { return 'Guest'; }
+  });
+
+  // Listen for IRC nick changes
+  useEffect(() => {
+    const handleStorage = () => {
+      try {
+        const nick = localStorage.getItem('devussy_irc_nick');
+        if (nick) setIrcNick(nick);
+      } catch (e) { }
+    };
+    window.addEventListener('storage', handleStorage);
+    // Also poll for changes since same-tab changes don't trigger storage event
+    const interval = setInterval(handleStorage, 1000);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Model Configuration
   const [modelConfigs, setModelConfigs] = useState<ModelConfigs>({
@@ -148,13 +186,15 @@ export default function Page() {
         return { width: 700, height: 600 };
       case 'model-settings':
         return { width: 500, height: 650 };
+      case 'irc':
+        return { width: 800, height: 600 };
       default:
         return { width: 600, height: 400 };
     }
   };
 
   // Window Management Functions
-  const spawnWindow = (type: WindowType, title: string, props?: Record<string, any>) => {
+  const spawnWindow = (type: WindowType, title: string, props?: Record<string, any>, options?: { isMinimized?: boolean }) => {
     const id = `${type}-${Date.now()}`;
     const offset = windows.length * 30;
     const size = getWindowSize(type);
@@ -164,13 +204,16 @@ export default function Page() {
       title,
       position: { x: 100 + offset, y: 100 + offset },
       zIndex: nextZIndex,
+      isMinimized: options?.isMinimized,
       props,
       size
     };
 
     setWindows(prev => [...prev, newWindow]);
     setNextZIndex(prev => prev + 1);
-    setActiveWindowId(id);
+    if (!options?.isMinimized) {
+      setActiveWindowId(id);
+    }
   };
 
   const closeWindow = (id: string) => {
@@ -300,22 +343,36 @@ export default function Page() {
     spawnWindow('model-settings', 'AI Model Settings');
   };
 
-  // Auto-open Help modal on the first visit (unless dismissed)
+  const handleOpenIrc = (options?: { isMinimized?: boolean }) => {
+    const existing = windows.find(w => w.type === 'irc');
+    if (existing) {
+      if (!options?.isMinimized) {
+        focusWindow(existing.id);
+        if (existing.isMinimized) {
+          toggleMinimize(existing.id);
+        }
+      }
+      return;
+    }
+    spawnWindow('irc', 'IRC Chat – #devussy-chat', undefined, options);
+  };
+
+  // Auto-launch IRC (always, minimized)
   useEffect(() => {
     try {
-      const dismissed = localStorage.getItem('devussy_help_dismissed');
-      const seen = localStorage.getItem('devussy_seen_help');
-      if (!dismissed && !seen) {
-        // Delay slightly to allow initial window to render
+      // Check preference, default to true if not set, or just always do it per requirements
+      const autoLaunch = localStorage.getItem('devussy_auto_launch_irc');
+      if (autoLaunch !== 'false') {
+        // Delay to let page load
         setTimeout(() => {
-          handleHelp();
-          try { localStorage.setItem('devussy_seen_help', '1'); } catch (e) { }
-        }, 300);
+          handleOpenIrc({ isMinimized: true });
+        }, 500);
       }
-    } catch (e) {
-      // localStorage might be unavailable; ignore silently
-    }
+    } catch (e) { }
   }, []);
+
+  // Help window is now shown by default on startup (init state changed above)
+  // This effect is no longer needed
 
   // Render Content based on Window Type
   const renderWindowContent = (window: WindowState) => {
@@ -489,6 +546,15 @@ export default function Page() {
               <li><strong>Execute</strong> - Generate code for each phase</li>
               <li><strong>Handoff</strong> - Export project and push to GitHub</li>
             </ol>
+
+            <h2 className="text-xl font-semibold mt-6 mb-3">IRC Chat Addon</h2>
+            <p>Devussy now includes a built-in IRC client accessible via the taskbar or desktop icon.</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Join <code className="bg-gray-800 px-2 py-1 rounded">#devussy-chat</code> to chat with other users</li>
+              <li>Click on usernames to start private messages</li>
+              <li>Server logs are collected in the <strong>Status</strong> tab</li>
+              <li>Your IRC nickname is saved automatically</li>
+            </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Circular Stateless Development</h2>
             <p>Devussy enables <strong>agent-agnostic, stateless development</strong> where any AI agent can pick up where another left off.</p>
 
@@ -512,7 +578,8 @@ export default function Page() {
               <li>Use <strong>checkpoints</strong> to save your progress at any stage</li>
               <li>Edit phases in the Plan view before execution</li>
               <li>Adjust <strong>concurrency</strong> in settings to control parallel execution</li>
-              <li>Windows can be minimized but not closed - find them in the taskbar</li>
+              <li>Windows can be minimized - find them in the taskbar</li>
+              <li>Use the <strong>Start Menu</strong> (Bliss theme) or taskbar to access all features</li>
             </ul>
             <h2 className="text-xl font-semibold mt-6 mb-3">Need More Help?</h2>
             <p>Check the <code className="bg-gray-800 px-2 py-1 rounded">handoff.md</code> file in your project for detailed technical documentation.</p>
@@ -521,18 +588,36 @@ export default function Page() {
             <p>Created by <strong>Kyle Durepos</strong>.</p>
 
             <div className="mt-6 flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={dontShowHelpAgain}
-                  onChange={(e) => {
-                    const v = e.target.checked;
-                    try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) { }
-                    setDontShowHelpAgain(v);
-                  }}
-                />
-                Don't show this again
-              </label>
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={dontShowHelpAgain}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      try { localStorage.setItem('devussy_help_dismissed', v ? '1' : '0'); } catch (err) { }
+                      setDontShowHelpAgain(v);
+                    }}
+                  />
+                  Don't show this again
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={analyticsOptOut}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      try {
+                        const expires = new Date();
+                        expires.setFullYear(expires.getFullYear() + 1);
+                        document.cookie = `devussy_analytics_optout=${v ? '1' : '0'}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+                      } catch (err) { }
+                      setAnalyticsOptOut(v);
+                    }}
+                  />
+                  Disable anonymous usage analytics for this browser
+                </label>
+              </div>
               <div>
                 <Button variant="secondary" onClick={() => closeWindow(window.id)}>
                   Close
@@ -541,13 +626,53 @@ export default function Page() {
             </div>
           </div>
         );
+      case 'irc':
+        return <IrcClient />;
       default:
         return null;
     }
   };
 
   return (
-    <main className="flex min-h-screen flex-col relative bg-transparent">
+    <main className="flex min-h-screen flex-col relative bg-transparent overflow-hidden">
+      {/* Desktop Icons */}
+      {theme === 'bliss' && (
+        <div className="absolute top-4 left-4 z-0 flex flex-col gap-6 p-4">
+          {/* My Computer */}
+          <button
+            className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
+            onDoubleClick={handleNewProject}
+          >
+            <div className="w-12 h-12 relative">
+              <img src="/devussy_logo_minimal.png" className="w-full h-full object-contain drop-shadow-md" />
+            </div>
+            <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
+              My Computer
+            </span>
+          </button>
+
+          {/* mIRC */}
+          <button
+            className="group flex flex-col items-center w-[70px] gap-1 focus:outline-none"
+            onDoubleClick={() => handleOpenIrc()}
+          >
+            <div className="w-12 h-12 relative bg-white/10 rounded-lg border border-white/20 flex items-center justify-center shadow-lg backdrop-blur-sm">
+              {/* Custom mIRC-like icon since we don't have the asset */}
+              <div className="relative w-8 h-8">
+                <div className="absolute inset-0 bg-red-500 rounded-full transform -rotate-12 opacity-80"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <MessageSquare className="text-white w-5 h-5 transform rotate-12" fill="currentColor" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-green-500 w-3 h-3 rounded-full border-2 border-white"></div>
+              </div>
+            </div>
+            <span className="text-white text-xs font-medium px-1 rounded group-hover:bg-[#0B61DE] group-focus:bg-[#0B61DE] group-focus:border group-focus:border-dotted drop-shadow-md text-center leading-tight">
+              mIRC
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* Global Header / Toolbar (Optional) */}
       {theme !== 'bliss' && (
         <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
@@ -604,6 +729,7 @@ export default function Page() {
         onNewProject={handleNewProject}
         onHelp={handleHelp}
         onOpenModelSettings={handleOpenModelSettings}
+        onOpenIrc={() => handleOpenIrc()}
         currentState={{
           projectName,
           languages,
@@ -616,6 +742,7 @@ export default function Page() {
         modelConfigs={modelConfigs}
         onModelConfigsChange={setModelConfigs}
         activeStage={getActiveStage()}
+        ircNick={ircNick}
       />
     </main>
   );

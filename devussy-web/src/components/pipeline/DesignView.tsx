@@ -3,9 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2 } from "lucide-react";
+import { Loader2, Check, ArrowRight, FileCode, LayoutGrid, Edit2, Gauge, AlertCircle, Shield, History } from "lucide-react";
 import { ModelConfig } from './ModelSettings';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ComplexityAssessment, ComplexityProfile, ComplexityBadge } from './ComplexityAssessment';
+import { ValidationReport, ValidationReportData, SanityReviewResult, ValidationBadge } from './ValidationReport';
+import { CorrectionTimeline, CorrectionHistory, CorrectionBadge } from './CorrectionTimeline';
 
 interface DesignViewProps {
     projectName: string;
@@ -14,6 +17,7 @@ interface DesignViewProps {
     modelConfig: ModelConfig;
     onDesignComplete: (design: any) => void;
     autoRun?: boolean;
+    enableAdaptive?: boolean;  // Enable adaptive complexity analysis
 }
 
 export const DesignView = ({
@@ -22,7 +26,8 @@ export const DesignView = ({
     languages,
     modelConfig,
     onDesignComplete,
-    autoRun = false
+    autoRun = false,
+    enableAdaptive = true
 }: DesignViewProps) => {
     const [designContent, setDesignContent] = useState("");
     const [designData, setDesignData] = useState<any>(null);
@@ -30,10 +35,284 @@ export const DesignView = ({
     const [viewMode, setViewMode] = useState<'preview' | 'raw'>('preview');
     const [isEditing, setIsEditing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // Adaptive complexity state
+    const [complexityProfile, setComplexityProfile] = useState<ComplexityProfile | null>(null);
+    const [isAnalyzingComplexity, setIsAnalyzingComplexity] = useState(false);
+    const [showComplexity, setShowComplexity] = useState(true);
+    
+    // Validation state
+    const [validationReport, setValidationReport] = useState<ValidationReportData | null>(null);
+    const [sanityReview, setSanityReview] = useState<SanityReviewResult | null>(null);
+    const [isValidating, setIsValidating] = useState(false);
+    const [showValidation, setShowValidation] = useState(true);
+    
+    // Correction loop state
+    const [correctionHistory, setCorrectionHistory] = useState<CorrectionHistory | null>(null);
+    const [isCorrecting, setIsCorrecting] = useState(false);
+    const [currentCorrectionIteration, setCurrentCorrectionIteration] = useState(0);
+    const [showCorrection, setShowCorrection] = useState(true);
 
     // Ref to track the current abort controller
     const abortControllerRef = React.useRef<AbortController | null>(null);
     const isGeneratingRef = React.useRef(false);
+
+    // Analyze complexity before design generation
+    const analyzeComplexity = async () => {
+        if (!enableAdaptive) return null;
+        
+        setIsAnalyzingComplexity(true);
+        try {
+            // Build interview data from form inputs
+            const interviewData = {
+                project_name: projectName,
+                project_type: inferProjectType(requirements),
+                requirements: requirements,
+                languages: languages.join(', '),
+                team_size: '1', // Default for now
+                integrations: inferIntegrations(requirements),
+            };
+
+            const response = await fetch('/api/adaptive/complexity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ interview_data: interviewData }),
+            });
+
+            if (!response.ok) {
+                console.warn('Complexity analysis failed, proceeding without adaptive scaling');
+                return null;
+            }
+
+            // Parse SSE stream for complexity profile
+            const reader = response.body?.getReader();
+            if (!reader) return null;
+
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let profile: ComplexityProfile | null = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || "";
+
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.profile) {
+                                profile = data.profile;
+                                setComplexityProfile(profile);
+                            }
+                            if (data.done && data.profile) {
+                                profile = data.profile;
+                                setComplexityProfile(profile);
+                            }
+                        } catch (e) {
+                            // Ignore parse errors
+                        }
+                    }
+                }
+            }
+
+            return profile;
+        } catch (err) {
+            console.warn('Complexity analysis error:', err);
+            return null;
+        } finally {
+            setIsAnalyzingComplexity(false);
+        }
+    };
+
+    // Helper to infer project type from requirements
+    const inferProjectType = (reqs: string): string => {
+        const lower = reqs.toLowerCase();
+        if (lower.includes('cli') || lower.includes('command line') || lower.includes('script')) return 'cli_tool';
+        if (lower.includes('library') || lower.includes('package') || lower.includes('sdk')) return 'library';
+        if (lower.includes('saas') || lower.includes('subscription') || lower.includes('multi-tenant')) return 'saas';
+        if (lower.includes('api') || lower.includes('rest') || lower.includes('graphql')) return 'api';
+        if (lower.includes('web') || lower.includes('website') || lower.includes('app')) return 'web_app';
+        return 'web_app'; // Default
+    };
+
+    // Helper to infer integrations from requirements
+    const inferIntegrations = (reqs: string): string => {
+        const lower = reqs.toLowerCase();
+        const integrations: string[] = [];
+        if (lower.includes('stripe') || lower.includes('payment')) integrations.push('stripe');
+        if (lower.includes('auth') || lower.includes('login') || lower.includes('oauth')) integrations.push('auth');
+        if (lower.includes('database') || lower.includes('sql') || lower.includes('postgres')) integrations.push('database');
+        if (lower.includes('email') || lower.includes('mail') || lower.includes('smtp')) integrations.push('email');
+        if (lower.includes('s3') || lower.includes('storage') || lower.includes('upload')) integrations.push('storage');
+        return integrations.join(', ') || 'none';
+    };
+
+    // Validate design after generation
+    const validateDesign = async (design: string) => {
+        if (!enableAdaptive || !design) return null;
+        
+        setIsValidating(true);
+        setValidationReport(null);
+        setSanityReview(null);
+        
+        try {
+            const response = await fetch('/api/adaptive/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    design_text: design,
+                    complexity_profile: complexityProfile 
+                }),
+            });
+
+            if (!response.ok) {
+                console.warn('Validation failed, proceeding without validation');
+                return null;
+            }
+
+            // Parse SSE stream for validation results
+            const reader = response.body?.getReader();
+            if (!reader) return null;
+
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let report: ValidationReportData | null = null;
+            let review: SanityReviewResult | null = null;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || "";
+
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.validation_report) {
+                                report = data.validation_report;
+                                setValidationReport(report);
+                            }
+                            if (data.sanity_review) {
+                                review = data.sanity_review;
+                                setSanityReview(review);
+                            }
+                            if (data.done) {
+                                if (data.validation_report) setValidationReport(data.validation_report);
+                                if (data.sanity_review) setSanityReview(data.sanity_review);
+                            }
+                        } catch (e) {
+                            // Ignore parse errors
+                        }
+                    }
+                }
+            }
+
+            return { report, review };
+        } catch (err) {
+            console.warn('Validation error:', err);
+            return null;
+        } finally {
+            setIsValidating(false);
+        }
+    };
+
+    // Run correction loop to auto-fix issues
+    const runCorrectionLoop = async () => {
+        if (!designContent || isCorrecting) return;
+        
+        setIsCorrecting(true);
+        setCurrentCorrectionIteration(0);
+        setCorrectionHistory({
+            total_iterations: 0,
+            max_iterations: 3,
+            final_status: 'in_progress',
+            iterations: []
+        });
+        
+        try {
+            const response = await fetch('/api/adaptive/correct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    design_text: designContent,
+                    validation_report: validationReport,
+                    complexity_profile: complexityProfile 
+                }),
+            });
+
+            if (!response.ok) {
+                console.warn('Correction loop failed');
+                return;
+            }
+
+            // Parse SSE stream for correction updates
+            const reader = response.body?.getReader();
+            if (!reader) return;
+
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || "";
+
+                for (const part of parts) {
+                    const line = part.trim();
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.iteration) {
+                                setCurrentCorrectionIteration(data.iteration.iteration_number);
+                                setCorrectionHistory(prev => prev ? {
+                                    ...prev,
+                                    total_iterations: data.iteration.iteration_number,
+                                    iterations: [...prev.iterations, data.iteration]
+                                } : prev);
+                            }
+                            
+                            if (data.corrected_design) {
+                                setDesignContent(data.corrected_design);
+                            }
+                            
+                            if (data.done && data.history) {
+                                setCorrectionHistory(data.history);
+                                // Re-validate after corrections
+                                if (data.corrected_design) {
+                                    await validateDesign(data.corrected_design);
+                                }
+                            }
+                        } catch (e) {
+                            // Ignore parse errors
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('Correction loop error:', err);
+        } finally {
+            setIsCorrecting(false);
+        }
+    };
 
     const generateDesign = async () => {
         if (isGeneratingRef.current) return;
@@ -55,7 +334,8 @@ export const DesignView = ({
                     projectName,
                     requirements,
                     languages,
-                    modelConfig
+                    modelConfig,
+                    complexityProfile  // Pass complexity profile to design endpoint
                 }),
                 signal: controller.signal
             });
@@ -119,10 +399,34 @@ export const DesignView = ({
         }
     };
 
+    // Start pipeline: analyze complexity first (if adaptive), then generate design, then validate
+    const startPipeline = async () => {
+        // Reset validation/correction state
+        setValidationReport(null);
+        setSanityReview(null);
+        setCorrectionHistory(null);
+        
+        if (enableAdaptive) {
+            await analyzeComplexity();
+        }
+        await generateDesign();
+    };
+    
+    // Trigger validation when design generation completes
+    useEffect(() => {
+        if (enableAdaptive && designContent && !isGenerating && !isValidating && !validationReport) {
+            // Small delay to let the UI settle
+            const timer = setTimeout(() => {
+                validateDesign(designContent);
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [designContent, isGenerating, enableAdaptive]);
+
     // Auto-generate on mount
     useEffect(() => {
         const timeoutId = setTimeout(() => {
-            generateDesign();
+            startPipeline();
         }, 50);
 
         return () => {
@@ -135,30 +439,112 @@ export const DesignView = ({
 
     const hasAutoAdvanced = React.useRef(false);
 
-    // Auto-advance when complete
+    // Auto-advance when complete - include complexity profile and validation in design data
+    // Only auto-advance if validation passed (or validation is disabled)
     useEffect(() => {
-        if (autoRun && !isGenerating && designContent && !hasAutoAdvanced.current) {
+        const canAutoAdvance = autoRun && 
+            !isGenerating && 
+            !isAnalyzingComplexity && 
+            !isValidating &&
+            !isCorrecting &&
+            designContent && 
+            !hasAutoAdvanced.current &&
+            // Only auto-advance if validation passed or not running adaptive
+            (!enableAdaptive || (validationReport?.is_valid));
+            
+        if (canAutoAdvance) {
             const timer = setTimeout(() => {
                 hasAutoAdvanced.current = true;
-                // Pass the design data or construct it from content if structured data is missing
-                onDesignComplete(designData || { raw_llm_response: designContent, project_name: projectName });
+                handleApprove();
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [autoRun, isGenerating, designContent, designData, onDesignComplete, projectName]);
+    }, [autoRun, isGenerating, isAnalyzingComplexity, isValidating, isCorrecting, designContent, validationReport, enableAdaptive]);
 
     const handleApprove = () => {
-        onDesignComplete(designData || { raw_llm_response: designContent, project_name: projectName });
+        const designWithMetadata = {
+            ...(designData || { raw_llm_response: designContent, project_name: projectName }),
+            complexity_profile: complexityProfile,
+            validation_report: validationReport,
+            sanity_review: sanityReview,
+            correction_history: correctionHistory
+        };
+        onDesignComplete(designWithMetadata);
     };
+    
+    // Check if approval should be blocked
+    const isApprovalBlocked = isGenerating || isAnalyzingComplexity || isValidating || isCorrecting || !designContent;
+    const hasValidationIssues = validationReport && !validationReport.is_valid;
 
     return (
         <div className="flex flex-col h-full">
             <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <LayoutGrid className="h-5 w-5" />
-                    System Design
-                </h2>
+                <div className="flex items-center gap-4">
+                    <h2 className="text-lg font-semibold flex items-center gap-2">
+                        <LayoutGrid className="h-5 w-5" />
+                        System Design
+                    </h2>
+                    {/* Show badges in header when panels collapsed */}
+                    <div className="flex items-center gap-2">
+                        {complexityProfile && !showComplexity && (
+                            <button 
+                                onClick={() => setShowComplexity(true)}
+                                className="hover:opacity-80 transition-opacity"
+                            >
+                                <ComplexityBadge profile={complexityProfile} />
+                            </button>
+                        )}
+                        {validationReport && !showValidation && (
+                            <button 
+                                onClick={() => setShowValidation(true)}
+                                className="hover:opacity-80 transition-opacity"
+                            >
+                                <ValidationBadge report={validationReport} />
+                            </button>
+                        )}
+                        {correctionHistory && correctionHistory.total_iterations > 0 && !showCorrection && (
+                            <button 
+                                onClick={() => setShowCorrection(true)}
+                                className="hover:opacity-80 transition-opacity"
+                            >
+                                <CorrectionBadge history={correctionHistory} isRunning={isCorrecting} />
+                            </button>
+                        )}
+                    </div>
+                </div>
                 <div className="flex gap-2">
+                    {/* Toggle buttons for panels */}
+                    {complexityProfile && showComplexity && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowComplexity(false)}
+                        >
+                            <Gauge className="h-4 w-4 mr-2" />
+                            Hide Complexity
+                        </Button>
+                    )}
+                    {validationReport && showValidation && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowValidation(false)}
+                        >
+                            <Shield className="h-4 w-4 mr-2" />
+                            Hide Validation
+                        </Button>
+                    )}
+                    {correctionHistory && correctionHistory.total_iterations > 0 && showCorrection && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowCorrection(false)}
+                        >
+                            <History className="h-4 w-4 mr-2" />
+                            Hide Corrections
+                        </Button>
+                    )}
+                    
                     {designContent && !isGenerating && (
                         <>
                             <Button
@@ -189,8 +575,8 @@ export const DesignView = ({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={generateDesign}
-                        disabled={isGenerating}
+                        onClick={() => startPipeline()}
+                        disabled={isGenerating || isAnalyzingComplexity || isValidating || isCorrecting}
                     >
                         Regenerate
                     </Button>
@@ -198,22 +584,89 @@ export const DesignView = ({
                     <Button
                         size="sm"
                         onClick={handleApprove}
-                        disabled={isGenerating || !designContent}
+                        disabled={isApprovalBlocked}
+                        variant={hasValidationIssues ? "outline" : "default"}
                     >
                         <Check className="h-4 w-4 mr-2" />
-                        Approve Design
+                        {hasValidationIssues ? "Approve Anyway" : "Approve Design"}
                     </Button>
                 </div>
             </div>
 
             <ScrollArea className="flex-1 p-6">
+                {/* Complexity Assessment Panel */}
+                {enableAdaptive && showComplexity && (isAnalyzingComplexity || complexityProfile) && (
+                    <div className="mb-6">
+                        {isAnalyzingComplexity ? (
+                            <Card className="animate-pulse">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <Gauge className="h-5 w-5 text-primary animate-spin" />
+                                        Analyzing Project Complexity...
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="h-24 bg-muted rounded" />
+                                </CardContent>
+                            </Card>
+                        ) : complexityProfile ? (
+                            <ComplexityAssessment 
+                                profile={complexityProfile}
+                                showDetails={true}
+                                onRefresh={() => analyzeComplexity()}
+                            />
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Validation Report Panel */}
+                {enableAdaptive && showValidation && (isValidating || validationReport) && (
+                    <div className="mb-6">
+                        {isValidating ? (
+                            <Card className="animate-pulse">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <Shield className="h-5 w-5 text-primary animate-spin" />
+                                        Validating Design...
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="h-24 bg-muted rounded" />
+                                </CardContent>
+                            </Card>
+                        ) : validationReport ? (
+                            <ValidationReport 
+                                report={validationReport}
+                                sanityReview={sanityReview}
+                                onRequestCorrection={validationReport.auto_correctable_count > 0 ? runCorrectionLoop : undefined}
+                                showDetails={true}
+                            />
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Correction Timeline Panel */}
+                {enableAdaptive && showCorrection && (isCorrecting || (correctionHistory && correctionHistory.total_iterations > 0)) && (
+                    <div className="mb-6">
+                        {correctionHistory && (
+                            <CorrectionTimeline 
+                                history={correctionHistory}
+                                isRunning={isCorrecting}
+                                currentIteration={currentCorrectionIteration}
+                                showDetails={true}
+                            />
+                        )}
+                    </div>
+                )}
+
                 {isGenerating && !designContent ? (
-                    <div className="flex flex-col items-center justify-center h-full space-y-4 text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center h-64 space-y-4 text-muted-foreground">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <p>Architecting system solution...</p>
+                        <p>Architecting system solution{complexityProfile ? ` (${complexityProfile.depth_level} mode)` : ''}...</p>
                     </div>
                 ) : error ? (
-                    <div className="text-destructive p-4 border border-destructive/20 rounded-lg bg-destructive/10">
+                    <div className="text-destructive p-4 border border-destructive/20 rounded-lg bg-destructive/10 flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5" />
                         Error: {error}
                     </div>
                 ) : (

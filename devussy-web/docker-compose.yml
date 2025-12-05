@@ -4,12 +4,16 @@ services:
     build:
       context: .
       dockerfile: frontend.Dockerfile
+      args:
+        - NEXT_PUBLIC_IRC_WS_URL=${NEXT_PUBLIC_IRC_WS_URL:-ws://localhost:8080}
+        - NEXT_PUBLIC_IRC_CHANNEL=${NEXT_PUBLIC_IRC_CHANNEL:-#devussy-chat}
     working_dir: /app
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - USE_LOCAL_API=${USE_LOCAL_API:-false}
+      - NEXT_PUBLIC_IRC_CHANNEL=#devussy-chat
     depends_on:
       - streaming-server
 
@@ -28,20 +32,33 @@ services:
       - "8000:8000"
     environment:
       - REQUESTY_API_KEY=${REQUESTY_API_KEY}
-      - STREAMING_SECRET=${STREAMING_SECRET}
       - LLM_PROVIDER=requesty
       - PYTHONPATH=/app:/app/devussy-web
 
   nginx:
     image: nginx:stable-alpine
+    hostname: nginx
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     ports:
       - "80:80"
       - "443:443"
     depends_on:
       - frontend
       - streaming-server
+
+  ircd:
+    image: inspircd/inspircd-docker:latest
+    container_name: devussy-ircd
+    ports:
+      - "6667:6667"
+      - "8080:8080"
+    volumes:
+      - ./irc/conf/inspircd_v2.conf:/inspircd/conf/inspircd.conf
+      - ./irc/logs:/inspircd/logs
+      - ./irc/data:/inspircd/data
+    restart: unless-stopped
 
 # Note: this is a minimal template. For production, build optimized images and avoid mounting the whole source tree.

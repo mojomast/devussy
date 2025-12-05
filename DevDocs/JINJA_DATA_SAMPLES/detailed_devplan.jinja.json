@@ -1,48 +1,9 @@
 {
-  "repo_context": {
-    "project_type": "python",
-    "structure": {
-      "source_dirs": [
-        "src"
-      ],
-      "test_dirs": [
-        "tests"
-      ],
-      "config_dirs": [
-        "config"
-      ],
-      "has_ci": true
-    },
-    "dependencies": {
-      "python": [
-        "fastapi",
-        "uvicorn"
-      ]
-    },
-    "metrics": {
-      "total_files": 42,
-      "total_lines": 1337
-    },
-    "patterns": {
-      "test_frameworks": [
-        "pytest"
-      ],
-      "build_tools": [
-        "poetry"
-      ]
-    },
-    "project_name": "ExistingApp",
-    "description": "An existing app",
-    "version": "1.0.0",
-    "author": "Dev"
-  },
-  "phase_number": 1,
-  "phase_title": "Setup",
-  "phase_description": "Initialize the project.",
-  "project_name": "SuperApp",
-  "tech_stack": [
-    "Python",
-    "Git"
-  ],
-  "code_samples": "print('hello')"
+  "phase_number": 3,
+  "phase_title": "Phase 3",
+  "phase_description": "",
+  "project_name": "test",
+  "tech_stack": [],
+  "task_group_size": 3,
+  "detail_level": "normal"
 }

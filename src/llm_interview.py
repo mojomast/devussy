@@ -29,6 +29,7 @@ from .config import AppConfig
 from .ui.menu import run_menu, SessionSettings, apply_settings_to_config
 from .interview import RepoAnalysis
 from .interview.code_sample_extractor import CodeSampleExtractor, CodeSample
+from .interview.complexity_analyzer import ComplexityProfile
 from .markdown_output_manager import MarkdownOutputManager
 
 console = Console()
@@ -38,9 +39,10 @@ logger = logging.getLogger(__name__)
 class LLMInterviewManager:
     """Conducts conversational interviews using LLM.
 
-    The manager supports two modes:
+    The manager supports three modes:
     - ``"initial"`` (default): requirements-gathering interview
     - ``"design_review"``: focused review of an existing design/devplan
+    - ``"follow_up"``: clarification questions when complexity analysis has low confidence
     """
 
     SYSTEM_PROMPT = """You are a helpful development planning assistant for DevUssY, a circular development system. Your goal is to gather project requirements through natural conversation.
@@ -130,13 +132,40 @@ At the end of the review (after the user types /done), you MUST produce ONE fina
 Always output that JSON block clearly (optionally inside ```json fences) once the review is complete.
 """
 
+    # Follow-up mode system prompt for clarification questions
+    FOLLOW_UP_SYSTEM_PROMPT = """You are a helpful development planning assistant for DevUssY. The complexity analysis of the project has identified areas that need clarification.
+
+You have been given specific questions to ask the user. Your goal is to gather the missing information efficiently without re-doing the entire interview.
+
+GUIDELINES:
+- Ask the provided clarification questions one at a time
+- Be direct and specific - the user has already provided initial project information
+- Accept brief answers - you're filling in gaps, not gathering all requirements
+- If the user says "skip" or "proceed anyway", respect that and move to the next question
+- When all clarifications are gathered (or skipped), ask the user to type '/done'
+
+RESPONSE FORMAT:
+- Keep responses concise
+- Show which clarification you're asking about
+- Don't repeat questions the user has already answered
+
+When clarifications are complete, output a JSON block with the clarified data:
+{
+    "clarifications": {
+        "question_key": "user_answer",
+        ...
+    },
+    "confidence_boost": 0.1  // estimated improvement to confidence
+}
+"""
+
     def __init__(
         self,
         config: AppConfig,
         verbose: bool = False,
         repo_analysis: "RepoAnalysis | None" = None,
         markdown_output_manager: "MarkdownOutputManager | None" = None,
-        mode: Literal["initial", "design_review"] = "initial",
+        mode: Literal["initial", "design_review", "follow_up"] = "initial",
     ):
         """Initialize with app config containing LLM settings.
 
@@ -147,14 +176,15 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
                 conversation with concrete project context.
             markdown_output_manager: Optional markdown output manager for
                 saving responses.
-            mode: "initial" for requirements gathering, or "design_review" for
-                review of an existing design/devplan.
+            mode: "initial" for requirements gathering, "design_review" for
+                review of an existing design/devplan, or "follow_up" for
+                clarification questions.
         """
         self.config = config
         self.verbose = verbose
         self.repo_analysis = repo_analysis
         self.markdown_output_manager = markdown_output_manager
-        self.mode: Literal["initial", "design_review"] = mode
+        self.mode: Literal["initial", "design_review", "follow_up"] = mode
 
         self.llm_client = create_llm_client(config)
 
@@ -182,10 +212,16 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
         # Add system prompt (core behavior), switched by mode
         if self.mode == "design_review":
             system_prompt = self.DESIGN_REVIEW_SYSTEM_PROMPT
+        elif self.mode == "follow_up":
+            system_prompt = self.FOLLOW_UP_SYSTEM_PROMPT
         else:
             system_prompt = self.SYSTEM_PROMPT
 
         self.conversation_history.append({"role": "system", "content": system_prompt})
+
+        # Store follow-up questions for follow_up mode
+        self._follow_up_questions: list[str] = []
+        self._complexity_profile: ComplexityProfile | None = None
 
         # If repository analysis is available, prepend a concise summary so the
         # interview is repo-aware without changing the primary instructions.
@@ -255,6 +291,144 @@ Always output that JSON block clearly (optionally inside ```json fences) once th
         )
 
         self._design_review_context_md = preamble + "".join(sections)
+
+    # ------------------------------------------------------------------
+    # Follow-up mode helpers (for complexity-driven clarifications)
+    # ------------------------------------------------------------------
+
+    def switch_mode(self, new_mode: Literal["initial", "design_review", "follow_up"]) -> None:
+        """Switch the interview mode and update the system prompt.
+
+        This allows transitioning from initial interview to follow-up mode
+        when the complexity analyzer detects low confidence and needs
+        clarification questions.
+
+        Args:
+            new_mode: The new mode to switch to.
+        """
+        if new_mode == self.mode:
+            return
+
+        self.mode = new_mode
+
+        # Select the appropriate system prompt
+        if new_mode == "design_review":
+            system_prompt = self.DESIGN_REVIEW_SYSTEM_PROMPT
+        elif new_mode == "follow_up":
+            system_prompt = self.FOLLOW_UP_SYSTEM_PROMPT
+        else:
+            system_prompt = self.SYSTEM_PROMPT
+
+        # Update the first system message in conversation history
+        for i, msg in enumerate(self.conversation_history):
+            if msg.get("role") == "system":
+                self.conversation_history[i] = {"role": "system", "content": system_prompt}
+                break
+
+        logger.info(f"Switched interview mode to: {new_mode}")
+
+    def set_follow_up_context(
+        self,
+        complexity_profile: ComplexityProfile,
+        follow_up_questions: list[str],
+        interview_data: Dict[str, Any] | None = None,
+    ) -> None:
+        """Set context for follow-up mode.
+
+        Args:
+            complexity_profile: The complexity profile with low confidence.
+            follow_up_questions: List of clarification questions to ask.
+            interview_data: Optional previous interview data for context.
+        """
+        self._complexity_profile = complexity_profile
+        self._follow_up_questions = follow_up_questions
+
+        # Build context message for the LLM
+        context_parts = [
+            "The complexity analysis has identified areas needing clarification.",
+            f"Current confidence: {complexity_profile.confidence:.2f}",
+            f"Complexity score: {complexity_profile.complexity_score}",
+            f"Estimated phases: {complexity_profile.estimated_phases}",
+            "",
+            "Please ask the following clarification questions:",
+        ]
+
+        for i, q in enumerate(follow_up_questions, 1):
+            context_parts.append(f"{i}. {q}")
+
+        if interview_data:
+            context_parts.append("")
+            context_parts.append("Previous interview data collected:")
+            for key, value in interview_data.items():
+                if value:
+                    context_parts.append(f"- {key}: {value}")
+
+        context_md = "\n".join(context_parts)
+
+        # Add as a system message for context
+        self.conversation_history.append({
+            "role": "system",
+            "content": context_md
+        })
+
+        logger.info(f"Set follow-up context with {len(follow_up_questions)} questions")
+
+    def request_clarifications(self, missing_context: list[str]) -> Dict[str, Any]:
+        """Request clarifications for missing context and return gathered data.
+
+        This is a simplified flow that asks follow-up questions and returns
+        the clarified data without running a full interactive loop.
+
+        Args:
+            missing_context: List of areas needing clarification.
+
+        Returns:
+            Dict with clarification responses.
+        """
+        if not missing_context:
+            return {}
+
+        self._follow_up_questions = missing_context
+        clarifications: Dict[str, Any] = {}
+
+        console.print(Panel.fit(
+            "[bold cyan]Clarification Questions[/bold cyan]\n"
+            "The complexity analysis needs more information.\n"
+            "[dim]Type 'skip' to proceed without answering.[/dim]",
+            border_style="cyan"
+        ))
+
+        for i, question in enumerate(missing_context, 1):
+            console.print(f"\n[yellow]Question {i}/{len(missing_context)}:[/yellow]")
+            console.print(f"[white]{question}[/white]")
+
+            try:
+                if sys.stdin.isatty() and sys.stdout.isatty():
+                    answer = pt_prompt("Your answer: ")
+                else:
+                    answer = Prompt.ask("Your answer", default="")
+            except Exception:
+                answer = Prompt.ask("Your answer", default="")
+
+            if answer.lower().strip() in ("skip", "proceed", "continue", ""):
+                logger.info(f"User skipped clarification question: {question}")
+                continue
+
+            # Store clarification with a key based on the question
+            key = self._question_to_key(question)
+            clarifications[key] = answer
+            logger.info(f"Collected clarification for '{key}': {answer[:50]}...")
+
+        return clarifications
+
+    def _question_to_key(self, question: str) -> str:
+        """Convert a question to a simple key for storage."""
+        # Extract key words and create a snake_case key
+        words = re.findall(r'\b\w+\b', question.lower())
+        # Take significant words, skip common ones
+        skip_words = {"what", "is", "the", "are", "how", "do", "you", "your", "a", "an", "to", "for", "of"}
+        key_words = [w for w in words if w not in skip_words][:3]
+        return "_".join(key_words) if key_words else "clarification"
 
     def _apply_client_debug(self, enabled: bool) -> None:
         """Best-effort propagation of a debug/verbose flag to the underlying LLM client.

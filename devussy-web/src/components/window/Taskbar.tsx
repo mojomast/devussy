@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { cn } from "@/utils";
-import { Layout, HelpCircle, Plus, Power, Settings } from "lucide-react";
+import { Layout, HelpCircle, Plus, Power, Settings, MessageSquare } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CheckpointManager } from "@/components/pipeline/CheckpointManager";
@@ -16,12 +16,14 @@ interface TaskbarProps {
     onNewProject?: () => void;
     onHelp?: () => void;
     onOpenModelSettings?: () => void;
+    onOpenIrc?: () => void;
     // Props for Start Menu options
     currentState?: any;
     onLoadCheckpoint?: (data: any) => void;
     modelConfigs?: ModelConfigs;
     onModelConfigsChange?: (configs: ModelConfigs) => void;
     activeStage?: PipelineStage;
+    ircNick?: string;
 }
 
 export const Taskbar: React.FC<TaskbarProps> = ({
@@ -32,11 +34,13 @@ export const Taskbar: React.FC<TaskbarProps> = ({
     onNewProject,
     onHelp,
     onOpenModelSettings,
+    onOpenIrc,
     currentState,
     onLoadCheckpoint,
     modelConfigs,
     onModelConfigsChange,
-    activeStage
+    activeStage,
+    ircNick = 'Guest'
 }) => {
     const { theme } = useTheme();
     const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
@@ -90,7 +94,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                             <div className="h-10 w-10 rounded-full bg-white border-2 border-white/40 overflow-hidden flex items-center justify-center">
                                 <img src="/devussy_logo_minimal.png" alt="User" className="h-8 w-8 object-contain" />
                             </div>
-                            <span className="text-white font-bold text-lg drop-shadow-md">Devussy User</span>
+                            <span className="text-white font-bold text-lg drop-shadow-md">{ircNick}</span>
                         </div>
 
                         {/* Body */}
@@ -112,6 +116,14 @@ export const Taskbar: React.FC<TaskbarProps> = ({
                                     <div className="flex flex-col">
                                         <span className="font-bold text-sm">Help & Support</span>
                                         <span className="text-[10px] text-gray-500 group-hover:text-white/80">Get assistance</span>
+                                    </div>
+                                </button>
+
+                                <button onClick={() => { onOpenIrc?.(); setIsStartMenuOpen(false); }} className="flex items-center gap-2 p-2 hover:bg-[#316AC5] hover:text-white rounded group transition-colors text-left">
+                                    <MessageSquare className="h-8 w-8 text-green-600 group-hover:text-white" />
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-sm">IRC Chat</span>
+                                        <span className="text-[10px] text-gray-500 group-hover:text-white/80">Chat with #devussy</span>
                                     </div>
                                 </button>
 
@@ -257,6 +269,16 @@ export const Taskbar: React.FC<TaskbarProps> = ({
             >
                 <HelpCircle className="h-4 w-4" />
                 <span>Help</span>
+            </button>
+
+            {/* IRC Button */}
+            <button
+                onClick={onOpenIrc}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:bg-white/5 hover:text-white"
+                title="IRC Chat"
+            >
+                <MessageSquare className="h-4 w-4" />
+                <span>Chat</span>
             </button>
 
             {windows.length > 0 && (

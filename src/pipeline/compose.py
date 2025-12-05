@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 from ..clients.factory import create_llm_client
 from ..concurrency import ConcurrencyManager
@@ -16,10 +17,14 @@ from ..models import DevPlan, DevPlanPhase, HandoffPrompt, ProjectDesign
 from ..progress_reporter import PipelineProgressReporter
 from ..state_manager import StateManager
 from ..markdown_output_manager import MarkdownOutputManager
+from ..interview.complexity_analyzer import ComplexityAnalyzer, ComplexityProfile
 from .basic_devplan import BasicDevPlanGenerator
+from .design_correction_loop import DesignCorrectionLoop, DesignCorrectionResult
+from .design_validator import DesignValidator, DesignValidationReport
 from .detailed_devplan import DetailedDevPlanGenerator, PhaseDetailResult
 from .handoff_prompt import HandoffPromptGenerator
 from .design_review import DesignReviewRefiner
+from .llm_sanity_reviewer import LLMSanityReviewer, LLMSanityReviewResult
 from .project_design import ProjectDesignGenerator
 
 logger = get_logger(__name__)
@@ -1407,3 +1412,537 @@ class PipelineOrchestrator:
                 self.progress_reporter.update_tokens(usage)
         except Exception as e:
             logger.debug(f"Could not update progress tokens: {e}")
+
+    # -------------------------------------------------------------------------
+    # Adaptive Pipeline Methods
+    # -------------------------------------------------------------------------
+
+    def analyze_complexity(
+        self,
+        interview_data: Mapping[str, Any],
+    ) -> ComplexityProfile:
+        """Analyze interview data to determine project complexity.
+
+        This uses the rule-based ComplexityAnalyzer for deterministic results.
+        In production with LLM integration, this would also incorporate
+        LLM-driven semantic analysis.
+
+        Args:
+            interview_data: Dictionary with project details from interview
+
+        Returns:
+            ComplexityProfile with score, phase count, and depth level
+        """
+        logger.info("Analyzing project complexity from interview data")
+        self.progress_reporter.start_stage("Complexity Analysis", 0)
+        
+        analyzer = ComplexityAnalyzer()
+        profile = analyzer.analyze(interview_data)
+        
+        logger.info(
+            f"Complexity analysis complete: score={profile.score:.1f}, "
+            f"phases={profile.estimated_phase_count}, depth={profile.depth_level}"
+        )
+        self.progress_reporter.end_stage("Complexity Analysis")
+        
+        return profile
+
+    def validate_design(
+        self,
+        design_text: str,
+        requirements_text: Optional[str] = None,
+        complexity_profile: Optional[ComplexityProfile] = None,
+    ) -> DesignValidationReport:
+        """Validate a design document against rule-based checks.
+
+        Args:
+            design_text: The design document text to validate
+            requirements_text: Optional requirements for scope alignment
+            complexity_profile: Optional complexity profile for scaling checks
+
+        Returns:
+            DesignValidationReport with issues and check results
+        """
+        logger.info("Validating design document")
+        self.progress_reporter.start_stage("Design Validation", 0)
+        
+        validator = DesignValidator()
+        report = validator.validate(
+            design_text,
+            requirements_text=requirements_text,
+            complexity_profile=complexity_profile,
+        )
+        
+        if report.is_valid:
+            logger.info("Design validation passed")
+        else:
+            logger.warning(
+                f"Design validation found {len(report.issues)} issues, "
+                f"auto_correctable={report.auto_correctable}"
+            )
+        
+        self.progress_reporter.end_stage("Design Validation")
+        return report
+
+    def review_design_with_llm(
+        self,
+        design_text: str,
+        validation_report: DesignValidationReport,
+    ) -> LLMSanityReviewResult:
+        """Perform LLM-based semantic review of a design.
+
+        Currently uses mock implementation. Will integrate with actual
+        LLM when real LLM review prompts are ready.
+
+        Args:
+            design_text: The design document text
+            validation_report: Results from rule-based validation
+
+        Returns:
+            LLMSanityReviewResult with confidence and risk assessment
+        """
+        logger.info("Performing LLM sanity review of design")
+        
+        reviewer = LLMSanityReviewer()
+        result = reviewer.review(design_text, validation_report)
+        
+        logger.info(f"LLM review complete: confidence={result.confidence:.2f}")
+        return result
+
+    def run_correction_loop(
+        self,
+        design_text: str,
+        complexity_profile: Optional[ComplexityProfile] = None,
+    ) -> DesignCorrectionResult:
+        """Run the iterative design correction loop.
+
+        Validates and reviews the design, applies corrections up to MAX_ITERATIONS
+        times until the design passes or requires human review.
+
+        Args:
+            design_text: Initial design document text
+            complexity_profile: Optional complexity profile for validation
+
+        Returns:
+            DesignCorrectionResult with final design and status
+        """
+        logger.info("Starting design correction loop")
+        self.progress_reporter.start_stage("Design Correction", 0)
+        
+        loop = DesignCorrectionLoop()
+        result = loop.run(design_text, complexity_profile=complexity_profile)
+        
+        if result.requires_human_review:
+            logger.warning("Correction loop requires human review")
+        elif result.max_iterations_reached:
+            logger.warning("Correction loop reached max iterations")
+        else:
+            logger.info("Correction loop completed successfully")
+        
+        self.progress_reporter.end_stage("Design Correction")
+        return result
+
+    async def run_adaptive_pipeline(
+        self,
+        project_name: str,
+        languages: List[str],
+        requirements: str,
+        interview_data: Mapping[str, Any],
+        frameworks: Optional[List[str]] = None,
+        apis: Optional[List[str]] = None,
+        output_dir: str = ".",
+        save_artifacts: bool = True,
+        enable_validation: bool = True,
+        enable_correction: bool = True,
+        **llm_kwargs: Any,
+    ) -> Tuple[ProjectDesign, DevPlan, HandoffPrompt, Optional[ComplexityProfile]]:
+        """Run the full adaptive pipeline with complexity analysis and validation.
+
+        This extends the standard pipeline with:
+        1. Complexity analysis before design generation
+        2. Design validation after generation
+        3. Iterative correction loop if issues found
+        4. Scaled output based on complexity profile
+
+        Args:
+            project_name: Name of the project
+            languages: Programming languages to use
+            requirements: Project requirements
+            interview_data: Full interview data for complexity analysis
+            frameworks: Optional frameworks
+            apis: Optional external APIs
+            output_dir: Directory to save artifacts
+            save_artifacts: Whether to save intermediate files
+            enable_validation: Whether to validate design
+            enable_correction: Whether to run correction loop
+            **llm_kwargs: Additional LLM parameters
+
+        Returns:
+            Tuple of (ProjectDesign, DevPlan, HandoffPrompt, ComplexityProfile)
+        """
+        logger.info(f"Starting adaptive pipeline for project: {project_name}")
+        
+        # Show pipeline start
+        self.progress_reporter.start_pipeline(project_name)
+        self.progress_reporter.start_status()
+
+        # Stage 0: Complexity Analysis
+        complexity_profile = self.analyze_complexity(interview_data)
+        
+        # Save checkpoint after complexity analysis
+        try:
+            self.state_manager.save_checkpoint(
+                checkpoint_key=f"{project_name}_adaptive_pipeline",
+                stage="complexity_analysis",
+                data={
+                    "complexity_profile": asdict(complexity_profile),
+                    "project_name": project_name,
+                    "languages": languages,
+                    "requirements": requirements,
+                    "frameworks": frameworks,
+                    "apis": apis,
+                    "interview_data": dict(interview_data),
+                },
+                metadata={
+                    "provider": self.get_current_provider(),
+                    "output_dir": output_dir,
+                    "enable_validation": enable_validation,
+                    "enable_correction": enable_correction,
+                },
+            )
+            logger.info("Saved checkpoint after complexity analysis")
+            self.progress_reporter.show_checkpoint_saved(
+                f"{project_name}_adaptive_pipeline", "complexity_analysis"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save checkpoint after complexity analysis: {e}")
+
+        # Save complexity profile artifact
+        if save_artifacts:
+            complexity_md = self._complexity_profile_to_markdown(complexity_profile)
+            self.file_manager.write_markdown(
+                f"{output_dir}/complexity_profile.md", complexity_md
+            )
+            logger.info("Saved complexity_profile.md")
+            self.progress_reporter.report_file_created(
+                f"{output_dir}/complexity_profile.md",
+                "Complexity Profile",
+                len(complexity_md),
+            )
+
+        # Stage 1: Generate project design (with complexity awareness)
+        self.progress_reporter.start_stage("Project Design", 1)
+        logger.info("Stage 1/5: Generating project design")
+        
+        with self.progress_reporter.create_spinner_context("Generating project design..."):
+            project_design = await self.project_design_gen.generate(
+                project_name=project_name,
+                languages=languages,
+                requirements=requirements,
+                frameworks=frameworks,
+                apis=apis,
+                **llm_kwargs,
+            )
+        
+        self._update_progress_tokens(self.design_client)
+        self.progress_reporter.end_stage("Project Design")
+
+        design_text = project_design.architecture_overview or ""
+
+        # Stage 2: Design Validation (if enabled)
+        validation_report: Optional[DesignValidationReport] = None
+        correction_result: Optional[DesignCorrectionResult] = None
+
+        if enable_validation:
+            self.progress_reporter.start_stage("Design Validation", 2)
+            validation_report = self.validate_design(
+                design_text,
+                requirements_text=requirements,
+                complexity_profile=complexity_profile,
+            )
+            self.progress_reporter.end_stage("Design Validation")
+
+            # Save validation report
+            if save_artifacts and validation_report:
+                validation_md = self._validation_report_to_markdown(validation_report)
+                self.file_manager.write_markdown(
+                    f"{output_dir}/validation_report.md", validation_md
+                )
+                self.progress_reporter.report_file_created(
+                    f"{output_dir}/validation_report.md",
+                    "Validation Report",
+                    len(validation_md),
+                )
+
+            # Stage 3: Correction Loop (if enabled and validation failed)
+            if enable_correction and validation_report and not validation_report.is_valid:
+                correction_result = self.run_correction_loop(
+                    design_text,
+                    complexity_profile=complexity_profile,
+                )
+                
+                # Update design with corrected version
+                if correction_result.design_text != design_text:
+                    # Update architecture overview with corrections
+                    project_design.architecture_overview = correction_result.design_text
+                    logger.info("Applied corrections to project design")
+                
+                # Save correction history
+                if save_artifacts:
+                    correction_md = self._correction_result_to_markdown(correction_result)
+                    self.file_manager.write_markdown(
+                        f"{output_dir}/correction_history.md", correction_md
+                    )
+                    self.progress_reporter.report_file_created(
+                        f"{output_dir}/correction_history.md",
+                        "Correction History",
+                        len(correction_md),
+                    )
+
+        # Save checkpoint after design stage
+        try:
+            checkpoint_data: dict[str, Any] = {
+                "complexity_profile": asdict(complexity_profile),
+                "project_design": project_design.model_dump(),
+                "project_name": project_name,
+                "languages": languages,
+                "requirements": requirements,
+                "frameworks": frameworks,
+                "apis": apis,
+            }
+            if validation_report:
+                checkpoint_data["validation_report"] = {
+                    "is_valid": validation_report.is_valid,
+                    "auto_correctable": validation_report.auto_correctable,
+                    "issues": [
+                        {"code": i.code, "message": i.message, "auto_correctable": i.auto_correctable}
+                        for i in validation_report.issues
+                    ],
+                    "checks": validation_report.checks,
+                }
+            if correction_result:
+                checkpoint_data["correction_result"] = {
+                    "requires_human_review": correction_result.requires_human_review,
+                    "max_iterations_reached": correction_result.max_iterations_reached,
+                }
+            
+            self.state_manager.save_checkpoint(
+                checkpoint_key=f"{project_name}_adaptive_pipeline",
+                stage="project_design",
+                data=checkpoint_data,
+                metadata={
+                    "provider": self.get_current_provider(),
+                    "output_dir": output_dir,
+                },
+            )
+            logger.info("Saved checkpoint after project design")
+        except Exception as e:
+            logger.warning(f"Failed to save checkpoint after project design: {e}")
+
+        if save_artifacts:
+            design_md_lines = [
+                f"# Project Design: {project_name}\n",
+                f"## Complexity: {complexity_profile.depth_level.capitalize()} ({complexity_profile.score:.1f})\n",
+                f"## Architecture Overview\n\n{project_design.architecture_overview or 'No design generated'}\n",
+                "## Tech Stack\n"
+            ]
+            for tech in project_design.tech_stack:
+                design_md_lines.append(f"- {tech}")
+            
+            if project_design.objectives:
+                design_md_lines.append("\n## Objectives\n")
+                for obj in project_design.objectives:
+                    design_md_lines.append(f"- {obj}")
+
+            design_content = "\n".join(design_md_lines)
+            self.file_manager.write_markdown(
+                f"{output_dir}/project_design.md", design_content
+            )
+            self.progress_reporter.report_file_created(
+                f"{output_dir}/project_design.md",
+                "Project Design",
+                len(design_content),
+            )
+
+        # Stage 4: Generate devplan (with complexity-aware phase count)
+        self.progress_reporter.start_stage("DevPlan Generation", 4)
+        logger.info(f"Stage 4/5: Generating devplan ({complexity_profile.estimated_phase_count} phases)")
+        
+        # Add code samples to kwargs if available
+        if self.code_samples:
+            llm_kwargs["code_samples"] = self.code_samples
+        
+        with self.progress_reporter.create_spinner_context("Creating basic development plan..."):
+            basic_devplan = await self.basic_devplan_gen.generate(
+                project_design,
+                repo_analysis=self.repo_analysis,
+                **llm_kwargs,
+            )
+        
+        self._update_progress_tokens(self.devplan_client)
+
+        # Generate detailed phases
+        total_phases = len({p.number for p in basic_devplan.phases})
+        self.progress_reporter.show_concurrent_phases(total_phases)
+        self.progress_reporter.start_phase_progress(total_phases, description="Generating detailed phases")
+        
+        def _handle_phase_complete(event: PhaseDetailResult) -> None:
+            try:
+                self.progress_reporter.advance_phase()
+                self.progress_reporter.report_phase_ready(
+                    phase_number=event.phase.number,
+                    steps=len(event.phase.steps),
+                    char_count=event.response_chars,
+                )
+            except Exception:
+                pass
+
+        with self.progress_reporter.create_spinner_context("Generating detailed phase plans..."):
+            detailed_devplan = await self.detailed_devplan_gen.generate(
+                basic_devplan,
+                project_name,
+                project_design.tech_stack,
+                repo_analysis=self.repo_analysis,
+                on_phase_complete=_handle_phase_complete,
+                **llm_kwargs,
+            )
+        
+        self.progress_reporter.stop_phase_progress()
+        self._update_progress_tokens(self.devplan_client)
+        self.progress_reporter.end_stage("DevPlan Generation")
+
+        # Save devplan checkpoint
+        try:
+            self.state_manager.save_checkpoint(
+                checkpoint_key=f"{project_name}_adaptive_pipeline",
+                stage="detailed_devplan",
+                data={
+                    "complexity_profile": asdict(complexity_profile),
+                    "project_design": project_design.model_dump(),
+                    "basic_devplan": basic_devplan.model_dump(),
+                    "detailed_devplan": detailed_devplan.model_dump(),
+                    "project_name": project_name,
+                },
+                metadata={
+                    "provider": self.get_current_provider(),
+                    "output_dir": output_dir,
+                },
+            )
+            logger.info("Saved checkpoint after detailed devplan")
+        except Exception as e:
+            logger.warning(f"Failed to save checkpoint: {e}")
+
+        if save_artifacts:
+            devplan_md = self._devplan_to_markdown(detailed_devplan)
+            ok, written_path = self.file_manager.safe_write_devplan(
+                f"{output_dir}/devplan.md", devplan_md
+            )
+            if ok:
+                self.progress_reporter.report_file_created(
+                    written_path, "DevPlan Dashboard", len(devplan_md)
+                )
+            
+            # Generate individual phase files
+            phase_files = self._generate_phase_files(detailed_devplan, output_dir)
+            logger.info(f"Generated {len(phase_files)} individual phase files")
+
+        # Stage 5: Generate handoff prompt
+        self.progress_reporter.start_stage("Handoff Prompt", 5)
+        logger.info("Stage 5/5: Generating handoff prompt")
+        
+        handoff_kwargs = {
+            "project_summary": detailed_devplan.summary or "",
+            "architecture_notes": project_design.architecture_overview or "",
+            "complexity_info": f"Complexity: {complexity_profile.depth_level} ({complexity_profile.score:.1f})",
+        }
+        if self.code_samples:
+            handoff_kwargs["code_samples"] = self.code_samples
+        
+        with self.progress_reporter.create_spinner_context("Composing handoff prompt..."):
+            handoff = self.handoff_gen.generate(
+                devplan=detailed_devplan,
+                project_name=project_name,
+                repo_analysis=self.repo_analysis,
+                **handoff_kwargs,
+            )
+        
+        self.progress_reporter.end_stage("Handoff Prompt")
+
+        if save_artifacts:
+            self.file_manager.write_markdown(
+                f"{output_dir}/handoff_prompt.md", handoff.content
+            )
+            self.progress_reporter.report_file_created(
+                f"{output_dir}/handoff_prompt.md",
+                "Handoff Prompt",
+                len(handoff.content),
+            )
+
+        logger.info("Adaptive pipeline complete!")
+        self.progress_reporter.display_summary()
+        
+        return project_design, detailed_devplan, handoff, complexity_profile
+
+    def _complexity_profile_to_markdown(self, profile: ComplexityProfile) -> str:
+        """Convert ComplexityProfile to markdown format."""
+        lines = [
+            "# Complexity Profile\n",
+            f"**Score**: {profile.score:.1f}/20\n",
+            f"**Depth Level**: {profile.depth_level}\n",
+            f"**Estimated Phases**: {profile.estimated_phase_count}\n",
+            f"**Confidence**: {profile.confidence:.0%}\n",
+            "\n## Buckets\n",
+            f"- **Project Type**: {profile.project_type_bucket}\n",
+            f"- **Technical Complexity**: {profile.technical_complexity_bucket}\n",
+            f"- **Integration**: {profile.integration_bucket}\n",
+            f"- **Team Size**: {profile.team_size_bucket}\n",
+            f"\n*Generated: {self._get_timestamp()}*\n",
+        ]
+        return "".join(lines)
+
+    def _validation_report_to_markdown(self, report: DesignValidationReport) -> str:
+        """Convert DesignValidationReport to markdown format."""
+        lines = [
+            "# Design Validation Report\n",
+            f"**Valid**: {'Yes' if report.is_valid else 'No'}\n",
+            f"**Auto-Correctable**: {'Yes' if report.auto_correctable else 'No'}\n",
+            "\n## Checks\n",
+        ]
+        for check_name, passed in report.checks.items():
+            status = "[PASS]" if passed else "[FAIL]"
+            lines.append(f"- {status} {check_name}\n")
+        
+        if report.issues:
+            lines.append("\n## Issues\n")
+            for issue in report.issues:
+                auto = "(auto-correctable)" if issue.auto_correctable else "(requires manual review)"
+                lines.append(f"- **{issue.code}** {auto}: {issue.message}\n")
+        
+        lines.append(f"\n*Generated: {self._get_timestamp()}*\n")
+        return "".join(lines)
+
+    def _correction_result_to_markdown(self, result: DesignCorrectionResult) -> str:
+        """Convert DesignCorrectionResult to markdown format."""
+        lines = [
+            "# Design Correction History\n",
+            f"**Final Status**: ",
+        ]
+        if result.requires_human_review:
+            lines.append("Requires Human Review\n")
+        elif result.max_iterations_reached:
+            lines.append("Max Iterations Reached\n")
+        else:
+            lines.append("Corrected Successfully\n")
+        
+        lines.extend([
+            f"\n**Final Validation**: {'Passed' if result.validation.is_valid else 'Failed'}\n",
+            f"**Review Confidence**: {result.review.confidence:.0%}\n",
+        ])
+        
+        if result.review.risks:
+            lines.append("\n## Remaining Risks\n")
+            for risk in result.review.risks:
+                lines.append(f"- {risk}\n")
+        
+        lines.append(f"\n*Generated: {self._get_timestamp()}*\n")
+        return "".join(lines)

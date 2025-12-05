@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devussy.dev/schemas/validation_report.json",
+  "title": "ValidationReport",
+  "description": "Design validation report containing check results and issues found.",
+  "type": "object",
+  "required": ["is_valid", "auto_correctable", "issues", "checks"],
+  "properties": {
+    "is_valid": {
+      "type": "boolean",
+      "description": "Whether the design passed all validation checks"
+    },
+    "auto_correctable": {
+      "type": "boolean",
+      "description": "Whether all issues can be automatically corrected"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ValidationIssue"
+      },
+      "description": "List of validation issues found"
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      },
+      "description": "Map of check names to pass/fail status"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the validation was performed"
+    },
+    "validator_version": {
+      "type": "string",
+      "description": "Version of the validator used"
+    }
+  },
+  "definitions": {
+    "ValidationIssue": {
+      "type": "object",
+      "required": ["code", "message", "auto_correctable"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Machine-readable issue code (e.g., 'consistency.conflict_monolith_microservices')"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the issue"
+        },
+        "auto_correctable": {
+          "type": "boolean",
+          "description": "Whether this issue can be automatically corrected"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warning", "info"],
+          "description": "Severity level of the issue"
+        },
+        "location": {
+          "type": "string",
+          "description": "Optional location/section where the issue was found"
+        },
+        "suggestion": {
+          "type": "string",
+          "description": "Optional suggested fix"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://devussy.dev/schemas/complexity_profile.json",
+  "title": "ComplexityProfile",
+  "description": "Complexity assessment profile for a software project, used to determine scaling of devplan output.",
+  "type": "object",
+  "required": [
+    "project_type_bucket",
+    "technical_complexity_bucket",
+    "integration_bucket",
+    "team_size_bucket",
+    "score",
+    "estimated_phase_count",
+    "depth_level",
+    "confidence"
+  ],
+  "properties": {
+    "project_type_bucket": {
+      "type": "string",
+      "enum": ["cli_tool", "library", "api", "web_app", "saas"],
+      "description": "Classification of project type affecting base complexity"
+    },
+    "technical_complexity_bucket": {
+      "type": "string",
+      "enum": ["simple_crud", "auth_db", "realtime", "ml_ai", "multi_region"],
+      "description": "Technical complexity classification based on requirements"
+    },
+    "integration_bucket": {
+      "type": "string",
+      "enum": ["standalone", "1_2_services", "3_5_services", "6_plus_services"],
+      "description": "External API/service integration complexity"
+    },
+    "team_size_bucket": {
+      "type": "string",
+      "enum": ["solo", "2_3", "4_6", "7_plus"],
+      "description": "Team size affecting coordination complexity multiplier"
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 30,
+      "description": "Calculated complexity score (0-20 typical range, higher with team multipliers)"
+    },
+    "estimated_phase_count": {
+      "type": "integer",
+      "minimum": 3,
+      "maximum": 15,
+      "description": "Recommended number of phases for the devplan"
+    },
+    "depth_level": {
+      "type": "string",
+      "enum": ["minimal", "standard", "detailed"],
+      "description": "Level of detail for generated artifacts"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence score for the complexity assessment (0.0-1.0)"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Optional explanation of complexity assessment (from LLM-driven analysis)"
+    },
+    "hidden_complexity_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Optional flags for hidden complexity factors (compliance, security, etc.)"
+    },
+    "follow_up_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Optional follow-up questions if confidence is low"
+    }
+  },
+  "additionalProperties": false
+}

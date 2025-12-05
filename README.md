@@ -40,6 +40,13 @@ Devussy turns a short project idea into a complete, actionable development plan.
 - New **Streaming Options** menu in Settings lets you toggle phases individually without touching config files.
 - Concurrency controls now live in Settings as well (max concurrent API requests / phases).
 
+**📊 Backend web analytics (server-side, opt-out supported)**
+
+- Added a lightweight **server-side analytics module** behind the FastAPI streaming server.
+- Tracks anonymized sessions (hashed IP + user-agent), API calls (endpoint, method, status, latency, sizes), and design inputs for the web UI.
+- All analytics are kept **on the server only** (SQLite), with a simple `/api/analytics/overview` endpoint for internal inspection.
+- Users can set a **“Disable anonymous usage analytics for this browser”** toggle in the Help window, which writes a `devussy_analytics_optout` cookie; when set, both the middleware and design endpoint completely skip analytics logging.
+
 **🧱 Under-the-hood fixes**
 
 - Hardened `LLMInterviewManager` to be explicitly mode-aware (`initial` vs `design_review`).
@@ -344,6 +351,70 @@ Legacy Devussy docs, handoff summaries, and helper scripts have been moved into 
 - Code samples included for LLM context
 - Backward compatible (works without repo analysis)
 
+### Adaptive Complexity Pipeline ✅ (NEW)
+
+Devussy now includes an **adaptive complexity system** that intelligently scales output based on project requirements.
+
+**Complexity Analysis:**
+- Automatic project complexity scoring (0-20 scale)
+- Dynamic depth level detection (minimal/standard/detailed)
+- Phase count estimation (3-15 phases based on complexity)
+- Confidence scoring with follow-up question triggers
+- Supports both rule-based (testing) and LLM-driven (production) assessment
+
+**Design Validation System:**
+- 5 validation checks: consistency, completeness, scope alignment, hallucination detection, over-engineering detection
+- Rule-based validation for deterministic testing
+- LLM-powered semantic review for production
+- Auto-correctable issue identification
+- Detailed issue reports with suggestions
+
+**Correction Loop:**
+- Iterative design improvement (max 3 iterations)
+- Automatic correction of identified issues
+- Confidence threshold (0.8) for approval
+- Manual review escalation when needed
+- Full correction history tracking
+
+**Adaptive Output Generation:**
+- Template-based output scaling (minimal/standard/detailed)
+- Dynamic phase count based on complexity
+- Complexity-aware design generator
+- Per-depth-level devplan templates
+
+**Usage:**
+```bash
+# Run adaptive pipeline via CLI
+python -m src.cli run-adaptive-pipeline \
+  --name "My Project" \
+  --languages "Python,TypeScript" \
+  --requirements "Build a REST API" \
+  --validation \
+  --correction
+
+# Or use interview JSON
+python -m src.cli run-adaptive-pipeline \
+  --interview-file interview_data.json
+```
+
+**Web UI Components:**
+- `ComplexityAssessment` - Visual score gauge, depth indicator, phase estimate
+- `ValidationReport` - Issue display with severity, auto-fix badges, LLM review
+- `CorrectionTimeline` - Iteration history with progress tracking
+
+**Testing:**
+```bash
+# Backend adaptive pipeline tests
+pytest tests/integration/test_adaptive_pipeline_e2e.py -v
+pytest tests/integration/test_adaptive_pipeline_orchestrator.py -v
+
+# Frontend component tests
+cd devussy-web && npm test
+
+# Build Storybook for visual components
+cd devussy-web && npm run build-storybook
+```
+
 ### Terminal UI (Phases 4-5) ✅
 **Foundation (Phase 4):**
 - Responsive grid layout (5 cols / 3x2 / 1x5)
@@ -378,6 +449,27 @@ Legacy Devussy docs, handoff summaries, and helper scripts have been moved into 
 - Zero diagnostics or syntax errors
 - Integration tests for full workflows
 - Real-world validation with actual APIs
+
+## Documentation for Agents
+
+> **Important:** If you're an AI agent working on this codebase, read `AGENTS.md` first.
+
+### Anchor-Based Context Management
+
+Devussy uses **stable HTML comment anchors** to enable efficient circular development. All planning/handoff documents contain anchors like:
+
+```markdown
+<!-- PROGRESS_LOG_START -->
+... content ...
+<!-- PROGRESS_LOG_END -->
+```
+
+**Key rules for agents:**
+1. Read ONLY anchored sections, not entire files (saves 90%+ tokens)
+2. Use `safe_write_devplan()` from `src/file_manager.py` for writes (validates anchors, creates backups)
+3. Never remove or modify anchor comments themselves
+
+See `AGENTS.md`, `WARP.md`, and `handoff.md` for comprehensive anchor documentation.
 
 ## Troubleshooting
 - No output files? Ensure the appropriate provider key is set (OPENAI_API_KEY, AETHER_API_KEY, REQUESTY_API_KEY, AGENTROUTER_API_KEY, or GENERIC_API_KEY).
