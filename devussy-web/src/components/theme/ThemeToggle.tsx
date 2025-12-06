@@ -1,12 +1,14 @@
 'use client';
 
 import { useTheme, Theme } from './ThemeProvider';
-import { Monitor, Terminal, Image } from 'lucide-react';
+import { Monitor, Terminal, Image, Cpu, Ghost } from 'lucide-react';
 
 const themes: { value: Theme; label: string; icon: React.ReactNode }[] = [
     { value: 'default', label: 'Default', icon: <Monitor className="w-4 h-4" /> },
     { value: 'terminal', label: 'Terminal', icon: <Terminal className="w-4 h-4" /> },
     { value: 'bliss', label: 'Bliss', icon: <Image className="w-4 h-4" /> },
+    { value: 'cyberpunk', label: 'Cyberpunk', icon: <Cpu className="w-4 h-4" /> },
+    { value: 'retro', label: 'Retro', icon: <Ghost className="w-4 h-4" /> },
 ];
 
 export function ThemeToggle() {
